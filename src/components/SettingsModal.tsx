@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { X, SlidersHorizontal, Keyboard, LucideIcon } from "lucide-react";
 import { cn } from "cn";
 import { KeymapAction } from "@/lib/keymaps";
+import { UpdateStatus } from "@/hooks/useAppUpdater";
 import GeneralSettings from "./settings/GeneralSettings";
 import KeymapSettings from "./settings/KeymapSettings";
 
@@ -29,6 +30,10 @@ interface SettingsModalProps {
   setKeymapBinding: (action: KeymapAction, binding: string) => void;
   resetKeymapBinding: (action: KeymapAction) => void;
   resetAllKeymaps: () => void;
+  updateStatus: UpdateStatus;
+  appVersion: string | null;
+  onCheckUpdates: () => void;
+  onOpenDownloadPage: () => void;
 }
 
 export default function SettingsModal({
@@ -48,6 +53,10 @@ export default function SettingsModal({
   setKeymapBinding,
   resetKeymapBinding,
   resetAllKeymaps,
+  updateStatus,
+  appVersion,
+  onCheckUpdates,
+  onOpenDownloadPage,
 }: SettingsModalProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>("general");
 
@@ -115,6 +124,10 @@ export default function SettingsModal({
                 setEditorFont={setEditorFont}
                 editorFontSize={editorFontSize}
                 setEditorFontSize={setEditorFontSize}
+                updateStatus={updateStatus}
+                appVersion={appVersion}
+                onCheckUpdates={onCheckUpdates}
+                onOpenDownloadPage={onOpenDownloadPage}
               />
             ) : (
               <KeymapSettings

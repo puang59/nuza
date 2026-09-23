@@ -3,6 +3,8 @@ import { getVersion } from "@tauri-apps/api/app";
 import { check, Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { ask } from "@tauri-apps/plugin-dialog";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { isMacPlatform } from "@/lib/platform";
 
 /** Delay before the first background check, so startup isn't slowed down. */
 const INITIAL_CHECK_DELAY_MS = 5_000;
@@ -10,11 +12,14 @@ const INITIAL_CHECK_DELAY_MS = 5_000;
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 /** How long transient results of a manual check ("Up to date", errors) stay visible. */
 const RESULT_VISIBLE_MS = 3_000;
+/** Where mac users are sent to grab a build manually, since self-install isn't available there. */
+const RELEASES_URL = "https://github.com/puang59/nuza/releases/latest";
 
 export type UpdateStatus =
   | { state: "idle" }
   | { state: "checking" }
   | { state: "up-to-date" }
+  | { state: "available"; version: string }
   | { state: "downloading"; version: string; progress: number | null }
   | { state: "ready"; version: string; installError?: string }
   | { state: "installing"; version: string }
@@ -102,6 +107,15 @@ export function useAppUpdater({ autoUpdate }: UseAppUpdaterOptions) {
           return;
         }
 
+        if (isMacPlatform()) {
+          // Our macOS builds aren't notarized, so Tauri's in-place self-install gets
+          // silently blocked by Gatekeeper. Just point people at a manual download
+          // instead of downloading a build we can't actually install.
+          await update.close();
+          setStatus({ state: "available", version: update.version });
+          return;
+        }
+
         let total: number | null = null;
         let downloaded = 0;
         setStatus({ state: "downloading", version: update.version, progress: null });
@@ -134,6 +148,11 @@ export function useAppUpdater({ autoUpdate }: UseAppUpdaterOptions) {
 
   const checkForUpdates = useCallback(() => runCheck(false), [runCheck]);
 
+  /** Sends the user to the GitHub releases page to grab a build by hand (macOS). */
+  const openDownloadPage = useCallback(() => {
+    openUrl(RELEASES_URL).catch((error) => console.error("Failed to open releases page:", error));
+  }, []);
+
   useEffect(() => {
     // Dev builds share the release version, so auto-checking would just nag.
     if (!autoUpdate || import.meta.env.DEV) return;
@@ -146,5 +165,5 @@ export function useAppUpdater({ autoUpdate }: UseAppUpdaterOptions) {
     };
   }, [autoUpdate, runCheck]);
 
-  return { status, version, checkForUpdates, installUpdate };
+  return { status, version, checkForUpdates, installUpdate, openDownloadPage };
 }

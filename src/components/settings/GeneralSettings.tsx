@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { isMacPlatform } from "@/lib/platform";
+import { UpdateStatus } from "@/hooks/useAppUpdater";
 import {
   DEFAULT_EDITOR_FONT,
   MAX_EDITOR_FONT_SIZE,
@@ -22,6 +23,28 @@ interface GeneralSettingsProps {
   setEditorFont: (font: string) => void;
   editorFontSize: number;
   setEditorFontSize: (size: number) => void;
+  updateStatus: UpdateStatus;
+  appVersion: string | null;
+  onCheckUpdates: () => void;
+  onOpenDownloadPage: () => void;
+}
+
+/** Describes where things stand for the manual macOS update flow. */
+function macUpdateDescription(status: UpdateStatus, appVersion: string | null) {
+  switch (status.state) {
+    case "checking":
+      return "Checking for the latest version…";
+    case "available":
+      return `v${status.version} is available. Our macOS builds aren't code-signed yet, so download and install it by hand.`;
+    case "up-to-date":
+      return "You're on the latest version.";
+    case "error":
+      return `Couldn't check for updates: ${status.message}`;
+    default:
+      return appVersion
+        ? `You're running v${appVersion}. macOS builds aren't code-signed yet, so updates are downloaded manually.`
+        : "macOS builds aren't code-signed yet, so updates are downloaded manually.";
+  }
 }
 
 export default function GeneralSettings({
@@ -35,9 +58,14 @@ export default function GeneralSettings({
   setEditorFont,
   editorFontSize,
   setEditorFontSize,
+  updateStatus,
+  appVersion,
+  onCheckUpdates,
+  onOpenDownloadPage,
 }: GeneralSettingsProps) {
   const [fonts, setFonts] = useState<string[]>([]);
   const [fontSizeInput, setFontSizeInput] = useState(String(editorFontSize));
+  const isMac = isMacPlatform();
 
   useEffect(() => {
     setFontSizeInput(String(editorFontSize));
@@ -49,7 +77,7 @@ export default function GeneralSettings({
       .catch((error) => console.error("Failed to list system fonts:", error));
   }, []);
 
-  const vibrancyLabel = isMacPlatform() ? "macOS vibrancy" : "window blur, where supported";
+  const vibrancyLabel = isMac ? "macOS vibrancy" : "window blur, where supported";
 
   return (
     <div className="divide-y divide-zinc-800">
@@ -66,10 +94,35 @@ export default function GeneralSettings({
 
       <SettingRow
         title="Automatic Updates"
-        description="Download new versions in the background. You choose when to restart."
+        description={
+          isMac
+            ? "Check for new versions in the background (macOS still requires a manual download below)."
+            : "Download new versions in the background. You choose when to restart."
+        }
       >
         <Switch checked={autoUpdateEnabled} onCheckedChange={setAutoUpdateEnabled} />
       </SettingRow>
+
+      {isMac && (
+        <SettingRow title="Update" description={macUpdateDescription(updateStatus, appVersion)}>
+          {updateStatus.state === "available" ? (
+            <button
+              onClick={onOpenDownloadPage}
+              className="bg-[#FF9696] hover:bg-[#FFB0B0] rounded-md px-3 py-1 text-xs font-medium text-black transition-colors cursor-pointer"
+            >
+              Download v{updateStatus.version}
+            </button>
+          ) : (
+            <button
+              onClick={onCheckUpdates}
+              disabled={updateStatus.state === "checking"}
+              className="bg-zinc-800 border border-zinc-700 rounded-md px-3 py-1 text-xs text-white hover:border-[#FF9696] transition-colors cursor-pointer disabled:cursor-default disabled:opacity-70"
+            >
+              {updateStatus.state === "checking" ? "Checking…" : "Check for Updates"}
+            </button>
+          )}
+        </SettingRow>
+      )}
 
       <SettingRow title="Font" description="Any font installed on your system">
         <div className="relative w-40">

@@ -1,5 +1,6 @@
 import { ArrowDownCircle, PanelLeft, RefreshCw, Save, Settings } from "lucide-react";
 import { UpdateStatus } from "@/hooks/useAppUpdater";
+import { isMacPlatform } from "@/lib/platform";
 
 interface EditorHeaderProps {
   updateStatus: UpdateStatus;
@@ -29,18 +30,46 @@ function updateLabel(status: UpdateStatus, version: string | null) {
   }
 }
 
-/** The version/update control: checks for updates, or offers a restart once one is downloaded. */
+/**
+ * The version/update control: checks for updates, or offers a restart once one is
+ * downloaded. On macOS our builds aren't notarized, so the plugin's self-install
+ * gets silently blocked by Gatekeeper - instead of a button that appears to do
+ * nothing, mac users just see a quiet "Update available" hint that opens Settings,
+ * where they're guided through downloading the new build by hand.
+ */
 function UpdateButton({
   status,
   version,
   onCheckUpdates,
   onInstallUpdate,
+  onOpenSettings,
 }: {
   status: UpdateStatus;
   version: string | null;
   onCheckUpdates: () => void;
   onInstallUpdate: () => void;
+  onOpenSettings: () => void;
 }) {
+  if (isMacPlatform()) {
+    if (status.state !== "available") {
+      return version ? (
+        <span className="text-xs text-gray-400 tabular-nums">{`v${version}`}</span>
+      ) : null;
+    }
+
+    return (
+      <button
+        data-tauri-drag-region="false"
+        className="flex items-center gap-1.5 rounded-full bg-[#FF9696] px-2.5 py-0.5 text-xs font-medium text-black hover:bg-[#FFB0B0] cursor-pointer transition-colors"
+        onClick={onOpenSettings}
+        title={`nuza v${status.version} is available - open Settings to download it`}
+      >
+        <ArrowDownCircle size={12} />
+        Update available
+      </button>
+    );
+  }
+
   if (status.state === "ready" || status.state === "installing") {
     const failed = status.state === "ready" && !!status.installError;
     return (
@@ -111,6 +140,7 @@ export default function EditorHeader({
           version={version}
           onCheckUpdates={onCheckUpdates}
           onInstallUpdate={onInstallUpdate}
+          onOpenSettings={onOpenSettings}
         />
 
         <button

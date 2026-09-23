@@ -48,7 +48,7 @@ function App() {
   } = useFileOperations({
     onFolderOpened: () => setIsSidebarOpen(true),
   });
-  const { status: updateStatus, checkForUpdates, installUpdate, version } = useAppUpdater({
+  const { status: updateStatus, checkForUpdates, installUpdate, openDownloadPage, version } = useAppUpdater({
     autoUpdate: autoUpdateEnabled,
   });
   const { bindings: keymapBindings, setBinding: setKeymapBinding, resetBinding: resetKeymapBinding, resetAll: resetAllKeymaps } = useKeymaps();
@@ -168,6 +168,10 @@ function App() {
         setKeymapBinding={setKeymapBinding}
         resetKeymapBinding={resetKeymapBinding}
         resetAllKeymaps={resetAllKeymaps}
+        updateStatus={updateStatus}
+        appVersion={version}
+        onCheckUpdates={checkForUpdates}
+        onOpenDownloadPage={openDownloadPage}
       />
     </main>
   );
