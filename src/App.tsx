@@ -24,7 +24,7 @@ import {
 } from "./lib/fonts";
 
 /** Space between the editor and the sidebar, collapsed with the panel itself. */
-const SIDEBAR_GAP = 20;
+const SIDEBAR_GAP = 12;
 
 function App() {
   const [mode, setMode] = useState<string>("normal");
