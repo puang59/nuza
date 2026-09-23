@@ -13,6 +13,7 @@ import { useKeymaps, useKeymapListener } from "./hooks/useKeymaps";
 import { useFileOperations } from "./hooks/useFileOperations";
 import { useAppUpdater } from "./hooks/useAppUpdater";
 import { usePersistedState } from "./hooks/usePersistedState";
+import { useResizableSidebar } from "./hooks/useResizableSidebar";
 import {
   DEFAULT_EDITOR_FONT,
   DEFAULT_EDITOR_FONT_SIZE,
@@ -20,6 +21,9 @@ import {
   clampEditorFontSize,
   editorFontFamily,
 } from "./lib/fonts";
+
+/** Space between the editor and the sidebar, collapsed with the panel itself. */
+const SIDEBAR_GAP = 20;
 
 function App() {
   const [mode, setMode] = useState<string>("normal");
@@ -52,6 +56,7 @@ function App() {
     autoUpdate: autoUpdateEnabled,
   });
   const { bindings: keymapBindings, setBinding: setKeymapBinding, resetBinding: resetKeymapBinding, resetAll: resetAllKeymaps } = useKeymaps();
+  const { width: sidebarWidth, isResizing, startResize, resetWidth } = useResizableSidebar();
 
   useEffect(() => {
     invoke("set_transparency", { enabled: transparencyEnabled }).catch((error) => {
@@ -115,7 +120,7 @@ function App() {
         onToggleSidebar={() => setIsSidebarOpen((open) => !open)}
       />
 
-      <div className="flex-1 min-h-0 px-4 flex gap-5 w-full relative z-20">
+      <div className="flex-1 min-h-0 px-4 flex w-full relative z-20">
         <div className="flex-1 min-w-0 h-full relative">
           <CodeMirror
             ref={editorRef}
@@ -133,20 +138,36 @@ function App() {
             onCreateEditor={handleEditorCreated}
           />
         </div>
-        {isSidebarOpen && (
-          <Sidebar
-            data={folderData}
-            rootPath={rootPath}
-            onOpenFolder={openFolder}
-            onFileSelect={selectFile}
-            currentFile={currentFile}
-            onCreateFile={createFile}
-            onCreateFolder={createFolder}
-            onRename={renameEntry}
-            onDelete={deleteEntry}
-            onMove={moveEntry}
-          />
-        )}
+
+        {/*
+          The sidebar stays mounted so it can animate closed as well as open;
+          `inert` keeps the collapsed copy out of tab order and off screen
+          readers. The gap between editor and sidebar lives in here too, so it
+          collapses along with the panel instead of leaving a dead strip.
+        */}
+        <div
+          className={`h-full shrink-0 overflow-hidden ${isResizing ? "" : "sidebar-transition"}`}
+          style={{ width: isSidebarOpen ? sidebarWidth + SIDEBAR_GAP : 0 }}
+          inert={!isSidebarOpen}
+        >
+          <div className="h-full" style={{ width: sidebarWidth + SIDEBAR_GAP, paddingLeft: SIDEBAR_GAP }}>
+            <Sidebar
+              data={folderData}
+              rootPath={rootPath}
+              onOpenFolder={openFolder}
+              onFileSelect={selectFile}
+              currentFile={currentFile}
+              onCreateFile={createFile}
+              onCreateFolder={createFolder}
+              onRename={renameEntry}
+              onDelete={deleteEntry}
+              onMove={moveEntry}
+              onResizeStart={startResize}
+              onResizeReset={resetWidth}
+              isResizing={isResizing}
+            />
+          </div>
+        </div>
       </div>
 
       <StatusBar vimEnabled={vimEnabled} mode={mode} currentFile={currentFile} timestamp={now} />

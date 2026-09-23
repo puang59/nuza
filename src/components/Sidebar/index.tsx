@@ -17,6 +17,9 @@ interface SidebarProps {
   onRename: (path: string, newName: string) => Promise<void> | void;
   onDelete: (path: string) => Promise<void> | void;
   onMove: (path: string, targetDir: string) => Promise<void> | void;
+  onResizeStart: (event: React.PointerEvent) => void;
+  onResizeReset: () => void;
+  isResizing: boolean;
 }
 
 export default function Sidebar({
@@ -30,6 +33,9 @@ export default function Sidebar({
   onRename,
   onDelete,
   onMove,
+  onResizeStart,
+  onResizeReset,
+  isResizing,
 }: SidebarProps) {
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
   const [pendingCreate, setPendingCreate] = useState<PendingCreate>(null);
@@ -149,7 +155,21 @@ export default function Sidebar({
   };
 
   return (
-    <aside className="flex h-full w-48 shrink-0 flex-col border-l border-zinc-700 text-zinc-300">
+    <aside className="relative flex h-full w-full shrink-0 flex-col border-l border-zinc-700 text-zinc-300">
+      {/* Straddles the border so there's a forgiving grab target, and tints the
+          border itself on hover/drag rather than adding another visible chrome. */}
+      <div
+        onPointerDown={onResizeStart}
+        onDoubleClick={onResizeReset}
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize sidebar"
+        title="Drag to resize, double-click to reset"
+        className={`absolute -left-1 top-0 z-10 h-full w-2 cursor-col-resize after:absolute after:inset-y-0 after:left-1 after:w-px after:transition-colors ${
+          isResizing ? "after:bg-[#FF9696]" : "after:bg-transparent hover:after:bg-zinc-500"
+        }`}
+      />
+
       <div className="flex items-center justify-between gap-1 px-3 pt-1">
         <h2
           className="truncate text-xs font-semibold uppercase tracking-wider text-zinc-500"
