@@ -20,6 +20,7 @@ function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [vimEnabled, setVimEnabled] = usePersistedState("vimEnabled", true);
   const [transparencyEnabled, setTransparencyEnabled] = usePersistedState("transparencyEnabled", true);
+  const [autoUpdateEnabled, setAutoUpdateEnabled] = usePersistedState("autoUpdateEnabled", true);
 
   const {
     value,
@@ -38,7 +39,9 @@ function App() {
   } = useFileOperations({
     onFolderOpened: () => setIsSidebarOpen(true),
   });
-  const { isUpdating, checkForUpdates, version } = useAppUpdater();
+  const { status: updateStatus, checkForUpdates, installUpdate, version } = useAppUpdater({
+    autoUpdate: autoUpdateEnabled,
+  });
   const { bindings: keymapBindings, setBinding: setKeymapBinding, resetBinding: resetKeymapBinding, resetAll: resetAllKeymaps } = useKeymaps();
 
   useEffect(() => {
@@ -84,9 +87,10 @@ function App() {
   return (
     <main className={`h-screen flex flex-col text-white overflow-hidden ${transparencyEnabled ? "bg-transparent" : "bg-[#1E1E1E]"}`}>
       <EditorHeader
-        isUpdating={isUpdating}
+        updateStatus={updateStatus}
         version={version}
         onCheckUpdates={checkForUpdates}
+        onInstallUpdate={installUpdate}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onSave={save}
         onToggleSidebar={() => setIsSidebarOpen((open) => !open)}
@@ -135,6 +139,8 @@ function App() {
         setVimEnabled={setVimEnabled}
         transparencyEnabled={transparencyEnabled}
         setTransparencyEnabled={setTransparencyEnabled}
+        autoUpdateEnabled={autoUpdateEnabled}
+        setAutoUpdateEnabled={setAutoUpdateEnabled}
         keymapBindings={keymapBindings}
         setKeymapBinding={setKeymapBinding}
         resetKeymapBinding={resetKeymapBinding}

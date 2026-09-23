@@ -19,6 +19,8 @@ interface SettingsModalProps {
   setVimEnabled: (enabled: boolean) => void;
   transparencyEnabled: boolean;
   setTransparencyEnabled: (enabled: boolean) => void;
+  autoUpdateEnabled: boolean;
+  setAutoUpdateEnabled: (enabled: boolean) => void;
   keymapBindings: Record<KeymapAction, string>;
   setKeymapBinding: (action: KeymapAction, binding: string) => void;
   resetKeymapBinding: (action: KeymapAction) => void;
@@ -32,6 +34,8 @@ export default function SettingsModal({
   setVimEnabled,
   transparencyEnabled,
   setTransparencyEnabled,
+  autoUpdateEnabled,
+  setAutoUpdateEnabled,
   keymapBindings,
   setKeymapBinding,
   resetKeymapBinding,
@@ -97,6 +101,8 @@ export default function SettingsModal({
                 setVimEnabled={setVimEnabled}
                 transparencyEnabled={transparencyEnabled}
                 setTransparencyEnabled={setTransparencyEnabled}
+                autoUpdateEnabled={autoUpdateEnabled}
+                setAutoUpdateEnabled={setAutoUpdateEnabled}
               />
             ) : (
               <KeymapSettings
