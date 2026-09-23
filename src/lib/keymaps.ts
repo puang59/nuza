@@ -6,7 +6,10 @@ export type KeymapAction =
   | "toggle-vim-mode"
   | "check-updates"
   | "increase-font-size"
-  | "decrease-font-size";
+  | "decrease-font-size"
+  | "next-tab"
+  | "previous-tab"
+  | "close-tab";
 
 export interface KeymapDefinition {
   id: KeymapAction;
@@ -64,6 +67,27 @@ export const KEYMAP_ACTIONS: KeymapDefinition[] = [
     label: "Decrease Font Size",
     description: "Make the editor text smaller",
     defaultBinding: "mod+-",
+  },
+  {
+    id: "next-tab",
+    label: "Next Tab",
+    description: "Switch to the tab on the right",
+    defaultBinding: "mod+alt+arrowright",
+  },
+  {
+    id: "previous-tab",
+    label: "Previous Tab",
+    description: "Switch to the tab on the left",
+    defaultBinding: "mod+alt+arrowleft",
+  },
+  {
+    // Deliberately not mod+w: on macOS that's the native "Close Window" menu
+    // shortcut, which fires before the webview ever sees the key and would
+    // close the whole app instead of the tab.
+    id: "close-tab",
+    label: "Close Tab",
+    description: "Close the current tab",
+    defaultBinding: "mod+shift+w",
   },
 ];
 

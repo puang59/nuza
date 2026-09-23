@@ -39,11 +39,15 @@ function App() {
     value,
     setValue,
     currentFile,
+    openPaths,
+    dirtyPaths,
     folderData,
     rootPath,
     openFolder,
     save,
     selectFile,
+    closeFile,
+    cycleFile,
     createFile,
     createFolder,
     renameEntry,
@@ -85,8 +89,11 @@ function App() {
       "check-updates": checkForUpdates,
       "increase-font-size": () => setEditorFontSize((size) => clampEditorFontSize(size + EDITOR_FONT_SIZE_STEP)),
       "decrease-font-size": () => setEditorFontSize((size) => clampEditorFontSize(size - EDITOR_FONT_SIZE_STEP)),
+      "next-tab": () => cycleFile(1),
+      "previous-tab": () => cycleFile(-1),
+      "close-tab": () => closeFile(currentFile),
     }),
-    [save, openFolder, checkForUpdates, setVimEnabled, setEditorFontSize]
+    [save, openFolder, checkForUpdates, setVimEnabled, setEditorFontSize, cycleFile, closeFile, currentFile]
   );
 
   useKeymapListener(keymapBindings, keymapHandlers);
@@ -113,6 +120,11 @@ function App() {
       <EditorHeader
         updateStatus={updateStatus}
         version={version}
+        openPaths={openPaths}
+        currentFile={currentFile}
+        dirtyPaths={dirtyPaths}
+        onSelectTab={selectFile}
+        onCloseTab={closeFile}
         onCheckUpdates={checkForUpdates}
         onInstallUpdate={installUpdate}
         onOpenSettings={() => setIsSettingsOpen(true)}

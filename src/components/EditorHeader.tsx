@@ -1,10 +1,16 @@
 import { ArrowDownCircle, PanelLeft, RefreshCw, Save, Settings } from "lucide-react";
 import { UpdateStatus } from "@/hooks/useAppUpdater";
 import { isMacPlatform } from "@/lib/platform";
+import TabBar from "./TabBar";
 
 interface EditorHeaderProps {
   updateStatus: UpdateStatus;
   version: string | null;
+  openPaths: string[];
+  currentFile: string;
+  dirtyPaths: Set<string>;
+  onSelectTab: (path: string) => void;
+  onCloseTab: (path: string) => void;
   onCheckUpdates: () => void;
   onInstallUpdate: () => void;
   onOpenSettings: () => void;
@@ -119,6 +125,11 @@ function UpdateButton({
 export default function EditorHeader({
   updateStatus,
   version,
+  openPaths,
+  currentFile,
+  dirtyPaths,
+  onSelectTab,
+  onCloseTab,
   onCheckUpdates,
   onInstallUpdate,
   onOpenSettings,
@@ -134,13 +145,21 @@ export default function EditorHeader({
   return (
     <header
       data-tauri-drag-region
-      className={`h-12 shrink-0 flex items-center justify-between px-4 ${leadingPadding}`}
+      className={`h-12 shrink-0 flex items-center gap-4 px-4 ${leadingPadding}`}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex shrink-0 items-center gap-3">
         <span className="text-sm font-bold text-gray-400">nuza</span>
       </div>
 
-      <div className="flex items-center gap-3">
+      <TabBar
+        paths={openPaths}
+        activePath={currentFile}
+        dirtyPaths={dirtyPaths}
+        onSelect={onSelectTab}
+        onClose={onCloseTab}
+      />
+
+      <div className="ml-auto flex shrink-0 items-center gap-3">
         <UpdateButton
           status={updateStatus}
           version={version}

@@ -144,6 +144,16 @@ body,
   transition: width 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* The tab strip scrolls, but a visible scrollbar in the title bar is noise. */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-in,
   .animate-panel-in,
