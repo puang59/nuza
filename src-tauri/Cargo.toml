@@ -27,6 +27,8 @@ tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-updater = "2.12.0"
 tauri-plugin-process = "2"
+fontdb = "0.24.0"
+ttf-parser = "0.25"
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

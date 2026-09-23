@@ -21,6 +21,8 @@ interface SettingsModalProps {
   setTransparencyEnabled: (enabled: boolean) => void;
   autoUpdateEnabled: boolean;
   setAutoUpdateEnabled: (enabled: boolean) => void;
+  editorFont: string;
+  setEditorFont: (font: string) => void;
   keymapBindings: Record<KeymapAction, string>;
   setKeymapBinding: (action: KeymapAction, binding: string) => void;
   resetKeymapBinding: (action: KeymapAction) => void;
@@ -36,6 +38,8 @@ export default function SettingsModal({
   setTransparencyEnabled,
   autoUpdateEnabled,
   setAutoUpdateEnabled,
+  editorFont,
+  setEditorFont,
   keymapBindings,
   setKeymapBinding,
   resetKeymapBinding,
@@ -103,6 +107,8 @@ export default function SettingsModal({
                 setTransparencyEnabled={setTransparencyEnabled}
                 autoUpdateEnabled={autoUpdateEnabled}
                 setAutoUpdateEnabled={setAutoUpdateEnabled}
+                editorFont={editorFont}
+                setEditorFont={setEditorFont}
               />
             ) : (
               <KeymapSettings
