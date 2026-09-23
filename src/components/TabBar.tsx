@@ -112,12 +112,19 @@ export default function TabBar({ paths, activePath, dirtyPaths, onSelect, onClos
                 onSelect(path);
               }
             }}
-            className={`animate-fade-in group flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-md pl-2.5 pr-1 text-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-[#FF9696] ${
+            className={`animate-fade-in group relative flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-md pl-2.5 pr-1 text-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-[#FF9696] ${
               isActive
                 ? "bg-zinc-800 text-white"
                 : "text-zinc-500 hover:bg-zinc-800/40 hover:text-zinc-300"
             }`}
           >
+            {/* Inset from the corners and positioned rather than set as a border,
+                so the accent stays a straight line instead of bending around the
+                pill's radius. */}
+            {isActive && (
+              <span className="pointer-events-none absolute inset-x-2 bottom-0 h-[2px] rounded-full bg-[#FF9696]" />
+            )}
+
             <span className="max-w-[140px] truncate">{fileName(path)}</span>
 
             {/* The dot marks unsaved edits and gives way to the close button on hover,
