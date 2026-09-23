@@ -86,7 +86,7 @@ export default function TabBar({ paths, activePath, dirtyPaths, onSelect, onClos
         if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
         scroller.scrollLeft += event.deltaY;
       }}
-      className="no-scrollbar flex min-w-0 shrink items-center gap-1 overflow-x-auto"
+      className="no-scrollbar flex min-w-0 shrink items-center gap-0.5 overflow-x-auto"
       style={{ maskImage: mask, WebkitMaskImage: mask }}
     >
       {paths.map((path) => {
@@ -112,10 +112,10 @@ export default function TabBar({ paths, activePath, dirtyPaths, onSelect, onClos
                 onSelect(path);
               }
             }}
-            className={`animate-fade-in group flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-md border-b-2 pl-2.5 pr-1.5 text-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-[#FF9696] ${
+            className={`animate-fade-in group flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-md pl-2.5 pr-1 text-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-[#FF9696] ${
               isActive
-                ? "border-[#FF9696] bg-zinc-800/80 text-white"
-                : "border-transparent text-gray-400 hover:bg-zinc-800/40 hover:text-gray-200"
+                ? "bg-zinc-800 text-white"
+                : "text-zinc-500 hover:bg-zinc-800/40 hover:text-zinc-300"
             }`}
           >
             <span className="max-w-[140px] truncate">{fileName(path)}</span>
@@ -124,7 +124,7 @@ export default function TabBar({ paths, activePath, dirtyPaths, onSelect, onClos
                 so the tab never changes width between the two states. */}
             <span className="relative flex h-4 w-4 shrink-0 items-center justify-center">
               {isDirty && (
-                <span className="absolute h-1.5 w-1.5 rounded-full bg-current opacity-80 transition-opacity group-hover:opacity-0" />
+                <span className="pointer-events-none absolute h-[5px] w-[5px] rounded-full bg-current opacity-70 transition-opacity group-hover:opacity-0" />
               )}
               <button
                 type="button"
@@ -133,11 +133,13 @@ export default function TabBar({ paths, activePath, dirtyPaths, onSelect, onClos
                   event.stopPropagation();
                   onClose(path);
                 }}
-                className={`flex h-4 w-4 cursor-pointer items-center justify-center rounded transition-all hover:bg-zinc-600/60 hover:text-white ${
-                  isDirty ? "opacity-0 group-hover:opacity-100" : "opacity-0 group-hover:opacity-80"
-                } ${isActive ? "opacity-60" : ""}`}
+                className={`flex h-4 w-4 cursor-pointer items-center justify-center rounded-sm text-zinc-400 transition-colors hover:bg-white/10 hover:text-white group-hover:opacity-100 ${
+                  // The active tab keeps its close button visible; the rest reveal
+                  // one on hover, and a dirty dot holds the slot until then.
+                  isActive && !isDirty ? "opacity-60" : "opacity-0"
+                }`}
               >
-                <X size={11} />
+                <X size={12} strokeWidth={2.25} />
               </button>
             </span>
           </div>
