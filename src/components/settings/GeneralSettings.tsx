@@ -2,7 +2,13 @@ import { useEffect, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { isMacPlatform } from "@/lib/platform";
-import { DEFAULT_EDITOR_FONT, listSystemFonts } from "@/lib/fonts";
+import {
+  DEFAULT_EDITOR_FONT,
+  MAX_EDITOR_FONT_SIZE,
+  MIN_EDITOR_FONT_SIZE,
+  clampEditorFontSize,
+  listSystemFonts,
+} from "@/lib/fonts";
 import SettingRow from "./SettingRow";
 
 interface GeneralSettingsProps {
@@ -14,6 +20,8 @@ interface GeneralSettingsProps {
   setAutoUpdateEnabled: (enabled: boolean) => void;
   editorFont: string;
   setEditorFont: (font: string) => void;
+  editorFontSize: number;
+  setEditorFontSize: (size: number) => void;
 }
 
 export default function GeneralSettings({
@@ -25,8 +33,15 @@ export default function GeneralSettings({
   setAutoUpdateEnabled,
   editorFont,
   setEditorFont,
+  editorFontSize,
+  setEditorFontSize,
 }: GeneralSettingsProps) {
   const [fonts, setFonts] = useState<string[]>([]);
+  const [fontSizeInput, setFontSizeInput] = useState(String(editorFontSize));
+
+  useEffect(() => {
+    setFontSizeInput(String(editorFontSize));
+  }, [editorFontSize]);
 
   useEffect(() => {
     listSystemFonts()
@@ -77,6 +92,30 @@ export default function GeneralSettings({
             size={12}
             className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400"
           />
+        </div>
+      </SettingRow>
+
+      <SettingRow
+        title="Font Size"
+        description={`Editor text size in pixels (${MIN_EDITOR_FONT_SIZE}-${MAX_EDITOR_FONT_SIZE})`}
+      >
+        <div className="relative w-40">
+          <input
+            aria-label="Editor font size"
+            type="number"
+            min={MIN_EDITOR_FONT_SIZE}
+            max={MAX_EDITOR_FONT_SIZE}
+            value={fontSizeInput}
+            onChange={(e) => setFontSizeInput(e.target.value)}
+            onBlur={() => setEditorFontSize(clampEditorFontSize(Number(fontSizeInput)))}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
+            }}
+            className="w-full bg-zinc-800 border border-zinc-700 rounded-md pl-2 pr-7 py-1 text-xs text-white outline-none focus-visible:border-[#FF9696]"
+          />
+          <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">
+            px
+          </span>
         </div>
       </SettingRow>
     </div>

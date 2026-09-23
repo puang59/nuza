@@ -4,7 +4,9 @@ export type KeymapAction =
   | "open-folder"
   | "open-settings"
   | "toggle-vim-mode"
-  | "check-updates";
+  | "check-updates"
+  | "increase-font-size"
+  | "decrease-font-size";
 
 export interface KeymapDefinition {
   id: KeymapAction;
@@ -50,6 +52,18 @@ export const KEYMAP_ACTIONS: KeymapDefinition[] = [
     label: "Check for Updates",
     description: "Check for a new version of nuza",
     defaultBinding: "mod+shift+u",
+  },
+  {
+    id: "increase-font-size",
+    label: "Increase Font Size",
+    description: "Make the editor text bigger",
+    defaultBinding: "mod+=",
+  },
+  {
+    id: "decrease-font-size",
+    label: "Decrease Font Size",
+    description: "Make the editor text smaller",
+    defaultBinding: "mod+-",
   },
 ];
 

@@ -13,7 +13,13 @@ import { useKeymaps, useKeymapListener } from "./hooks/useKeymaps";
 import { useFileOperations } from "./hooks/useFileOperations";
 import { useAppUpdater } from "./hooks/useAppUpdater";
 import { usePersistedState } from "./hooks/usePersistedState";
-import { DEFAULT_EDITOR_FONT, editorFontFamily } from "./lib/fonts";
+import {
+  DEFAULT_EDITOR_FONT,
+  DEFAULT_EDITOR_FONT_SIZE,
+  EDITOR_FONT_SIZE_STEP,
+  clampEditorFontSize,
+  editorFontFamily,
+} from "./lib/fonts";
 
 function App() {
   const [mode, setMode] = useState<string>("normal");
@@ -23,6 +29,7 @@ function App() {
   const [transparencyEnabled, setTransparencyEnabled] = usePersistedState("transparencyEnabled", true);
   const [autoUpdateEnabled, setAutoUpdateEnabled] = usePersistedState("autoUpdateEnabled", true);
   const [editorFont, setEditorFont] = usePersistedState("editorFont", DEFAULT_EDITOR_FONT);
+  const [editorFontSize, setEditorFontSize] = usePersistedState("editorFontSize", DEFAULT_EDITOR_FONT_SIZE);
 
   const {
     value,
@@ -53,8 +60,11 @@ function App() {
   }, [transparencyEnabled]);
 
   const editorFontTheme = useMemo(
-    () => EditorView.theme({ ".cm-scroller": { fontFamily: editorFontFamily(editorFont) } }),
-    [editorFont]
+    () =>
+      EditorView.theme({
+        ".cm-scroller": { fontFamily: editorFontFamily(editorFont), fontSize: `${editorFontSize}px` },
+      }),
+    [editorFont, editorFontSize]
   );
 
   const editorRef = useRef<ReactCodeMirrorRef>(null);
@@ -68,8 +78,10 @@ function App() {
       "open-settings": () => setIsSettingsOpen((open) => !open),
       "toggle-vim-mode": () => setVimEnabled((enabled) => !enabled),
       "check-updates": checkForUpdates,
+      "increase-font-size": () => setEditorFontSize((size) => clampEditorFontSize(size + EDITOR_FONT_SIZE_STEP)),
+      "decrease-font-size": () => setEditorFontSize((size) => clampEditorFontSize(size - EDITOR_FONT_SIZE_STEP)),
     }),
-    [save, openFolder, checkForUpdates, setVimEnabled]
+    [save, openFolder, checkForUpdates, setVimEnabled, setEditorFontSize]
   );
 
   useKeymapListener(keymapBindings, keymapHandlers);
@@ -150,6 +162,8 @@ function App() {
         setAutoUpdateEnabled={setAutoUpdateEnabled}
         editorFont={editorFont}
         setEditorFont={setEditorFont}
+        editorFontSize={editorFontSize}
+        setEditorFontSize={(size) => setEditorFontSize(clampEditorFontSize(size))}
         keymapBindings={keymapBindings}
         setKeymapBinding={setKeymapBinding}
         resetKeymapBinding={resetKeymapBinding}

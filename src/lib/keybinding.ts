@@ -22,13 +22,23 @@ const KEY_DISPLAY_NAMES: Record<string, string> = {
   ".": ".",
 };
 
+// On most keyboard layouts, typing "+" or "_" requires holding Shift even though the
+// shortcut (e.g. zoom in/out) is conceptually just mod+= / mod+-. Normalize to the
+// unshifted key so "mod+=" matches whether or not Shift was physically needed.
+const SHIFTED_KEY_EQUIVALENTS: Record<string, string> = { "+": "=", "_": "-" };
+
 export function eventToBinding(e: KeyboardEvent): string {
   const parts: string[] = [];
   if (e.ctrlKey || e.metaKey) parts.push("mod");
   if (e.altKey) parts.push("alt");
-  if (e.shiftKey) parts.push("shift");
 
-  const key = e.key.toLowerCase();
+  let key = e.key.toLowerCase();
+  if (key in SHIFTED_KEY_EQUIVALENTS) {
+    key = SHIFTED_KEY_EQUIVALENTS[key];
+  } else if (e.shiftKey) {
+    parts.push("shift");
+  }
+
   if (!MODIFIER_KEYS.has(key)) {
     parts.push(key === " " ? "space" : key);
   }

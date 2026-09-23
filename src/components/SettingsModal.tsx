@@ -23,6 +23,8 @@ interface SettingsModalProps {
   setAutoUpdateEnabled: (enabled: boolean) => void;
   editorFont: string;
   setEditorFont: (font: string) => void;
+  editorFontSize: number;
+  setEditorFontSize: (size: number) => void;
   keymapBindings: Record<KeymapAction, string>;
   setKeymapBinding: (action: KeymapAction, binding: string) => void;
   resetKeymapBinding: (action: KeymapAction) => void;
@@ -40,6 +42,8 @@ export default function SettingsModal({
   setAutoUpdateEnabled,
   editorFont,
   setEditorFont,
+  editorFontSize,
+  setEditorFontSize,
   keymapBindings,
   setKeymapBinding,
   resetKeymapBinding,
@@ -109,6 +113,8 @@ export default function SettingsModal({
                 setAutoUpdateEnabled={setAutoUpdateEnabled}
                 editorFont={editorFont}
                 setEditorFont={setEditorFont}
+                editorFontSize={editorFontSize}
+                setEditorFontSize={setEditorFontSize}
               />
             ) : (
               <KeymapSettings
