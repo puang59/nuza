@@ -14,6 +14,7 @@ import { useFileOperations } from "./hooks/useFileOperations";
 import { useAppUpdater } from "./hooks/useAppUpdater";
 import { usePersistedState } from "./hooks/usePersistedState";
 import { useResizableSidebar } from "./hooks/useResizableSidebar";
+import { isMacPlatform } from "./lib/platform";
 import {
   DEFAULT_EDITOR_FONT,
   DEFAULT_EDITOR_FONT_SIZE,
@@ -48,6 +49,8 @@ function App() {
     selectFile,
     closeFile,
     cycleFile,
+    switchToRecent,
+    jumpToFile,
     createFile,
     createFolder,
     renameEntry,
@@ -91,12 +94,31 @@ function App() {
       "decrease-font-size": () => setEditorFontSize((size) => clampEditorFontSize(size - EDITOR_FONT_SIZE_STEP)),
       "next-tab": () => cycleFile(1),
       "previous-tab": () => cycleFile(-1),
+      "recent-tab": switchToRecent,
       "close-tab": () => closeFile(currentFile),
     }),
-    [save, openFolder, checkForUpdates, setVimEnabled, setEditorFontSize, cycleFile, closeFile, currentFile]
+    [save, openFolder, checkForUpdates, setVimEnabled, setEditorFontSize, cycleFile, switchToRecent, closeFile, currentFile]
   );
 
   useKeymapListener(keymapBindings, keymapHandlers);
+
+  // mod+1..8 jump to that tab and mod+9 to the last, matching what browsers and
+  // editors do. These stay fixed rather than joining the rebindable keymap list,
+  // which would mean nine near-identical rows in Settings for a convention
+  // nobody reassigns.
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      const usesMod = isMacPlatform() ? event.metaKey : event.ctrlKey;
+      if (!usesMod || event.altKey || event.shiftKey) return;
+      if (event.key < "1" || event.key > "9") return;
+
+      event.preventDefault();
+      jumpToFile(event.key === "9" ? -1 : Number(event.key) - 1);
+    }
+
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [jumpToFile]);
 
   const handleEditorCreated = useCallback(
     (view: EditorView) => {

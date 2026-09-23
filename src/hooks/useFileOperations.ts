@@ -44,6 +44,8 @@ export function useFileOperations({ onFolderOpened }: UseFileOperationsOptions =
   const rootPathRef = useRef(rootPath);
   const openPathsRef = useRef(openPaths);
   const docsRef = useRef<Record<string, OpenDoc>>({ [UNTITLED_FILE]: { content: "", saved: "" } });
+  /** Open paths in most-recently-viewed order, so ctrl+tab can flip back. */
+  const recentRef = useRef<string[]>([UNTITLED_FILE]);
 
   valueRef.current = value;
   currentFileRef.current = currentFile;
@@ -83,6 +85,7 @@ export function useFileOperations({ onFolderOpened }: UseFileOperationsOptions =
         setFolderData(result.entries);
 
         docsRef.current = { [UNTITLED_FILE]: { content: "", saved: "" } };
+        recentRef.current = [UNTITLED_FILE];
         setOpenPaths([UNTITLED_FILE]);
         setCurrentFile(UNTITLED_FILE);
         setValue("");
@@ -148,6 +151,7 @@ export function useFileOperations({ onFolderOpened }: UseFileOperationsOptions =
 
         setCurrentFile(path);
         setOpenPaths((paths) => (paths.includes(path) ? paths : [...paths, path]));
+        recentRef.current = [path, ...recentRef.current.filter((p) => p !== path)];
       } catch (error) {
         console.error("Failed to read file:", error);
       }
@@ -167,9 +171,11 @@ export function useFileOperations({ onFolderOpened }: UseFileOperationsOptions =
       if (index === -1) return;
 
       const remaining = paths.filter((p) => p !== path);
+      recentRef.current = recentRef.current.filter((p) => p !== path);
 
       if (remaining.length === 0) {
         docsRef.current[UNTITLED_FILE] = { content: "", saved: "" };
+        recentRef.current = [UNTITLED_FILE];
         setOpenPaths([UNTITLED_FILE]);
         setCurrentFile(UNTITLED_FILE);
         setValue("");
@@ -197,6 +203,26 @@ export function useFileOperations({ onFolderOpened }: UseFileOperationsOptions =
     [selectFile]
   );
 
+  /**
+   * Flips to the document viewed before this one, so repeated presses toggle
+   * between a pair the way ctrl+tab does elsewhere.
+   */
+  const switchToRecent = useCallback(() => {
+    const open = new Set(openPathsRef.current);
+    const previous = recentRef.current.find((p) => p !== currentFileRef.current && open.has(p));
+    if (previous) void selectFile(previous);
+  }, [selectFile]);
+
+  /** Jumps to a tab by position; `index` of -1 means the last one. */
+  const jumpToFile = useCallback(
+    (index: number) => {
+      const paths = openPathsRef.current;
+      const path = index === -1 ? paths[paths.length - 1] : paths[index];
+      if (path) void selectFile(path);
+    },
+    [selectFile]
+  );
+
   /** Rewrites cached documents and open tabs after a path changes on disk. */
   const rewritePaths = useCallback((from: string, to: string) => {
     for (const key of Object.keys(docsRef.current)) {
@@ -206,6 +232,7 @@ export function useFileOperations({ onFolderOpened }: UseFileOperationsOptions =
       }
     }
     setOpenPaths((paths) => paths.map((p) => (isWithin(p, from) ? p.replace(from, to) : p)));
+    recentRef.current = recentRef.current.map((p) => (isWithin(p, from) ? p.replace(from, to) : p));
     if (isWithin(currentFileRef.current, from)) {
       setCurrentFile(currentFileRef.current.replace(from, to));
     }
@@ -255,8 +282,11 @@ export function useFileOperations({ onFolderOpened }: UseFileOperationsOptions =
       }
 
       const remaining = openPathsRef.current.filter((p) => !isWithin(p, path));
+      recentRef.current = recentRef.current.filter((p) => !isWithin(p, path));
+
       if (remaining.length === 0) {
         docsRef.current[UNTITLED_FILE] = { content: "", saved: "" };
+        recentRef.current = [UNTITLED_FILE];
         setOpenPaths([UNTITLED_FILE]);
         setCurrentFile(UNTITLED_FILE);
         setValue("");
@@ -286,6 +316,8 @@ export function useFileOperations({ onFolderOpened }: UseFileOperationsOptions =
     selectFile,
     closeFile,
     cycleFile,
+    switchToRecent,
+    jumpToFile,
     createFile,
     createFolder,
     renameEntry,

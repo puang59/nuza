@@ -9,6 +9,7 @@ export type KeymapAction =
   | "decrease-font-size"
   | "next-tab"
   | "previous-tab"
+  | "recent-tab"
   | "close-tab";
 
 export interface KeymapDefinition {
@@ -79,6 +80,12 @@ export const KEYMAP_ACTIONS: KeymapDefinition[] = [
     label: "Previous Tab",
     description: "Switch to the tab on the left",
     defaultBinding: "mod+alt+arrowleft",
+  },
+  {
+    id: "recent-tab",
+    label: "Recent Tab",
+    description: "Flip back to the previously viewed tab",
+    defaultBinding: "ctrl+tab",
   },
   {
     // Deliberately not mod+w: on macOS that's the native "Close Window" menu
