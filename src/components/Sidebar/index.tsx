@@ -155,9 +155,10 @@ export default function Sidebar({
   };
 
   return (
-    <aside className="relative flex h-full w-full shrink-0 flex-col border-l border-zinc-700 text-zinc-300">
-      {/* Straddles the border so there's a forgiving grab target, and tints the
-          border itself on hover/drag rather than adding another visible chrome. */}
+    <aside className="relative flex h-full w-full shrink-0 flex-col text-zinc-300">
+      {/* No resting divider - the editor's darker tint already separates the two
+          panes. The handle is a forgiving grab target that only draws a line
+          while it's hovered or being dragged. */}
       <div
         onPointerDown={onResizeStart}
         onDoubleClick={onResizeReset}

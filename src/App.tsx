@@ -159,7 +159,7 @@ function App() {
             surface reads as the deepest layer, with the sidebar and the bars
             above it. Tinted rather than filled so window vibrancy still shows
             through when transparency is on. */}
-        <div className="flex-1 min-w-0 h-full relative overflow-hidden rounded-lg bg-black/20">
+        <div className="flex-1 min-w-0 h-full relative overflow-hidden rounded-t-lg bg-black/20">
           <CodeMirror
             ref={editorRef}
             value={value}
