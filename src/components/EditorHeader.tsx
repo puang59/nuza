@@ -42,16 +42,27 @@ function UpdateButton({
   onInstallUpdate: () => void;
 }) {
   if (status.state === "ready" || status.state === "installing") {
+    const failed = status.state === "ready" && !!status.installError;
     return (
       <button
         data-tauri-drag-region="false"
-        className="flex items-center gap-1.5 rounded-full bg-[#FF9696] px-2.5 py-0.5 text-xs font-medium text-black hover:bg-[#FFB0B0] cursor-pointer transition-colors disabled:cursor-default disabled:opacity-70"
+        className={`flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium text-black cursor-pointer transition-colors disabled:cursor-default disabled:opacity-70 ${
+          failed ? "bg-red-400 hover:bg-red-300" : "bg-[#FF9696] hover:bg-[#FFB0B0]"
+        }`}
         onClick={onInstallUpdate}
         disabled={status.state === "installing"}
-        title={`Restart to update to v${status.version}`}
+        title={
+          failed
+            ? `Install failed: ${status.installError}`
+            : `Restart to update to v${status.version}`
+        }
       >
         <ArrowDownCircle size={12} />
-        {status.state === "installing" ? "Installing…" : "Restart to update"}
+        {status.state === "installing"
+          ? "Installing…"
+          : failed
+            ? "Install failed - retry"
+            : "Restart to update"}
       </button>
     );
   }

@@ -16,7 +16,7 @@ export type UpdateStatus =
   | { state: "checking" }
   | { state: "up-to-date" }
   | { state: "downloading"; version: string; progress: number | null }
-  | { state: "ready"; version: string }
+  | { state: "ready"; version: string; installError?: string }
   | { state: "installing"; version: string }
   | { state: "error"; message: string };
 
@@ -73,7 +73,7 @@ export function useAppUpdater({ autoUpdate }: UseAppUpdaterOptions) {
       await relaunch();
     } catch (error) {
       console.error("Failed to install update:", error);
-      setStatus({ state: "ready", version: current.version });
+      setStatus({ state: "ready", version: current.version, installError: String(error) });
     }
   }, []);
 
