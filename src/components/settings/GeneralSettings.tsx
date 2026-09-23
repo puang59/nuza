@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { isMacPlatform } from "@/lib/platform";
 import { UpdateStatus } from "@/hooks/useAppUpdater";
@@ -164,11 +164,32 @@ export default function GeneralSettings({
             onKeyDown={(e) => {
               if (e.key === "Enter") e.currentTarget.blur();
             }}
-            className="w-full bg-zinc-800 border border-zinc-700 rounded-md pl-2 pr-7 py-1 text-xs text-white outline-none focus-visible:border-[#FF9696]"
+            className="w-full bg-zinc-800 border border-zinc-700 rounded-md pl-2 pr-14 py-1 text-xs text-white outline-none focus-visible:border-[#FF9696] [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
           />
-          <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">
+          <span className="pointer-events-none absolute right-8 top-1/2 -translate-y-1/2 text-xs text-gray-500">
             px
           </span>
+          {/* Native number-input spinner arrows render black on some platforms and are
+              unreadable on this dark background, so we hide them (above) and drive the
+              same clamp/step logic from our own grey buttons instead. */}
+          <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex flex-col">
+            <button
+              type="button"
+              aria-label="Increase font size"
+              onClick={() => setEditorFontSize(clampEditorFontSize(editorFontSize + 1))}
+              className="text-gray-400 hover:text-white cursor-pointer leading-none"
+            >
+              <ChevronUp size={10} />
+            </button>
+            <button
+              type="button"
+              aria-label="Decrease font size"
+              onClick={() => setEditorFontSize(clampEditorFontSize(editorFontSize - 1))}
+              className="text-gray-400 hover:text-white cursor-pointer leading-none"
+            >
+              <ChevronDown size={10} />
+            </button>
+          </div>
         </div>
       </SettingRow>
     </div>
