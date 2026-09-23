@@ -75,12 +75,12 @@ export default function SettingsModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+      className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-[#1E1E1E] border border-zinc-700 rounded-lg shadow-xl w-[640px] h-[520px] max-w-full max-h-full overflow-hidden flex flex-col"
+        className="animate-panel-in bg-[#1E1E1E] border border-zinc-700 rounded-lg shadow-xl w-[640px] h-[520px] max-w-full max-h-full overflow-hidden flex flex-col"
       >
         <div className="flex items-center justify-between p-4 border-b border-zinc-800 shrink-0">
           <h2 className="text-lg font-semibold text-white">Settings</h2>

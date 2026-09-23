@@ -22,12 +22,12 @@ export default function ConfirmDeleteModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+      className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
       onClick={onCancel}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-[360px] max-w-full rounded-lg border border-zinc-700 bg-[#1E1E1E] p-5 shadow-xl"
+        className="animate-panel-in w-[360px] max-w-full rounded-lg border border-zinc-700 bg-[#1E1E1E] p-5 shadow-xl"
       >
         <h2 className="text-sm font-semibold text-white">Delete {isDirectory ? "folder" : "file"}</h2>
         <p className="mt-2 text-sm text-zinc-400">

@@ -101,6 +101,61 @@ body,
   --color-ring: var(--ring);
 }
 
+/*
+ * Shared entrance animations. Everything that appears on top of the editor
+ * (modals, menus) uses these so surfaces enter the same way instead of
+ * snapping in. Durations stay short on purpose - this is feedback, not a
+ * showpiece, and the app should never feel like it's waiting on an animation.
+ */
+@keyframes nuza-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes nuza-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.985);
+  }
+}
+
+@keyframes nuza-menu-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+.animate-fade-in {
+  animation: nuza-fade-in 140ms ease-out;
+}
+
+.animate-panel-in {
+  animation: nuza-panel-in 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.animate-menu-in {
+  animation: nuza-menu-in 120ms cubic-bezier(0.22, 1, 0.36, 1);
+  transform-origin: top left;
+}
+
+.sidebar-transition {
+  transition: width 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .animate-panel-in,
+  .animate-menu-in {
+    animation: none;
+  }
+
+  .sidebar-transition {
+    transition: none;
+  }
+}
+
 :root {
   font-family: "Inter", sans-serif;
   font-size: 16px;

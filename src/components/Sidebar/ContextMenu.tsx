@@ -45,7 +45,7 @@ export default function ContextMenu({
     <div
       ref={ref}
       style={{ top, left }}
-      className="fixed z-50 min-w-[160px] rounded-md border border-zinc-700 bg-[#252526] py-1 shadow-xl"
+      className="animate-menu-in fixed z-50 min-w-[160px] rounded-md border border-zinc-700 bg-[#252526] py-1 shadow-xl"
     >
       {items.map((item) => (
         <button
