@@ -97,3 +97,17 @@ jobs:
           publish_dir: ./public
           cname: nuza-update.puang.in
           keep_files: false
+
+      - name: Redeploy nuza.puang.in so its changelog picks up this release
+        # nuza-website reads GitHub Releases at Astro build time (see src/lib/changelog.ts),
+        # so a new nuza release doesn't show up there until the site is rebuilt. This hits
+        # a Vercel Deploy Hook (Project Settings > Git > Deploy Hooks on nuza-website) to
+        # trigger that rebuild. Skips quietly if the hook hasn't been configured yet.
+        env:
+          HOOK_URL: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$HOOK_URL" ]; then
+            echo "VERCEL_DEPLOY_HOOK_URL secret not set - skipping nuza-website redeploy"
+            exit 0
+          fi
+          curl -fsS -X POST "$HOOK_URL"
