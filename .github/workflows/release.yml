@@ -71,14 +71,22 @@ jobs:
       - name: Download updater JSON from release
         run: |
           mkdir -p public
-          echo "Waiting for GitHub release assets to be fully published..."
-          sleep 20
-          
+
           # Fetch the app version (tauri.conf.json is authoritative for the release tag)
           VERSION=$(jq -r .version src-tauri/tauri.conf.json)
           TAG_NAME="app-v$VERSION"
 
-          gh release download "$TAG_NAME" -p "latest.json" -O public/updater.json
+          for i in $(seq 1 15); do
+            if gh release download "$TAG_NAME" -p "latest.json" -O public/updater.json 2>/dev/null; then
+              echo "Downloaded latest.json"
+              exit 0
+            fi
+            echo "latest.json not ready yet, retrying in 10s... ($i/15)"
+            sleep 10
+          done
+
+          echo "Error: latest.json never became available"
+          exit 1
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
