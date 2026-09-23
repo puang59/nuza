@@ -58,6 +58,13 @@ jobs:
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
+          # Every leg of this matrix runs at once, and each one would read, merge
+          # and re-upload the same latest.json on the same release. That races:
+          # a job can delete a manifest another job has already replaced, which
+          # fails with a 404 and - worse - can publish a manifest missing the
+          # platform whose job lost the race. publish-updater builds it once
+          # instead, after every build has uploaded its artifacts.
+          includeUpdaterJson: false
 
   publish-updater:
     needs: publish-tauri
@@ -68,27 +75,56 @@ jobs:
       - name: checkout
         uses: actions/checkout@v4
       
-      - name: Download updater JSON from release
+      - name: Build the updater manifest from the release signatures
+        # The build jobs no longer write latest.json (they'd race each other for
+        # it), so assemble it here from every platform's .sig now that all of
+        # them have uploaded. The script refuses to emit a manifest that's
+        # missing a platform, so a half-published release fails loudly instead
+        # of leaving those users with no update.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           mkdir -p public
 
-          # Fetch the app version (tauri.conf.json is authoritative for the release tag)
+          # tauri.conf.json is authoritative for the release tag
           VERSION=$(jq -r .version src-tauri/tauri.conf.json)
           TAG_NAME="app-v$VERSION"
+          NOTES=$(gh release view "$TAG_NAME" -R "$GITHUB_REPOSITORY" --json body -q .body 2>/dev/null || echo "")
 
+          # Assets can lag a little behind the jobs that uploaded them.
           for i in $(seq 1 15); do
-            if gh release download "$TAG_NAME" -p "latest.json" -O public/updater.json 2>/dev/null; then
-              echo "Downloaded latest.json"
+            rm -rf sigs && mkdir -p sigs
+            gh release download "$TAG_NAME" -R "$GITHUB_REPOSITORY" -p "*.sig" -D sigs 2>/dev/null || true
+
+            if python3 .github/scripts/build-updater-manifest.py \
+                --sig-dir sigs \
+                --version "$VERSION" \
+                --tag "$TAG_NAME" \
+                --repo "$GITHUB_REPOSITORY" \
+                --notes "$NOTES" \
+                --output public/updater.json; then
+              jq '.platforms | keys' public/updater.json
               exit 0
             fi
-            echo "latest.json not ready yet, retrying in 10s... ($i/15)"
+
+            echo "signatures incomplete, retrying in 10s... ($i/15)"
             sleep 10
           done
 
-          echo "Error: latest.json never became available"
+          echo "Error: the release never had a complete set of signatures"
           exit 1
+
+      - name: Attach the manifest to the release
+        # Keeps latest.json on the release itself, as it was when tauri-action
+        # published it - only now there's a single writer.
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION=$(jq -r .version src-tauri/tauri.conf.json)
+          cp public/updater.json latest.json
+          gh release upload "app-v$VERSION" latest.json -R "$GITHUB_REPOSITORY" --clobber
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
