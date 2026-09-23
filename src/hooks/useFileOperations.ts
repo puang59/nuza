@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useReducer, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { FileEntry } from "@/lib/types";
 
@@ -14,15 +14,25 @@ interface OpenedFolder {
   entries: FileEntry[];
 }
 
+/**
+ * One open document. `saved` is the content as of the last read or write, so
+ * comparing it against `content` is what marks a tab as having unsaved edits.
+ */
+interface OpenDoc {
+  content: string;
+  saved: string;
+}
+
 /** True if `path` is `ancestor` itself, or lives somewhere underneath it. */
 function isWithin(path: string, ancestor: string) {
   return path === ancestor || path.startsWith(ancestor + "/") || path.startsWith(ancestor + "\\");
 }
 
-/** Owns the editor's document state and every Tauri file-system round trip. */
+/** Owns the editor's open documents and every Tauri file-system round trip. */
 export function useFileOperations({ onFolderOpened }: UseFileOperationsOptions = {}) {
   const [value, setValue] = useState<string>("");
   const [currentFile, setCurrentFile] = useState<string>(UNTITLED_FILE);
+  const [openPaths, setOpenPaths] = useState<string[]>([UNTITLED_FILE]);
   const [folderData, setFolderData] = useState<FileEntry[]>([]);
   const [rootPath, setRootPath] = useState<string | null>(null);
 
@@ -32,11 +42,38 @@ export function useFileOperations({ onFolderOpened }: UseFileOperationsOptions =
   const valueRef = useRef(value);
   const currentFileRef = useRef(currentFile);
   const rootPathRef = useRef(rootPath);
-  const fileCacheRef = useRef<Record<string, string>>({});
+  const openPathsRef = useRef(openPaths);
+  const docsRef = useRef<Record<string, OpenDoc>>({ [UNTITLED_FILE]: { content: "", saved: "" } });
 
   valueRef.current = value;
   currentFileRef.current = currentFile;
   rootPathRef.current = rootPath;
+  openPathsRef.current = openPaths;
+
+  // Writing to disk doesn't touch React state on its own, but it does change
+  // which tabs count as dirty - bump this to recompute after a save.
+  const [savedRevision, markSaved] = useReducer((n: number) => n + 1, 0);
+
+  /** Parks the live editor buffer back on its document before switching away. */
+  const stashCurrent = useCallback(() => {
+    const path = currentFileRef.current;
+    const doc = docsRef.current[path];
+    docsRef.current[path] = { content: valueRef.current, saved: doc?.saved ?? valueRef.current };
+  }, []);
+
+  /** Paths whose buffer has drifted from what's on disk. */
+  const dirtyPaths = useMemo(() => {
+    const dirty = new Set<string>();
+    for (const path of openPaths) {
+      const doc = docsRef.current[path];
+      if (!doc) continue;
+      const content = path === currentFile ? value : doc.content;
+      if (content !== doc.saved) dirty.add(path);
+    }
+    return dirty;
+    // `savedRevision` isn't read directly - it's what re-runs this after a save.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openPaths, currentFile, value, savedRevision]);
 
   const openFolder = useCallback(async () => {
     try {
@@ -44,10 +81,11 @@ export function useFileOperations({ onFolderOpened }: UseFileOperationsOptions =
       if (result) {
         setRootPath(result.path);
         setFolderData(result.entries);
-        
+
+        docsRef.current = { [UNTITLED_FILE]: { content: "", saved: "" } };
+        setOpenPaths([UNTITLED_FILE]);
         setCurrentFile(UNTITLED_FILE);
         setValue("");
-        fileCacheRef.current = {};
 
         onFolderOpened?.();
       }
@@ -75,37 +113,101 @@ export function useFileOperations({ onFolderOpened }: UseFileOperationsOptions =
       if (path !== UNTITLED_FILE) {
         // Direct save if we already have a real file path
         await invoke("write_file", { path, content });
+        docsRef.current[path] = { content, saved: content };
       } else {
         // Otherwise, open the picker for a new file
         const savedPath = await invoke<string | null>("save_file_picker", { content });
         if (savedPath) {
           setCurrentFile(savedPath);
-          fileCacheRef.current[savedPath] = content;
-          delete fileCacheRef.current[UNTITLED_FILE];
+          docsRef.current[savedPath] = { content, saved: content };
+          delete docsRef.current[UNTITLED_FILE];
+          // The scratch tab becomes the saved file rather than spawning a second tab.
+          setOpenPaths((paths) => paths.map((p) => (p === UNTITLED_FILE ? savedPath : p)));
         }
       }
+      markSaved();
     } catch (error) {
       console.error("Failed to save file:", error);
     }
   }, []);
 
-  const selectFile = useCallback(async (path: string) => {
-    try {
-      if (currentFileRef.current) {
-        fileCacheRef.current[currentFileRef.current] = valueRef.current;
+  const selectFile = useCallback(
+    async (path: string) => {
+      try {
+        if (path === currentFileRef.current) return;
+        stashCurrent();
+
+        const cached = docsRef.current[path];
+        if (!cached) {
+          const content = await invoke<string>("read_file", { path });
+          docsRef.current[path] = { content, saved: content };
+          setValue(content);
+        } else {
+          setValue(cached.content);
+        }
+
+        setCurrentFile(path);
+        setOpenPaths((paths) => (paths.includes(path) ? paths : [...paths, path]));
+      } catch (error) {
+        console.error("Failed to read file:", error);
+      }
+    },
+    [stashCurrent]
+  );
+
+  /**
+   * Closes a tab, falling back to its right-hand neighbour (then its left) so
+   * focus lands somewhere predictable. The document itself is kept around, so
+   * reopening a file restores unsaved edits rather than silently dropping them.
+   */
+  const closeFile = useCallback(
+    (path: string) => {
+      const paths = openPathsRef.current;
+      const index = paths.indexOf(path);
+      if (index === -1) return;
+
+      const remaining = paths.filter((p) => p !== path);
+
+      if (remaining.length === 0) {
+        docsRef.current[UNTITLED_FILE] = { content: "", saved: "" };
+        setOpenPaths([UNTITLED_FILE]);
+        setCurrentFile(UNTITLED_FILE);
+        setValue("");
+        return;
       }
 
-      if (path in fileCacheRef.current) {
-        setValue(fileCacheRef.current[path]);
-        setCurrentFile(path);
-      } else {
-        const content = await invoke<string>("read_file", { path });
-        fileCacheRef.current[path] = content;
-        setValue(content)
-        setCurrentFile(path);
+      setOpenPaths(remaining);
+      if (path === currentFileRef.current) {
+        void selectFile(remaining[index] ?? remaining[remaining.length - 1]);
       }
-    } catch (error) {
-      console.error("Failed to read file:", error);
+    },
+    [selectFile]
+  );
+
+  /** Moves `step` tabs along, wrapping at either end. */
+  const cycleFile = useCallback(
+    (step: number) => {
+      const paths = openPathsRef.current;
+      if (paths.length < 2) return;
+      const index = paths.indexOf(currentFileRef.current);
+      if (index === -1) return;
+      const next = (index + step + paths.length) % paths.length;
+      void selectFile(paths[next]);
+    },
+    [selectFile]
+  );
+
+  /** Rewrites cached documents and open tabs after a path changes on disk. */
+  const rewritePaths = useCallback((from: string, to: string) => {
+    for (const key of Object.keys(docsRef.current)) {
+      if (isWithin(key, from)) {
+        docsRef.current[key.replace(from, to)] = docsRef.current[key];
+        delete docsRef.current[key];
+      }
+    }
+    setOpenPaths((paths) => paths.map((p) => (isWithin(p, from) ? p.replace(from, to) : p)));
+    if (isWithin(currentFileRef.current, from)) {
+      setCurrentFile(currentFileRef.current.replace(from, to));
     }
   }, []);
 
@@ -129,40 +231,18 @@ export function useFileOperations({ onFolderOpened }: UseFileOperationsOptions =
     async (path: string, newName: string) => {
       const newPath = await invoke<string>("rename_entry", { path, newName });
       await refreshFolder();
-
-      for (const key of Object.keys(fileCacheRef.current)) {
-        if (isWithin(key, path)) {
-          const updatedPath = key.replace(path, newPath);
-          fileCacheRef.current[updatedPath] = fileCacheRef.current[key];
-          delete fileCacheRef.current[key];
-        }
-      }
-
-      if (isWithin(currentFileRef.current, path)) {
-        setCurrentFile(currentFileRef.current.replace(path, newPath));
-      }
+      rewritePaths(path, newPath);
     },
-    [refreshFolder]
+    [refreshFolder, rewritePaths]
   );
 
   const moveEntry = useCallback(
     async (path: string, targetDir: string) => {
       const newPath = await invoke<string>("move_entry", { path, targetDir });
       await refreshFolder();
-
-      for (const key of Object.keys(fileCacheRef.current)) {
-        if (isWithin(key, path)) {
-          const updatedPath = key.replace(path, newPath);
-          fileCacheRef.current[updatedPath] = fileCacheRef.current[key];
-          delete fileCacheRef.current[key];
-        }
-      }
-
-      if (isWithin(currentFileRef.current, path)) {
-        setCurrentFile(currentFileRef.current.replace(path, newPath));
-      }
+      rewritePaths(path, newPath);
     },
-    [refreshFolder]
+    [refreshFolder, rewritePaths]
   );
 
   const deleteEntry = useCallback(
@@ -170,15 +250,24 @@ export function useFileOperations({ onFolderOpened }: UseFileOperationsOptions =
       await invoke("delete_entry", { path });
       await refreshFolder();
 
-      for (const key of Object.keys(fileCacheRef.current)) {
-        if (isWithin(key, path)) {
-          delete fileCacheRef.current[key];
-        }
+      for (const key of Object.keys(docsRef.current)) {
+        if (isWithin(key, path)) delete docsRef.current[key];
       }
 
-      if (isWithin(currentFileRef.current, path)) {
+      const remaining = openPathsRef.current.filter((p) => !isWithin(p, path));
+      if (remaining.length === 0) {
+        docsRef.current[UNTITLED_FILE] = { content: "", saved: "" };
+        setOpenPaths([UNTITLED_FILE]);
         setCurrentFile(UNTITLED_FILE);
-        setValue(fileCacheRef.current[UNTITLED_FILE] || "");
+        setValue("");
+        return;
+      }
+
+      setOpenPaths(remaining);
+      if (isWithin(currentFileRef.current, path)) {
+        const doc = docsRef.current[remaining[0]];
+        setCurrentFile(remaining[0]);
+        setValue(doc?.content ?? "");
       }
     },
     [refreshFolder]
@@ -188,11 +277,15 @@ export function useFileOperations({ onFolderOpened }: UseFileOperationsOptions =
     value,
     setValue,
     currentFile,
+    openPaths,
+    dirtyPaths,
     folderData,
     rootPath,
     openFolder,
     save,
     selectFile,
+    closeFile,
+    cycleFile,
     createFile,
     createFolder,
     renameEntry,
