@@ -5,7 +5,7 @@ import { EditorView } from "@codemirror/view";
 import { invoke } from "@tauri-apps/api/core";
 import EditorHeader from "./components/EditorHeader";
 import StatusBar from "./components/StatusBar";
-import Sidebar from "./components/Sidebar";
+import Sidebar, { SidebarHandle } from "./components/Sidebar";
 import SettingsModal from "./components/SettingsModal";
 import { useKeymaps, useKeymapListener } from "./hooks/useKeymaps";
 import { useFileOperations } from "./hooks/useFileOperations";
@@ -95,6 +95,7 @@ function App() {
   );
 
   const editorRef = useRef<ReactCodeMirrorRef>(null);
+  const sidebarRef = useRef<SidebarHandle>(null);
   const now = new Date().toLocaleString();
 
   const keymapHandlers = useMemo(
@@ -102,6 +103,12 @@ function App() {
       "toggle-sidebar": () => setIsSidebarOpen((open) => !open),
       "save-file": save,
       "open-folder": openFolder,
+      "search-files": () => {
+        // The panel has to be open - and un-`inert` - before its input can
+        // take focus, which is why the sidebar defers the focus itself.
+        setIsSidebarOpen(true);
+        sidebarRef.current?.focusSearch();
+      },
       "open-settings": () => setIsSettingsOpen((open) => !open),
       "toggle-vim-mode": () => setVimEnabled((enabled) => !enabled),
       "check-updates": checkForUpdates,
@@ -208,6 +215,7 @@ function App() {
         >
           <div className="h-full" style={{ width: sidebarWidth + SIDEBAR_GAP, paddingLeft: SIDEBAR_GAP }}>
             <Sidebar
+              ref={sidebarRef}
               data={folderData}
               rootPath={rootPath}
               onOpenFolder={openFolder}

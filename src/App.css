@@ -185,6 +185,26 @@ textarea,
   transition: width 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/*
+ * The explorer's search row. It stays mounted and collapses to nothing so the
+ * tree beneath it slides instead of jumping. `max-height` rather than the
+ * `grid-template-rows: 0fr/1fr` trick, which not every webview this app ships
+ * into can interpolate yet.
+ */
+.sidebar-search {
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  transition:
+    max-height 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 150ms ease-out;
+}
+
+.sidebar-search[data-open="true"] {
+  max-height: 3rem;
+  opacity: 1;
+}
+
 /* The tab strip scrolls, but a visible scrollbar in the title bar is noise. */
 .no-scrollbar {
   -ms-overflow-style: none;
@@ -204,7 +224,8 @@ textarea,
     animation: none;
   }
 
-  .sidebar-transition {
+  .sidebar-transition,
+  .sidebar-search {
     transition: none;
   }
 }

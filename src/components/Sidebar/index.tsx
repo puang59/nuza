@@ -1,10 +1,18 @@
-import { useMemo, useRef, useState } from "react";
-import { ChevronsDownUp, FilePlus, FolderPlus } from "lucide-react";
+import { Ref, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { ChevronsDownUp, FilePlus, FolderPlus, Search, X } from "lucide-react";
+import { cn } from "cn";
+import { searchFiles } from "@/lib/fileSearch";
 import { FileEntry } from "@/lib/types";
 import { TreeContext, TreeActions, ContextMenuState, PendingCreate } from "./TreeContext";
 import FileTreeNode, { NewEntryRow } from "./FileTreeNode";
 import ContextMenu, { ContextMenuItem } from "./ContextMenu";
 import ConfirmDeleteModal from "./ConfirmDeleteModal";
+import SearchResults from "./SearchResults";
+
+/** What the rest of the app can ask the sidebar to do. */
+export interface SidebarHandle {
+  focusSearch: () => void;
+}
 
 interface SidebarProps {
   data: FileEntry[];
@@ -20,6 +28,7 @@ interface SidebarProps {
   onResizeStart: (event: React.PointerEvent) => void;
   onResizeReset: () => void;
   isResizing: boolean;
+  ref?: Ref<SidebarHandle>;
 }
 
 export default function Sidebar({
@@ -36,6 +45,7 @@ export default function Sidebar({
   onResizeStart,
   onResizeReset,
   isResizing,
+  ref,
 }: SidebarProps) {
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
   const [pendingCreate, setPendingCreate] = useState<PendingCreate>(null);
@@ -43,9 +53,66 @@ export default function Sidebar({
   const [deleteTarget, setDeleteTarget] = useState<FileEntry | null>(null);
   const [draggingPath, setDraggingPath] = useState<string | null>(null);
   const [dragOverPath, setDragOverPath] = useState<string | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const [query, setQuery] = useState("");
+  const [activeIndex, setActiveIndex] = useState(0);
   const treeRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   const hasFolder = !!data && data.length > 0 && !!rootPath;
+
+  const matches = useMemo(() => (isSearching ? searchFiles(data, query) : []), [isSearching, data, query]);
+  /** With nothing typed the tree stays put, so opening search never blanks the panel. */
+  const showResults = isSearching && query.trim().length > 0;
+
+  function openSearch() {
+    // Nothing to search until a folder is open, and the keymap can reach this
+    // even when the header's toggle is not on screen.
+    if (!hasFolder) return;
+    setIsSearching(true);
+    // The row animates open from zero height, so it is not focusable until the
+    // browser has laid it out.
+    requestAnimationFrame(() => searchRef.current?.focus());
+  }
+
+  function closeSearch() {
+    setIsSearching(false);
+    setQuery("");
+    setActiveIndex(0);
+  }
+
+  useImperativeHandle(ref, () => ({ focusSearch: openSearch }));
+
+  function selectResult(path: string) {
+    onFileSelect?.(path);
+    closeSearch();
+  }
+
+  function onSearchKeyDown(event: React.KeyboardEvent) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      // Two stages: clear what you typed, then put the panel back.
+      if (query) {
+        setQuery("");
+        setActiveIndex(0);
+      } else {
+        closeSearch();
+      }
+      return;
+    }
+
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const step = event.key === "ArrowDown" ? 1 : -1;
+      setActiveIndex((index) => Math.min(Math.max(index + step, 0), matches.length - 1));
+      return;
+    }
+
+    if (event.key === "Enter" && matches[activeIndex]) {
+      event.preventDefault();
+      selectResult(matches[activeIndex].entry.path);
+    }
+  }
 
   const folderLabel = useMemo(() => {
     if (!rootPath) return "Explorer";
@@ -182,6 +249,16 @@ export default function Sidebar({
         {hasFolder && (
           <div className="flex shrink-0 items-center gap-0.5 ml-auto">
             <button
+              onClick={() => (isSearching ? closeSearch() : openSearch())}
+              title="Search Files"
+              className={cn(
+                "cursor-pointer rounded p-1 transition-colors hover:bg-zinc-800 hover:text-white",
+                isSearching ? "text-[#FF9696]" : "text-zinc-500"
+              )}
+            >
+              <Search className="h-3.5 w-3.5" />
+            </button>
+            <button
               onClick={() => beginCreate("file")}
               title="New File"
               className="cursor-pointer rounded p-1 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white"
@@ -206,6 +283,46 @@ export default function Sidebar({
         )}
       </div>
 
+      {/* Kept mounted and collapsed to zero height so it slides rather than
+          appears, and so the tree below it moves with it. */}
+      <div className="sidebar-search" data-open={isSearching}>
+        <div className="px-2 pt-1.5">
+          <div
+            className={cn(
+              "flex items-center gap-1.5 rounded-md border bg-zinc-800/60 px-2 py-1 transition-colors",
+              isSearching ? "border-zinc-700" : "border-transparent"
+            )}
+          >
+            <Search className="h-3 w-3 shrink-0 text-zinc-500" />
+            <input
+              ref={searchRef}
+              value={query}
+              placeholder="Find a file"
+              aria-label="Search files"
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setActiveIndex(0);
+              }}
+              onKeyDown={onSearchKeyDown}
+              className="min-w-0 flex-1 bg-transparent text-xs text-white outline-none placeholder:text-zinc-600"
+            />
+            {query && (
+              <button
+                onClick={() => {
+                  setQuery("");
+                  setActiveIndex(0);
+                  searchRef.current?.focus();
+                }}
+                title="Clear"
+                className="animate-fade-in shrink-0 cursor-pointer rounded text-zinc-500 transition-colors hover:text-white"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
       <div
         ref={treeRef}
         onContextMenu={(e) => {
@@ -226,7 +343,15 @@ export default function Sidebar({
         }}
         className="flex flex-1 flex-col overflow-y-auto px-2 py-3"
       >
-        {!hasFolder ? (
+        {showResults ? (
+          <SearchResults
+            matches={matches}
+            activeIndex={activeIndex}
+            currentFile={currentFile}
+            onHover={setActiveIndex}
+            onSelect={selectResult}
+          />
+        ) : !hasFolder ? (
           <div className="mt-2 flex flex-1 flex-col items-center justify-start gap-3 text-center">
             {onOpenFolder && (
               <button

@@ -2,6 +2,7 @@ export type KeymapAction =
   | "toggle-sidebar"
   | "save-file"
   | "open-folder"
+  | "search-files"
   | "open-settings"
   | "toggle-vim-mode"
   | "check-updates"
@@ -38,6 +39,12 @@ export const KEYMAP_ACTIONS: KeymapDefinition[] = [
     label: "Open Folder",
     description: "Open a folder in the explorer",
     defaultBinding: "mod+o",
+  },
+  {
+    id: "search-files",
+    label: "Search Files",
+    description: "Find a file in the explorer by name",
+    defaultBinding: "mod+p",
   },
   {
     id: "open-settings",
