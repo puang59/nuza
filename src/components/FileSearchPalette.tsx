@@ -87,7 +87,7 @@ export default function FileSearchPalette({
     <div
       onClick={onClose}
       className={cn(
-        "fixed inset-0 z-50 flex items-start justify-center bg-black/25 px-4 pb-4 pt-[16vh]",
+        "fixed inset-0 z-50 flex items-start justify-center bg-black/25 px-4 pb-4 pt-[14vh]",
         isClosing ? "animate-fade-out" : "animate-fade-in"
       )}
     >
@@ -95,16 +95,15 @@ export default function FileSearchPalette({
         onClick={(e) => e.stopPropagation()}
         onKeyDown={onKeyDown}
         className={cn(
-          // Translucent, not transparent: enough of the note shows through to
-          // keep your place, not enough to compete with the list. A shade
-          // lighter than the window it floats over, so it reads as sitting
-          // above the document rather than cut into it.
-          "flex w-[560px] max-w-full flex-col overflow-hidden rounded-xl border border-white/10 bg-[#262628]/82 shadow-2xl backdrop-blur-xl",
+          // Frosted rather than tinted: the blur is what keeps a background
+          // this transparent legible, and the shade above the window's own
+          // makes it read as floating rather than cut into the surface.
+          "flex w-[460px] max-w-full flex-col overflow-hidden rounded-xl border border-white/10 bg-[#262628]/65 shadow-2xl backdrop-blur-2xl",
           isClosing ? "animate-palette-out" : "animate-palette-in"
         )}
       >
-        <div className="flex shrink-0 items-center gap-2.5 px-4 py-3">
-          <Search className="h-4 w-4 shrink-0 text-zinc-500" />
+        <div className="flex shrink-0 items-center gap-2 px-3 py-2 leading-5">
+          <Search className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
           <input
             autoFocus
             value={query}
@@ -114,38 +113,35 @@ export default function FileSearchPalette({
               setQuery(e.target.value);
               setActiveIndex(0);
             }}
-            className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
+            className="min-w-0 flex-1 bg-transparent text-[13px] text-white outline-none placeholder:text-zinc-500"
           />
         </div>
 
         {matches.length === 0 ? (
-          <p className="border-t border-white/5 px-4 py-6 text-center text-xs text-zinc-500">{hint}</p>
+          <p className="border-t border-white/5 px-3 py-4 text-center text-xs text-zinc-500">{hint}</p>
         ) : (
-          <ul ref={listRef} className="max-h-[46vh] min-h-0 overflow-y-auto border-t border-white/5 p-1.5">
+          <ul ref={listRef} className="max-h-[280px] min-h-0 overflow-y-auto border-t border-white/5 p-1">
             {matches.map((match, index) => (
               <li key={match.entry.path}>
                 <button
                   onMouseEnter={() => setActiveIndex(index)}
                   onClick={() => choose(match.entry.path)}
+                  title={match.directory ? `${match.directory}/${match.entry.name}` : match.entry.name}
                   className={cn(
-                    "flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors",
-                    index === activeIndex ? "bg-white/8" : "hover:bg-white/5"
+                    "flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] leading-5 transition-colors",
+                    index === activeIndex ? "bg-white/8" : "hover:bg-white/5",
+                    currentFile === match.entry.path ? "text-white" : "text-zinc-200"
                   )}
                 >
                   <FileIcon name={match.entry.name} />
-                  <span className="min-w-0 flex-1">
-                    <span
-                      className={cn(
-                        "block truncate text-sm",
-                        currentFile === match.entry.path ? "text-white" : "text-zinc-200"
-                      )}
-                    >
-                      <MatchedText name={match.entry.name} highlight={match.highlight} />
-                    </span>
-                    <span className="block truncate text-[11px] text-zinc-500">
-                      {match.directory || "in this folder"}
-                    </span>
+                  <span className="truncate">
+                    <MatchedText name={match.entry.name} highlight={match.highlight} />
                   </span>
+                  {match.directory && (
+                    <span className="ml-auto min-w-0 shrink truncate pl-3 text-right text-[11px] text-zinc-500">
+                      {match.directory}
+                    </span>
+                  )}
                 </button>
               </li>
             ))}
