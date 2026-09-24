@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { X, SlidersHorizontal, Keyboard, LucideIcon } from "lucide-react";
 import { cn } from "cn";
+import { useExitAnimation } from "@/hooks/useExitAnimation";
 import { KeymapAction } from "@/lib/keymaps";
 import { UpdateStatus } from "@/hooks/useAppUpdater";
 import GeneralSettings from "./settings/GeneralSettings";
@@ -59,6 +60,7 @@ export default function SettingsModal({
   onOpenDownloadPage,
 }: SettingsModalProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>("general");
+  const { isMounted, isClosing } = useExitAnimation(isOpen);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -71,16 +73,22 @@ export default function SettingsModal({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
+  if (!isMounted) return null;
 
   return (
     <div
-      className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+      className={cn(
+        "fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4",
+        isClosing ? "animate-fade-out" : "animate-fade-in"
+      )}
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="animate-panel-in bg-[#1E1E1E] border border-zinc-700 rounded-lg shadow-xl w-[640px] h-[520px] max-w-full max-h-full overflow-hidden flex flex-col"
+        className={cn(
+          "bg-[#1E1E1E] border border-zinc-700 rounded-lg shadow-xl w-[640px] h-[520px] max-w-full max-h-full overflow-hidden flex flex-col",
+          isClosing ? "animate-panel-out" : "animate-panel-in"
+        )}
       >
         <div className="flex items-center justify-between p-4 border-b border-zinc-800 shrink-0">
           <h2 className="text-lg font-semibold text-white">Settings</h2>

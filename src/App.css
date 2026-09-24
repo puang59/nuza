@@ -118,6 +118,24 @@ body,
   }
 }
 
+/*
+ * The exits. These need `forwards` where the entrances do not: an entrance
+ * lands on the element's own styles, while an exit has to hold its last frame
+ * until the component is actually unmounted.
+ */
+@keyframes nuza-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes nuza-panel-out {
+  to {
+    opacity: 0;
+    transform: translateY(4px) scale(0.985);
+  }
+}
+
 .animate-fade-in {
   animation: nuza-fade-in 140ms ease-out;
 }
@@ -129,6 +147,14 @@ body,
 .animate-menu-in {
   animation: nuza-menu-in 120ms cubic-bezier(0.22, 1, 0.36, 1);
   transform-origin: top left;
+}
+
+.animate-fade-out {
+  animation: nuza-fade-out 140ms ease-in forwards;
+}
+
+.animate-panel-out {
+  animation: nuza-panel-out 140ms cubic-bezier(0.4, 0, 1, 1) forwards;
 }
 
 .sidebar-transition {
@@ -148,7 +174,9 @@ body,
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-in,
   .animate-panel-in,
-  .animate-menu-in {
+  .animate-menu-in,
+  .animate-fade-out,
+  .animate-panel-out {
     animation: none;
   }
 
