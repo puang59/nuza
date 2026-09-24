@@ -217,15 +217,25 @@ function decorateNode(node: SyntaxNodeRef, build: Build): boolean | undefined {
 
   const headingLevel = HEADING_LEVELS[name];
   if (headingLevel) {
+    // A setext heading is two lines, and its second line is `---` or `===`,
+    // which is also how a list starts. `- ` under a paragraph parses as a
+    // heading underline right up until the item has some text in it, so
+    // rendering one while that line is being typed makes the paragraph above
+    // jump to heading size and back every time a list is started under it.
+    if (name.startsWith("Setext")) {
+      const underline = findChild(node.node, "HeaderMark");
+      if (underline && isBeingEdited(state, underline.from, underline.to)) return;
+    }
     out.push(HEADING_LINES[headingLevel - 1].range(doc.lineAt(from).from));
     return;
   }
 
   if (name === "HeaderMark") {
     // A setext underline is a line of its own; hiding it would fold two lines
-    // into one, so it is dimmed down to a rule instead.
+    // into one, so it is dimmed down to a rule instead - but left as plain
+    // text while it is the line being typed on, for the reason above.
     if (hasAncestor(node.node, "SetextHeading1", "SetextHeading2")) {
-      out.push(SETEXT_MARK.range(from, to));
+      if (!isBeingEdited(state, from, to)) out.push(SETEXT_MARK.range(from, to));
       return;
     }
     if (isBeingEdited(state, from, to)) {
