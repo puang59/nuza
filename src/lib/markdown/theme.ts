@@ -29,6 +29,12 @@ const ink = {
  */
 const MEASURE = "44rem";
 
+/** The checkbox tick: a centred background image, so it never drifts off. */
+const CHECK_MARK =
+  "PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiI+PHBhdGggZD0i" +
+  "TTMuNSA4LjRsMy4xIDMuMUwxMi41IDUiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzFFMUUxRSIgc3Ryb2tlLXdpZHRoPSIy" +
+  "LjYiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjwvc3ZnPg==";
+
 /** A cross-platform monospace stack for code, independent of the prose font. */
 export const CODE_FONT_FAMILY =
   'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace';
@@ -146,34 +152,46 @@ const editorTheme = EditorView.theme(
       position: "relative",
       display: "inline-block",
       boxSizing: "border-box",
-      width: "1em",
-      height: "1em",
-      margin: "0 0.15em 0 0",
-      verticalAlign: "-0.15em",
+      width: "1.05em",
+      height: "1.05em",
+      margin: "0 0.2em 0 0",
+      verticalAlign: "-0.17em",
       border: `1.5px solid ${ink.muted}`,
-      borderRadius: "0.25em",
+      borderRadius: "0.3em",
       background: "transparent",
       cursor: "pointer",
+      transition: "background-color 140ms ease, border-color 140ms ease",
     },
+    ".cm-md-task:hover": { borderColor: ink.accent },
     ".cm-md-task:checked": {
       backgroundColor: ink.accent,
       borderColor: ink.accent,
     },
-    ".cm-md-task:checked::after": {
+    /* The tick is a centred background image rather than a rotated box, which
+       is what keeps it centred at any font size. It scales in on check -
+       `updateDOM` reuses the same input so the transition has something to
+       animate from. */
+    ".cm-md-task::after": {
       content: '""',
       position: "absolute",
-      left: "0.3em",
-      top: "0.12em",
-      width: "0.2em",
-      height: "0.45em",
-      border: "solid #1E1E1E",
-      borderWidth: "0 2px 2px 0",
-      transform: "rotate(45deg)",
+      inset: "0",
+      backgroundImage: `url("data:image/svg+xml;base64,${CHECK_MARK}")`,
+      backgroundRepeat: "no-repeat",
+      backgroundPosition: "center",
+      backgroundSize: "70%",
+      opacity: "0",
+      transform: "scale(0.5)",
+      transition: "opacity 110ms ease-out, transform 180ms cubic-bezier(0.34, 1.5, 0.64, 1)",
+    },
+    ".cm-md-task:checked::after": {
+      opacity: "1",
+      transform: "scale(1)",
     },
     ".cm-md-task-done": {
       color: ink.muted,
       textDecoration: "line-through",
       textDecorationColor: "rgba(255, 255, 255, 0.25)",
+      transition: "color 160ms ease",
     },
 
     /* ---- Inline emphasis ------------------------------------------------ */
@@ -199,6 +217,7 @@ const editorTheme = EditorView.theme(
       textDecorationColor: "rgba(255, 150, 150, 0.35)",
       textUnderlineOffset: "0.2em",
       cursor: "pointer",
+      transition: "text-decoration-color 140ms ease",
     },
     ".cm-md-link:hover": {
       textDecorationColor: ink.accent,
@@ -251,6 +270,7 @@ const editorTheme = EditorView.theme(
       display: "block",
       overflowX: "auto",
       padding: "0.5em 0",
+      whiteSpace: "normal",
     },
     ".cm-md-table": {
       borderCollapse: "collapse",
@@ -268,6 +288,9 @@ const editorTheme = EditorView.theme(
       color: ink.heading,
       fontWeight: "600",
       backgroundColor: ink.surfaceStrong,
+    },
+    ".cm-md-table tbody td": {
+      transition: "background-color 120ms ease",
     },
     ".cm-md-table tbody tr:hover td": {
       backgroundColor: "rgba(255, 255, 255, 0.025)",
@@ -292,6 +315,94 @@ const editorTheme = EditorView.theme(
       border: `1px dashed ${ink.hairline}`,
       borderRadius: "0.4em",
       padding: "0.2em 0.6em",
+    },
+
+    /* ---- Inline and block HTML ------------------------------------------ */
+
+    /* The note supplies the structure; this only lends it the same ink,
+       spacing and rules the markdown around it already uses.
+
+       `white-space: normal` is the important one: the editor lays the document
+       out as preformatted text, and without this the newlines and indentation
+       inside an HTML block are drawn as real blank lines. Headings and list
+       markers have to be restated too, since Tailwind's preflight strips them
+       from every element on the page. */
+    ".cm-md-html": { whiteSpace: "normal" },
+    ".cm-md-html-block": { display: "block", padding: "0.3em 0" },
+    ".cm-md-html h1": { fontSize: "1.6em" },
+    ".cm-md-html h2": { fontSize: "1.4em" },
+    ".cm-md-html h3": { fontSize: "1.2em" },
+    ".cm-md-html h4": { fontSize: "1.1em" },
+    ".cm-md-html ul": { listStyle: "disc outside" },
+    ".cm-md-html ol": { listStyle: "decimal outside" },
+    ".cm-md-html li": { display: "list-item" },
+    ".cm-md-html img, .cm-md-html video": {
+      maxWidth: "100%",
+      height: "auto",
+      borderRadius: "0.4em",
+    },
+    ".cm-md-html p": { margin: "0.35em 0" },
+    ".cm-md-html h1, .cm-md-html h2, .cm-md-html h3, .cm-md-html h4, .cm-md-html h5, .cm-md-html h6":
+      {
+        color: ink.heading,
+        fontWeight: "650",
+        lineHeight: "1.3",
+        margin: "0.5em 0 0.25em",
+      },
+    ".cm-md-html ul, .cm-md-html ol": { margin: "0.35em 0", paddingLeft: "1.5em" },
+    ".cm-md-html a": {
+      color: ink.accent,
+      textDecoration: "underline",
+      textUnderlineOffset: "0.2em",
+    },
+    ".cm-md-html code": {
+      fontFamily: CODE_FONT_FAMILY,
+      fontSize: "0.9em",
+      color: ink.code,
+      backgroundColor: ink.surface,
+      borderRadius: "0.3em",
+      padding: "0.12em 0.35em",
+    },
+    ".cm-md-html pre": {
+      fontFamily: CODE_FONT_FAMILY,
+      fontSize: "0.9em",
+      backgroundColor: ink.surface,
+      borderRadius: "0.5em",
+      padding: "0.7em 0.9em",
+      overflowX: "auto",
+    },
+    ".cm-md-html pre code": { background: "none", padding: "0" },
+    ".cm-md-html blockquote": {
+      borderLeft: "3px solid rgba(150, 150, 255, 0.45)",
+      margin: "0.4em 0",
+      paddingLeft: "1em",
+      color: ink.muted,
+    },
+    ".cm-md-html hr": {
+      border: "none",
+      borderTop: `1px solid ${ink.hairline}`,
+      margin: "0.8em 0",
+    },
+    ".cm-md-html table": {
+      borderCollapse: "collapse",
+      width: "100%",
+      fontSize: "0.94em",
+    },
+    ".cm-md-html th, .cm-md-html td": {
+      border: `1px solid ${ink.hairline}`,
+      padding: "0.4em 0.8em",
+      textAlign: "left",
+    },
+    ".cm-md-html th": {
+      color: ink.heading,
+      fontWeight: "600",
+      backgroundColor: ink.surfaceStrong,
+    },
+
+    "@media (prefers-reduced-motion: reduce)": {
+      ".cm-md-task, .cm-md-task::after, .cm-md-task-done, .cm-md-link, .cm-md-table tbody td": {
+        transition: "none",
+      },
     },
   },
   { dark: true }

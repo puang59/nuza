@@ -1,4 +1,5 @@
 import { EditorView, WidgetType } from "@codemirror/view";
+import { sanitizeHtml } from "./sanitize";
 import { safeExternalHref } from "./sources";
 
 /**
@@ -106,22 +107,71 @@ export class TaskWidget extends WidgetType {
     const box = document.createElement("input");
     box.type = "checkbox";
     box.className = "cm-md-task";
-    box.checked = this.checked;
     box.setAttribute("aria-label", "Toggle task");
+
+    // The marker's position is kept on the element, not captured in the
+    // listener: `updateDOM` reuses this input across edits, so a closure over
+    // `this.from` would go stale the moment anything above it changed.
     box.addEventListener("mousedown", (event) => {
-      // Rewrite the source instead of letting the input own its own state -
+      // Rewrite the source rather than letting the input own its own state -
       // the document is the single source of truth, and the decoration is
       // rebuilt from it on the next update.
       event.preventDefault();
       view.dispatch({
-        changes: { from: this.from, to: this.to, insert: this.checked ? "[ ]" : "[x]" },
+        changes: {
+          from: Number(box.dataset.from),
+          to: Number(box.dataset.to),
+          insert: box.checked ? "[ ]" : "[x]",
+        },
       });
     });
+
+    this.updateDOM(box);
     return box;
+  }
+
+  /**
+   * Toggling swaps in a new widget, and rebuilding the input from scratch
+   * would put a finished checkbox on screen with no transition to play.
+   * Updating the one that is already there lets the tick animate in.
+   */
+  updateDOM(dom: HTMLElement) {
+    const box = dom as HTMLInputElement;
+    box.checked = this.checked;
+    box.dataset.from = String(this.from);
+    box.dataset.to = String(this.to);
+    return true;
   }
 
   ignoreEvent() {
     return true;
+  }
+}
+
+/** Raw HTML from the note, rendered through the sanitiser in `sanitize.ts`. */
+export class HtmlWidget extends WidgetType {
+  constructor(
+    readonly html: string,
+    readonly directory: string,
+    readonly block: boolean
+  ) {
+    super();
+  }
+
+  eq(other: HtmlWidget) {
+    return other.html === this.html && other.directory === this.directory && other.block === this.block;
+  }
+
+  toDOM() {
+    const wrapper = document.createElement(this.block ? "div" : "span");
+    wrapper.className = this.block ? "cm-md-html cm-md-html-block" : "cm-md-html";
+    wrapper.appendChild(sanitizeHtml(this.html, this.directory));
+    return wrapper;
+  }
+
+  /** Clicking rendered HTML should put the caret in the source behind it. */
+  ignoreEvent() {
+    return false;
   }
 }
 

@@ -2,9 +2,11 @@ import { syntaxTree } from "@codemirror/language";
 import { EditorState, Range, StateField, Text } from "@codemirror/state";
 import { Decoration, DecorationSet, EditorView } from "@codemirror/view";
 import type { SyntaxNode, SyntaxNodeRef } from "@lezer/common";
+import { rendersAnything, sanitizeHtml } from "./sanitize";
 import { noteDirectory, resolveImageSource, safeExternalHref } from "./sources";
 import {
   BulletWidget,
+  HtmlWidget,
   ImageWidget,
   RuleWidget,
   TableAlignment,
@@ -22,7 +24,7 @@ const CODE_INFO = Decoration.mark({ class: "cm-md-code-info" });
 const ORDERED_MARK = Decoration.mark({ class: "cm-md-ordered-mark" });
 
 const QUOTE_LINE = Decoration.line({ class: "cm-md-quote" });
-const TASK_DONE_LINE = Decoration.line({ class: "cm-md-task-done" });
+const TASK_DONE = Decoration.mark({ class: "cm-md-task-done" });
 const RULE_LINE = Decoration.line({ class: "cm-md-mark" });
 
 const INLINE_CLASSES: Record<string, Decoration> = {
@@ -163,14 +165,55 @@ function imageAltText(source: string) {
   return /^!\[([^\]]*)\]/.exec(source)?.[1] ?? "";
 }
 
-function decorateNode(
-  node: SyntaxNodeRef,
-  state: EditorState,
-  directory: string,
-  out: Range<Decoration>[]
-): boolean | undefined {
+/** Tags that never have a closing partner, so they render on their own. */
+const VOID_TAGS = new Set([
+  "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source",
+  "track", "wbr",
+]);
+
+type Build = {
+  state: EditorState;
+  directory: string;
+  out: Range<Decoration>[];
+  /**
+   * End of the last range swallowed by a widget. Inline HTML is rendered as a
+   * run of sibling nodes rather than one subtree, so the nodes inside that run
+   * have to be skipped by position instead of by returning false.
+   */
+  coveredUntil: number;
+};
+
+/**
+ * The end of the tag that closes `<tag>`, searching forward through siblings
+ * and counting nesting, or -1 when the run is unbalanced - in which case it is
+ * left as plain text rather than guessed at.
+ */
+function findClosingTag(doc: Text, open: SyntaxNode, tag: string) {
+  const opening = new RegExp(`^<${tag}(\\s|>|/)`, "i");
+  const closing = new RegExp(`^</${tag}\\s*>$`, "i");
+  let depth = 1;
+
+  for (let sibling = open.nextSibling; sibling; sibling = sibling.nextSibling) {
+    if (sibling.name !== "HTMLTag") continue;
+    const text = doc.sliceString(sibling.from, sibling.to);
+
+    if (closing.test(text)) {
+      depth--;
+      if (depth === 0) return sibling.to;
+    } else if (opening.test(text) && !text.endsWith("/>")) {
+      depth++;
+    }
+  }
+
+  return -1;
+}
+
+function decorateNode(node: SyntaxNodeRef, build: Build): boolean | undefined {
+  const { state, directory, out } = build;
   const { name, from, to } = node;
   const doc = state.doc;
+
+  if (from < build.coveredUntil) return false;
 
   const headingLevel = HEADING_LEVELS[name];
   if (headingLevel) {
@@ -242,10 +285,13 @@ function decorateNode(
   if (name === "TaskMarker") {
     const checked = /^\[[xX]\]$/.test(doc.sliceString(from, to));
     out.push(Decoration.replace({ widget: new TaskWidget(checked, from, to) }).range(from, to));
-    if (checked) {
-      const task = node.node.parent;
-      eachLine(doc, from, task ? task.to : to, (lineStart) => out.push(TASK_DONE_LINE.range(lineStart)));
-    }
+
+    // Strike the text, not the line: a line decoration draws the rule straight
+    // through the checkbox, since the rule is painted across everything in the
+    // box it is set on - replaced elements included.
+    const task = node.node.parent;
+    const textFrom = doc.sliceString(to, to + 1) === " " ? to + 1 : to;
+    if (checked && task && task.to > textFrom) out.push(TASK_DONE.range(textFrom, task.to));
     return;
   }
 
@@ -324,6 +370,44 @@ function decorateNode(
     return false;
   }
 
+  if (name === "HTMLBlock") {
+    if (isBeingEdited(state, from, to)) return false;
+
+    const html = doc.sliceString(from, to);
+    if (!rendersAnything(sanitizeHtml(html, directory))) return false;
+
+    out.push(
+      Decoration.replace({
+        widget: new HtmlWidget(html, directory, true),
+        block: true,
+      }).range(doc.lineAt(from).from, doc.lineAt(to).to)
+    );
+    return false;
+  }
+
+  if (name === "HTMLTag") {
+    const source = doc.sliceString(from, to);
+    const tag = /^<([a-zA-Z][\w-]*)/.exec(source)?.[1]?.toLowerCase();
+    // A closing tag is reached through its opener; on its own it is nothing.
+    if (!tag) return;
+
+    const end =
+      source.endsWith("/>") || VOID_TAGS.has(tag) ? to : findClosingTag(doc, node.node, tag);
+    if (end < 0 || isBeingEdited(state, from, end)) return;
+
+    const html = doc.sliceString(from, end);
+    if (!rendersAnything(sanitizeHtml(html, directory))) return;
+
+    out.push(Decoration.replace({ widget: new HtmlWidget(html, directory, false) }).range(from, end));
+    build.coveredUntil = end;
+    return false;
+  }
+
+  if (name === "Comment" || name === "CommentBlock") {
+    out.push(DIMMED.range(from, to));
+    return false;
+  }
+
   if (name === "Table") {
     const table = readTable(state, node.node);
     if (!table || isBeingEdited(state, from, to)) return;
@@ -342,17 +426,21 @@ function decorateNode(
 }
 
 function buildDecorations(state: EditorState): DecorationSet {
-  const out: Range<Decoration>[] = [];
-  const directory = state.facet(noteDirectory);
+  const build: Build = {
+    state,
+    directory: state.facet(noteDirectory),
+    out: [],
+    coveredUntil: -1,
+  };
 
   syntaxTree(state).iterate({
-    enter: (node) => decorateNode(node, state, directory, out),
+    enter: (node) => decorateNode(node, build),
   });
 
   // Sorted on the way in rather than built with a RangeSetBuilder: a pre-order
   // walk hands us a block's line decoration after the inline decorations that
   // belong to it, so the ranges do not arrive in document order.
-  return Decoration.set(out, true);
+  return Decoration.set(build.out, true);
 }
 
 /**
