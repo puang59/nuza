@@ -255,14 +255,13 @@ export default function Sidebar({
         <ContextMenu x={contextMenu.x} y={contextMenu.y} items={contextItems} onClose={() => setContextMenu(null)} />
       )}
 
-      {deleteTarget && (
-        <ConfirmDeleteModal
-          name={deleteTarget.name}
-          isDirectory={deleteTarget.isDirectory}
-          onConfirm={confirmDelete}
-          onCancel={() => setDeleteTarget(null)}
-        />
-      )}
+      {/* Always mounted: it has to outlive `deleteTarget` long enough to
+          animate closed. */}
+      <ConfirmDeleteModal
+        target={deleteTarget}
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </aside>
   );
 }
