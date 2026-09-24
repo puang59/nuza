@@ -25,6 +25,9 @@ import {
 /** Space between the editor and the sidebar, collapsed with the panel itself. */
 const SIDEBAR_GAP = 12;
 
+/** Built once: a fresh instance would reset Vim's state on every rebuild. */
+const vimExtension = vim();
+
 function App() {
   const [mode, setMode] = useState<string>("normal");
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
@@ -85,7 +88,7 @@ function App() {
     () => [
       liveMarkdown,
       noteDirectory.of(directoryOf(currentFile)),
-      ...(vimEnabled ? [vim()] : []),
+      ...(vimEnabled ? [vimExtension] : []),
       editorFontTheme,
     ],
     [currentFile, vimEnabled, editorFontTheme]
