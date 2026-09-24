@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
 import { cn } from "cn";
-import { FileMatch, splitOnHighlight } from "@/lib/fileSearch";
+import { FileMatch } from "@/lib/fileSearch";
 import { FileIcon } from "@/lib/utils";
+import MatchedText from "../MatchedText";
 
 interface SearchResultsProps {
   matches: FileMatch[];
@@ -9,27 +10,6 @@ interface SearchResultsProps {
   currentFile: string;
   onHover: (index: number) => void;
   onSelect: (path: string) => void;
-}
-
-/** The matched run of a file name, picked out of the rest. */
-function MatchedName({ name, highlight }: { name: string; highlight: number[] }) {
-  const runs = splitOnHighlight(name, highlight);
-
-  return (
-    <span className="truncate">
-      {runs.map((run, index) =>
-        // splitOnHighlight always starts with an unmatched run, so the odd
-        // ones are the matches.
-        index % 2 === 1 ? (
-          <mark key={index} className="bg-transparent font-medium text-[#FF9696]">
-            {run}
-          </mark>
-        ) : (
-          run
-        )
-      )}
-    </span>
-  );
 }
 
 export default function SearchResults({
@@ -70,7 +50,9 @@ export default function SearchResults({
             )}
           >
             <FileIcon name={match.entry.name} />
-            <MatchedName name={match.entry.name} highlight={match.highlight} />
+            <span className="truncate">
+              <MatchedText name={match.entry.name} highlight={match.highlight} />
+            </span>
             {match.directory && (
               <span className="ml-auto min-w-0 shrink truncate pl-2 text-right text-[11px] text-zinc-600">
                 {match.directory}

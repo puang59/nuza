@@ -7,6 +7,7 @@ import EditorHeader from "./components/EditorHeader";
 import StatusBar from "./components/StatusBar";
 import Sidebar, { SidebarHandle } from "./components/Sidebar";
 import SettingsModal from "./components/SettingsModal";
+import FileSearchPalette from "./components/FileSearchPalette";
 import { useKeymaps, useKeymapListener } from "./hooks/useKeymaps";
 import { useFileOperations } from "./hooks/useFileOperations";
 import { useAppUpdater } from "./hooks/useAppUpdater";
@@ -32,6 +33,7 @@ function App() {
   const [mode, setMode] = useState<string>("normal");
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isQuickOpenOpen, setIsQuickOpenOpen] = useState(false);
   const [vimEnabled, setVimEnabled] = usePersistedState("vimEnabled", true);
   const [transparencyEnabled, setTransparencyEnabled] = usePersistedState("transparencyEnabled", true);
   const [autoUpdateEnabled, setAutoUpdateEnabled] = usePersistedState("autoUpdateEnabled", true);
@@ -103,6 +105,7 @@ function App() {
       "toggle-sidebar": () => setIsSidebarOpen((open) => !open),
       "save-file": save,
       "open-folder": openFolder,
+      "quick-open": () => setIsQuickOpenOpen((open) => !open),
       "search-files": () => {
         // The panel has to be open - and un-`inert` - before its input can
         // take focus, which is why the sidebar defers the focus itself.
@@ -235,6 +238,15 @@ function App() {
       </div>
 
       <StatusBar vimEnabled={vimEnabled} mode={mode} currentFile={currentFile} timestamp={now} />
+
+      <FileSearchPalette
+        isOpen={isQuickOpenOpen}
+        onClose={() => setIsQuickOpenOpen(false)}
+        data={folderData}
+        openPaths={openPaths}
+        currentFile={currentFile}
+        onSelect={selectFile}
+      />
 
       <SettingsModal
         isOpen={isSettingsOpen}

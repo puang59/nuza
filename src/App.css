@@ -147,6 +147,24 @@ textarea,
  * lands on the element's own styles, while an exit has to hold its last frame
  * until the component is actually unmounted.
  */
+/*
+ * Quick open drops in from just above where it lands, which is the direction
+ * it reads as coming from.
+ */
+@keyframes nuza-palette-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+}
+
+@keyframes nuza-palette-out {
+  to {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.985);
+  }
+}
+
 @keyframes nuza-fade-out {
   to {
     opacity: 0;
@@ -171,6 +189,14 @@ textarea,
 .animate-menu-in {
   animation: nuza-menu-in 120ms cubic-bezier(0.22, 1, 0.36, 1);
   transform-origin: top left;
+}
+
+.animate-palette-in {
+  animation: nuza-palette-in 170ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.animate-palette-out {
+  animation: nuza-palette-out 130ms cubic-bezier(0.4, 0, 1, 1) forwards;
 }
 
 .animate-fade-out {
@@ -219,8 +245,10 @@ textarea,
   .animate-fade-in,
   .animate-panel-in,
   .animate-menu-in,
+  .animate-palette-in,
   .animate-fade-out,
-  .animate-panel-out {
+  .animate-panel-out,
+  .animate-palette-out {
     animation: none;
   }
 

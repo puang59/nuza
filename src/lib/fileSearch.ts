@@ -86,6 +86,22 @@ export function searchFiles(entries: FileEntry[], query: string): FileMatch[] {
 }
 
 /**
+ * Rows for a known set of paths, in the order given. Used for the empty-query
+ * state, where there is nothing to score - the order is already meaningful.
+ */
+export function matchesForPaths(entries: FileEntry[], paths: string[]): FileMatch[] {
+  const found = new Map<string, FileMatch>();
+
+  walkFiles(entries, [], (entry, trail) => {
+    if (paths.includes(entry.path)) {
+      found.set(entry.path, { entry, directory: trail.join("/"), highlight: [], score: 0 });
+    }
+  });
+
+  return paths.map((path) => found.get(path)).filter((match): match is FileMatch => !!match);
+}
+
+/**
  * Splits a name into alternating unmatched/matched runs, so the row can render
  * the match without reasoning about indices itself. Always starts unmatched,
  * which may be an empty string.

@@ -3,6 +3,7 @@ export type KeymapAction =
   | "save-file"
   | "open-folder"
   | "search-files"
+  | "quick-open"
   | "open-settings"
   | "toggle-vim-mode"
   | "check-updates"
@@ -45,6 +46,12 @@ export const KEYMAP_ACTIONS: KeymapDefinition[] = [
     label: "Search Files",
     description: "Find a file in the explorer by name",
     defaultBinding: "mod+p",
+  },
+  {
+    id: "quick-open",
+    label: "Quick Open",
+    description: "Find a file from a floating search, with or without the explorer open",
+    defaultBinding: "mod+shift+f",
   },
   {
     id: "open-settings",
