@@ -207,10 +207,9 @@ const editorTheme = EditorView.theme(
     /* ---- Blocks --------------------------------------------------------- */
 
     ".cm-md-quote": {
-      borderLeft: `3px solid rgba(150, 150, 255, 0.45)`,
+      borderLeft: "3px solid rgba(150, 150, 255, 0.45)",
       paddingLeft: "1em",
       color: ink.muted,
-      fontStyle: "italic",
     },
     ".cm-md-code-line": {
       backgroundColor: ink.surface,
