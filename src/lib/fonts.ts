@@ -1,16 +1,25 @@
 import { invoke } from "@tauri-apps/api/core";
 
-/** Empty means "no preference": keep CodeMirror's stock monospace font. */
+/** Empty means "no preference": fall through to the stack below. */
 export const DEFAULT_EDITOR_FONT = "";
 
-/** CSS `font-family` for a system font name, falling back to monospace if it's missing. */
+/**
+ * Prose, not code. The editor renders markdown as you type, so the default is a
+ * proportional UI face - whichever of these the OS actually has - rather than
+ * the monospace font a plain-text editor would reach for. Code blocks and
+ * inline code still get a monospace stack of their own from the editor theme.
+ */
+const FALLBACK_FONT_STACK =
+  'ui-sans-serif, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial, sans-serif';
+
+/** CSS `font-family` for a system font name, falling back to the stack above. */
 export function editorFontFamily(font: string) {
-  if (!font) return "monospace";
-  return `"${font.replace(/["\\]/g, "\\$&")}", monospace`;
+  if (!font) return FALLBACK_FONT_STACK;
+  return `"${font.replace(/["\\]/g, "\\$&")}", ${FALLBACK_FONT_STACK}`;
 }
 
-/** Matches the editor's default Tailwind `text-sm` size, so the font-size setting starts a no-op. */
-export const DEFAULT_EDITOR_FONT_SIZE = 14;
+/** Comfortable reading size for body text; headings scale up from here. */
+export const DEFAULT_EDITOR_FONT_SIZE = 16;
 export const MIN_EDITOR_FONT_SIZE = 8;
 export const MAX_EDITOR_FONT_SIZE = 32;
 /** How much a single zoom-in/zoom-out keystroke changes the font size, in px. */

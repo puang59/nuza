@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CodeMirror, { ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { getCM, vim, Vim } from "@replit/codemirror-vim";
-import { markdown } from "@codemirror/lang-markdown";
-import { oneDark } from "@codemirror/theme-one-dark";
 import { EditorView } from "@codemirror/view";
 import { invoke } from "@tauri-apps/api/core";
 import EditorHeader from "./components/EditorHeader";
@@ -14,6 +12,7 @@ import { useFileOperations } from "./hooks/useFileOperations";
 import { useAppUpdater } from "./hooks/useAppUpdater";
 import { usePersistedState } from "./hooks/usePersistedState";
 import { useResizableSidebar } from "./hooks/useResizableSidebar";
+import { directoryOf, liveMarkdown, noteDirectory } from "./lib/markdown";
 import { isMacPlatform } from "./lib/platform";
 import {
   DEFAULT_EDITOR_FONT,
@@ -77,6 +76,19 @@ function App() {
         ".cm-scroller": { fontFamily: editorFontFamily(editorFont), fontSize: `${editorFontSize}px` },
       }),
     [editorFont, editorFontSize]
+  );
+
+  // Memoised because CodeMirror reconfigures itself whenever this array's
+  // identity changes - rebuilding it every render would throw away the
+  // rendered document and the Vim state on each keystroke.
+  const editorExtensions = useMemo(
+    () => [
+      liveMarkdown,
+      noteDirectory.of(directoryOf(currentFile)),
+      ...(vimEnabled ? [vim()] : []),
+      editorFontTheme,
+    ],
+    [currentFile, vimEnabled, editorFontTheme]
   );
 
   const editorRef = useRef<ReactCodeMirrorRef>(null);
@@ -164,14 +176,17 @@ function App() {
             ref={editorRef}
             value={value}
             height="100%"
-            theme={oneDark}
-            extensions={[markdown(), ...(vimEnabled ? [vim()] : []), EditorView.lineWrapping, editorFontTheme]}
+            theme="none"
+            extensions={editorExtensions}
             onChange={setValue}
-            className="h-full text-sm border-none outline-none"
+            className="h-full border-none outline-none"
             basicSetup={{
-              lineNumbers: true,
+              // Nothing in the margins and nothing highlighted: the rendered
+              // markdown is the only thing on screen worth looking at.
+              lineNumbers: false,
               foldGutter: false,
-              highlightActiveLine: true,
+              highlightActiveLine: false,
+              highlightActiveLineGutter: false,
             }}
             onCreateEditor={handleEditorCreated}
           />
