@@ -109,19 +109,24 @@ export class TaskWidget extends WidgetType {
     box.className = "cm-md-task";
     box.setAttribute("aria-label", "Toggle task");
 
-    // The marker's position is kept on the element, not captured in the
-    // listener: `updateDOM` reuses this input across edits, so a closure over
-    // `this.from` would go stale the moment anything above it changed.
-    box.addEventListener("mousedown", (event) => {
-      // Rewrite the source rather than letting the input own its own state -
-      // the document is the single source of truth, and the decoration is
-      // rebuilt from it on the next update.
-      event.preventDefault();
+    // Keep the caret in the document: without this the browser moves focus to
+    // the input, and the editor loses its selection on every tick.
+    box.addEventListener("mousedown", (event) => event.preventDefault());
+
+    // The write happens on `click`, after the browser has already flipped the
+    // box, and follows that flip rather than inverting it. Cancelling the
+    // click instead would not help: the browser restores the pre-click state
+    // *after* the listener runs, undoing whatever we had just written.
+    //
+    // The marker's position is read off the element rather than closed over,
+    // because `updateDOM` reuses this input across edits - a closure over
+    // `this.from` would go stale as soon as anything above it changed.
+    box.addEventListener("click", () => {
       view.dispatch({
         changes: {
           from: Number(box.dataset.from),
           to: Number(box.dataset.to),
-          insert: box.checked ? "[ ]" : "[x]",
+          insert: box.checked ? "[x]" : "[ ]",
         },
       });
     });
