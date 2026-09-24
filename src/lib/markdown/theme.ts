@@ -16,7 +16,12 @@ const ink = {
   accent: "#FF9696",
   code: "#9696FF",
   caret: "#FF9696",
-  selection: "rgba(150, 150, 255, 0.28)",
+  /* Warm, and keyed to the caret: a drag-select reads as one gesture rather
+     than as the browser's default blue turning up uninvited. */
+  selection: "rgba(255, 150, 150, 0.24)",
+  /* Neutral when the editor does not have focus, so it is obvious that a
+     highlighted run is a leftover rather than a live selection. */
+  selectionInactive: "rgba(255, 255, 255, 0.09)",
   hairline: "rgba(255, 255, 255, 0.10)",
   surface: "rgba(255, 255, 255, 0.045)",
   surfaceStrong: "rgba(255, 255, 255, 0.07)",
@@ -70,7 +75,7 @@ const editorTheme = EditorView.theme(
       padding: "0",
     },
 
-    ".cm-cursor, .cm-dropCursor": {
+    "&.cm-focused > .cm-scroller > .cm-cursorLayer .cm-cursor, .cm-cursor, .cm-dropCursor": {
       borderLeft: `2px solid ${ink.caret}`,
     },
     /* Vim's block cursor draws itself as a background, not a border. */
@@ -83,17 +88,67 @@ const editorTheme = EditorView.theme(
       outline: `1px solid ${ink.caret}`,
       color: "transparent !important",
     },
-    "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection":
+    /* Spelled out through the scroller and the selection layer, rather than as
+       a flat `.cm-selectionBackground`: CodeMirror's own dark base theme sets
+       the same property through that full path, and a shorter selector loses
+       to it no matter what colour it names. */
+    "&:not(.cm-focused) > .cm-scroller > .cm-selectionLayer .cm-selectionBackground": {
+      background: ink.selectionInactive,
+    },
+    "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-content ::selection":
       {
-        backgroundColor: ink.selection,
+        background: ink.selection,
       },
     ".cm-activeLine": { backgroundColor: "transparent" },
+
+    /* Other copies of what you have selected, in the second accent so they
+       read as related to the selection without being mistaken for it.
+       CodeMirror's own default here is a bright green that belongs to no part
+       of this app. */
+    ".cm-selectionMatch": { backgroundColor: "rgba(150, 150, 255, 0.18)" },
     ".cm-searchMatch": {
-      backgroundColor: "rgba(255, 255, 150, 0.22)",
-      outline: "1px solid rgba(255, 255, 150, 0.4)",
+      backgroundColor: "rgba(245, 201, 123, 0.2)",
+      outline: "1px solid rgba(245, 201, 123, 0.35)",
+      borderRadius: "2px",
     },
     ".cm-searchMatch.cm-searchMatch-selected": {
-      backgroundColor: "rgba(255, 255, 150, 0.4)",
+      backgroundColor: "rgba(245, 201, 123, 0.42)",
+    },
+
+    /* The find panel is CodeMirror's, and it arrives in CodeMirror's colours:
+       a mid-grey bar with borderless, transparent controls. Only the colours
+       are restated here - the layout is left to the base theme. */
+    ".cm-panels": {
+      backgroundColor: "#1E1E1E",
+      color: ink.text,
+      fontSize: "12px",
+    },
+    ".cm-panels-bottom": { borderTop: `1px solid ${ink.hairline}` },
+    ".cm-panels-top": { borderBottom: `1px solid ${ink.hairline}` },
+    ".cm-panel.cm-search label": { color: ink.muted },
+    ".cm-panel.cm-search input:not([type=checkbox])": {
+      backgroundColor: ink.surface,
+      border: `1px solid ${ink.hairline}`,
+      borderRadius: "4px",
+      color: ink.text,
+      padding: "2px 6px",
+      outline: "none",
+    },
+    ".cm-panel.cm-search input:not([type=checkbox]):focus": { borderColor: ink.accent },
+    ".cm-panel.cm-search button": {
+      backgroundColor: ink.surface,
+      backgroundImage: "none",
+      border: `1px solid ${ink.hairline}`,
+      borderRadius: "4px",
+      color: ink.text,
+      cursor: "pointer",
+    },
+    ".cm-panel.cm-search button:hover": { borderColor: ink.accent },
+    ".cm-panel.cm-search button[name=close]": {
+      background: "none",
+      border: "none",
+      color: ink.muted,
+      cursor: "pointer",
     },
 
     /* ---- Markdown syntax that is still visible ------------------------- */

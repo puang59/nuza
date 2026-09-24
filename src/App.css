@@ -9,6 +9,30 @@ body,
   padding: 0;
 }
 
+/*
+ * The window is an app, not a web page: dragging across the tab strip, the
+ * sidebar or a settings label should not leave a trail of highlighted text.
+ * Selection is handed back to the places where it means something - the
+ * editor, and anything you can type into.
+ */
+body {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.cm-editor,
+input,
+textarea,
+[contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* The editor draws its own selection layer; this covers the text fields. */
+::selection {
+  background-color: rgba(255, 150, 150, 0.24);
+}
+
 .cm-editor {
   height: 100% !important;
   min-height: 100% !important;
