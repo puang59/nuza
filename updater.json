@@ -1,51 +1,51 @@
 {
-  "version": "0.1.11",
+  "version": "0.1.12",
   "notes": "See the assets to download this version and install.",
-  "pub_date": "2026-09-25T08:40:06.493Z",
+  "pub_date": "2026-09-25T11:53:20.539Z",
   "platforms": {
     "darwin-aarch64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcmZDb3kyak5vdXMydU9vVDdZWHpBSW9QbG9hRzlLVnB2WG1Yek9qR2labzRvc2F3Q3VpdXZGenNWOE9IbnFEZUhKMTd6dGZDN0o3MzJqZFhIUCtyRGNXMXJmQUYzZVFFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMzI1NDA0CWZpbGU6bnV6YS5hcHAudGFyLmd6CkdWVk1ad3Y5ejdiZ3Vua2hLTzcyQ3JYSUlQWDVSd09VZzlVTyt3MDNyYlRwRnRzK2pSVndwYlZrblZzZlE2MTBZWWdmNVlkbzREaDdZRlplc2owVENnPT0K",
-      "url": "https://github.com/puang59/nuza/releases/download/app-v0.1.11/nuza_aarch64.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcmZDb3kyak5vdXNyTHRtTmdiUnJtUE5xaFRCZnFHSWdLdGhHUjR3N3ZzNUYzY29oRGZQMWVDM2NIMDdmdXpTcTFwU0l3SHBDUERUbStzZlNIOU1kOTl3VGRaTUZURGdBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMzM2ODk4CWZpbGU6bnV6YS5hcHAudGFyLmd6ClVuRTNpRXZ5TTM3Q09IVmYxN1laWDl5amhXMnVqMHErRDU5dnZoSGVPMW1zVUloRzhLS2sySE02eFpLekg0dk5yanVHaG11VDRDOUtoQi9KWHN0K0FRPT0K",
+      "url": "https://github.com/puang59/nuza/releases/download/app-v0.1.12/nuza_aarch64.app.tar.gz"
     },
     "darwin-aarch64-app": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcmZDb3kyak5vdXMydU9vVDdZWHpBSW9QbG9hRzlLVnB2WG1Yek9qR2labzRvc2F3Q3VpdXZGenNWOE9IbnFEZUhKMTd6dGZDN0o3MzJqZFhIUCtyRGNXMXJmQUYzZVFFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMzI1NDA0CWZpbGU6bnV6YS5hcHAudGFyLmd6CkdWVk1ad3Y5ejdiZ3Vua2hLTzcyQ3JYSUlQWDVSd09VZzlVTyt3MDNyYlRwRnRzK2pSVndwYlZrblZzZlE2MTBZWWdmNVlkbzREaDdZRlplc2owVENnPT0K",
-      "url": "https://github.com/puang59/nuza/releases/download/app-v0.1.11/nuza_aarch64.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcmZDb3kyak5vdXNyTHRtTmdiUnJtUE5xaFRCZnFHSWdLdGhHUjR3N3ZzNUYzY29oRGZQMWVDM2NIMDdmdXpTcTFwU0l3SHBDUERUbStzZlNIOU1kOTl3VGRaTUZURGdBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMzM2ODk4CWZpbGU6bnV6YS5hcHAudGFyLmd6ClVuRTNpRXZ5TTM3Q09IVmYxN1laWDl5amhXMnVqMHErRDU5dnZoSGVPMW1zVUloRzhLS2sySE02eFpLekg0dk5yanVHaG11VDRDOUtoQi9KWHN0K0FRPT0K",
+      "url": "https://github.com/puang59/nuza/releases/download/app-v0.1.12/nuza_aarch64.app.tar.gz"
     },
     "darwin-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcmZDb3kyak5vdWp3ZjdYT0Vab09NOXRxRUtwWHVPQUtJUTg1a1pKcTR6V2FuS0Ezcmk4OUVldmlHZ2haUlU5QUdnM09Za05HMDNrS0dKZXU3MmFaaWpNWm5NY1dUOUFjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMzI1NDk3CWZpbGU6bnV6YS5hcHAudGFyLmd6CkNtZGhNWUNUMTRzWHdaYW9jMFAvV20xRjNoR25aUDF5eHNsb2h0azQ2eU5QNzZVekVIbDg1YTNMOFBJMnBST3dsaDlGT3ZyQklOWklZVGY0K3ltL0F3PT0K",
-      "url": "https://github.com/puang59/nuza/releases/download/app-v0.1.11/nuza_x64.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcmZDb3kyak5vdWwrZEJOblVrZFZuQ2FHcHN6K2MrTzY0UHBoS2Z0Q3NqeVhQMDRMeWFjQTZiZHV0WWFneTNBUkhrL2N3RW52aURWcXArU01SSE1pYk10N3Zkbis3N3dJPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMzM2OTQyCWZpbGU6bnV6YS5hcHAudGFyLmd6Ckcvem5uNjlUNGhWRUdUTzBubDIvNEZEbU5BSGxNcW5oaVhuZS9Objd4WW84SHBPOXhZWU0wRkxOWk15WmJXeFVQTmtwcEVqeUx2cTV3eDZlVWF0QUFnPT0K",
+      "url": "https://github.com/puang59/nuza/releases/download/app-v0.1.12/nuza_x64.app.tar.gz"
     },
     "darwin-x86_64-app": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcmZDb3kyak5vdWp3ZjdYT0Vab09NOXRxRUtwWHVPQUtJUTg1a1pKcTR6V2FuS0Ezcmk4OUVldmlHZ2haUlU5QUdnM09Za05HMDNrS0dKZXU3MmFaaWpNWm5NY1dUOUFjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMzI1NDk3CWZpbGU6bnV6YS5hcHAudGFyLmd6CkNtZGhNWUNUMTRzWHdaYW9jMFAvV20xRjNoR25aUDF5eHNsb2h0azQ2eU5QNzZVekVIbDg1YTNMOFBJMnBST3dsaDlGT3ZyQklOWklZVGY0K3ltL0F3PT0K",
-      "url": "https://github.com/puang59/nuza/releases/download/app-v0.1.11/nuza_x64.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcmZDb3kyak5vdWwrZEJOblVrZFZuQ2FHcHN6K2MrTzY0UHBoS2Z0Q3NqeVhQMDRMeWFjQTZiZHV0WWFneTNBUkhrL2N3RW52aURWcXArU01SSE1pYk10N3Zkbis3N3dJPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMzM2OTQyCWZpbGU6bnV6YS5hcHAudGFyLmd6Ckcvem5uNjlUNGhWRUdUTzBubDIvNEZEbU5BSGxNcW5oaVhuZS9Objd4WW84SHBPOXhZWU0wRkxOWk15WmJXeFVQTmtwcEVqeUx2cTV3eDZlVWF0QUFnPT0K",
+      "url": "https://github.com/puang59/nuza/releases/download/app-v0.1.12/nuza_x64.app.tar.gz"
     },
     "linux-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcmZDb3kyak5vdXBvWklhaE1UT2VTS2EvK0JobTB1SXNtWUdhZ3JRaDNOQkdvNmZEYjd1UlRPdnVPRFB1ZEIzYnd6U0w5cEZrTEdYdnpDOXJTZUVMV3BCR1RZQkFMSVFBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMzI1NTUyCWZpbGU6bnV6YV8wLjEuMTFfYW1kNjQuQXBwSW1hZ2UKS2YwcUVBTkxzU0Y5UWVCOFZWOE1LVy9WNXl6MWFid0E4bkk3S3ZWSmlDWEc4MGNkcDJaUDE2RjZFOElqU2VCYldrZk4yOGxBeVJDMFhibmh6Y2o3RHc9PQo=",
-      "url": "https://github.com/puang59/nuza/releases/download/app-v0.1.11/nuza_0.1.11_amd64.AppImage"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcmZDb3kyak5vdWxzL1labkRzc2NDUUFXWE53RHo3Q0I0TWRvKzIwRHJTREF5VCt4amlTbGp2MjJlUThTb1N0cWZFRVVUcEhGTFlvcllZa1FXeVhqUlRGTVBPWm52d1FzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMzM3MDYwCWZpbGU6bnV6YV8wLjEuMTJfYW1kNjQuQXBwSW1hZ2UKRWU3YVFrSjI4c2xQWjJ5L1JlQWpqOEpPZzIrUjM0YklaMjIyKytsVHpHdVpVSENmbTNBckF3TmtwQTJ4S0YxcFN2TUJQSzBkbENWUG1TZDQwdmNHQ1E9PQo=",
+      "url": "https://github.com/puang59/nuza/releases/download/app-v0.1.12/nuza_0.1.12_amd64.AppImage"
     },
     "linux-x86_64-appimage": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcmZDb3kyak5vdXBvWklhaE1UT2VTS2EvK0JobTB1SXNtWUdhZ3JRaDNOQkdvNmZEYjd1UlRPdnVPRFB1ZEIzYnd6U0w5cEZrTEdYdnpDOXJTZUVMV3BCR1RZQkFMSVFBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMzI1NTUyCWZpbGU6bnV6YV8wLjEuMTFfYW1kNjQuQXBwSW1hZ2UKS2YwcUVBTkxzU0Y5UWVCOFZWOE1LVy9WNXl6MWFid0E4bkk3S3ZWSmlDWEc4MGNkcDJaUDE2RjZFOElqU2VCYldrZk4yOGxBeVJDMFhibmh6Y2o3RHc9PQo=",
-      "url": "https://github.com/puang59/nuza/releases/download/app-v0.1.11/nuza_0.1.11_amd64.AppImage"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcmZDb3kyak5vdWxzL1labkRzc2NDUUFXWE53RHo3Q0I0TWRvKzIwRHJTREF5VCt4amlTbGp2MjJlUThTb1N0cWZFRVVUcEhGTFlvcllZa1FXeVhqUlRGTVBPWm52d1FzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMzM3MDYwCWZpbGU6bnV6YV8wLjEuMTJfYW1kNjQuQXBwSW1hZ2UKRWU3YVFrSjI4c2xQWjJ5L1JlQWpqOEpPZzIrUjM0YklaMjIyKytsVHpHdVpVSENmbTNBckF3TmtwQTJ4S0YxcFN2TUJQSzBkbENWUG1TZDQwdmNHQ1E9PQo=",
+      "url": "https://github.com/puang59/nuza/releases/download/app-v0.1.12/nuza_0.1.12_amd64.AppImage"
     },
     "linux-x86_64-deb": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcmZDb3kyak5vdXV6Wkh0bW9pOUhWS0o3N0xWRXBId25TbEFjVlE4YjZ6S1RnbFhsSkoybFEybDRRN0Z6WC9XSXpVZFBQbnYxT3lub1QvRVBWTUFUekFISlVubEwvaXdJPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMzI1NTUyCWZpbGU6bnV6YV8wLjEuMTFfYW1kNjQuZGViCjlWOUErNGNHaWJWbE5Va3NhaG9OUFpaTE9rbWR3MEtORnBiZVB6cnBPVlRNK3N2UmRPamllc3Y2d2t4dk4xYk5KVmduaVFHdUxYQk1EcDIzdnZJQkRBPT0K",
-      "url": "https://github.com/puang59/nuza/releases/download/app-v0.1.11/nuza_0.1.11_amd64.deb"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcmZDb3kyak5vdW9lcXBDTUthaVhXbWVyMXRXTEY3SGRLTmc3R1hTR1B5QzJScGhVSk9oYlNIeXloZldvdit6STJjOG05QUpOUXJ6aXR6elVtQVBiVXFLSGRvMmp0Wmd3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMzM3MDYwCWZpbGU6bnV6YV8wLjEuMTJfYW1kNjQuZGViCnVTUlpyRzBjeXNGZ1FkcGwxSU01RUdkNDVZdWpIcmxCMlpVaUtLWm9RTTRZUnVoVVFXVmZzS3ZLUXBLMW9FOS9vRU9OdyszLzlvOXk2ckhncFdDcUFnPT0K",
+      "url": "https://github.com/puang59/nuza/releases/download/app-v0.1.12/nuza_0.1.12_amd64.deb"
     },
     "linux-x86_64-rpm": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcmZDb3kyak5vdWhNa3RLQURnWUVBbmxkUlBFYitlQnRmS0crSlNGUWhEaExoV0FsZE5sM255aGxVdXRoREpJZ3pWSEZVYjdBNXhBNkRhZjBBVU1LYTc0ZVBVY2I1T0FzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMzI1NTUyCWZpbGU6bnV6YS0wLjEuMTEtMS54ODZfNjQucnBtCmJEQzBPZFNXa3Q2K05GeXk3QlpaZUlFSWFLb1k5S0o2RTI2UEVlbHcyQWNrQUVwZDNBV2RVTExuUGhyWjhnSzZNMXJYR0FhNm5MV1pSc2xqV2poTkF3PT0K",
-      "url": "https://github.com/puang59/nuza/releases/download/app-v0.1.11/nuza-0.1.11-1.x86_64.rpm"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcmZDb3kyak5vdWpxZFdQK28vZWlQaUM2SlpHN1lOWUV4ZEh4K0NucEtkYTJIRzlJbGNIMVhrTzZvUWRhRDduUU9taUhlNnJKOUs0Tkt5YkNtQitoRjMxTXV5NHNtaUFFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMzM3MDYwCWZpbGU6bnV6YS0wLjEuMTItMS54ODZfNjQucnBtCndwbHBiT1J0ZHl4Y1RTS04vQitwNU50TGpPMzUyaFFLK1k3dk5YVHloc3hZd0Q0dmZHcmViV29BZzViNEt2Y0JKNEdreUNmS0padC9la1BKQzlUQURRPT0K",
+      "url": "https://github.com/puang59/nuza/releases/download/app-v0.1.12/nuza-0.1.12-1.x86_64.rpm"
     },
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcmZDb3kyak5vdXRUb3BhU3RIMHNKY2JRVGxaa2dTYzZZdWhNNkVBaU1MY0NjWkplcVlxMG1LQlFYSEQ1aktUWEdGTVphZ1pEMEdvTHNtQWNRVW5YNkZUVVdkVDBCYkE4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMzI1NDU4CWZpbGU6bnV6YV8wLjEuMTFfeDY0X2VuLVVTLm1zaQo4TFFuUWhmdStRcE9pN0FqeFdKVmNja24zN2VvTVBlSEFOSmdneVlBaCttUHBiTTl0YzdvMFlmSWNyMWpjdFh5ZGcwL1ZDVS9LcWlVWTNpRXFBOWVDdz09Cg==",
-      "url": "https://github.com/puang59/nuza/releases/download/app-v0.1.11/nuza_0.1.11_x64_en-US.msi"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcmZDb3kyak5vdXJCMm1GbWpkbHlVTEQ3SkltemRKdnJnblpRUVFIZGw2bXJ3UDNTWnF2SXpLdnl0MlVsSm82N0UvM1JVWjkvUGZDMnY2LzY3TUdHVnRJb2U3aGMrVGdrPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMzM3MTg4CWZpbGU6bnV6YV8wLjEuMTJfeDY0X2VuLVVTLm1zaQo0dWFORkM0b0YwSnBLQjZNU3A0UEJzZnZWYmJGSzdHL3pZUEMvZ0ZCMWlHZ0VqRVdUcFRUZUFSVlhYY1lIc1NXN0NiNXhocnlhWFB1NDc1SmFNL0JDUT09Cg==",
+      "url": "https://github.com/puang59/nuza/releases/download/app-v0.1.12/nuza_0.1.12_x64_en-US.msi"
     },
     "windows-x86_64-msi": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcmZDb3kyak5vdXRUb3BhU3RIMHNKY2JRVGxaa2dTYzZZdWhNNkVBaU1MY0NjWkplcVlxMG1LQlFYSEQ1aktUWEdGTVphZ1pEMEdvTHNtQWNRVW5YNkZUVVdkVDBCYkE4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMzI1NDU4CWZpbGU6bnV6YV8wLjEuMTFfeDY0X2VuLVVTLm1zaQo4TFFuUWhmdStRcE9pN0FqeFdKVmNja24zN2VvTVBlSEFOSmdneVlBaCttUHBiTTl0YzdvMFlmSWNyMWpjdFh5ZGcwL1ZDVS9LcWlVWTNpRXFBOWVDdz09Cg==",
-      "url": "https://github.com/puang59/nuza/releases/download/app-v0.1.11/nuza_0.1.11_x64_en-US.msi"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcmZDb3kyak5vdXJCMm1GbWpkbHlVTEQ3SkltemRKdnJnblpRUVFIZGw2bXJ3UDNTWnF2SXpLdnl0MlVsSm82N0UvM1JVWjkvUGZDMnY2LzY3TUdHVnRJb2U3aGMrVGdrPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMzM3MTg4CWZpbGU6bnV6YV8wLjEuMTJfeDY0X2VuLVVTLm1zaQo0dWFORkM0b0YwSnBLQjZNU3A0UEJzZnZWYmJGSzdHL3pZUEMvZ0ZCMWlHZ0VqRVdUcFRUZUFSVlhYY1lIc1NXN0NiNXhocnlhWFB1NDc1SmFNL0JDUT09Cg==",
+      "url": "https://github.com/puang59/nuza/releases/download/app-v0.1.12/nuza_0.1.12_x64_en-US.msi"
     },
     "windows-x86_64-nsis": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcmZDb3kyak5vdXJuRHlJZUs5dTN2emp6ZjQ1N01WYUN5dG80c0h5NTRLL25mQ1FtUWpCbG1kMUpZeWRYU3pONXJiMkVkSm5HNGpVZHBFOW8rTGhBbTRnMjlZTzVvS3dzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMzI1NDU4CWZpbGU6bnV6YV8wLjEuMTFfeDY0LXNldHVwLmV4ZQpQSllsUzF2dmMvc3NxcUZ0RStvNGxIS09sakxzdHVJWmxWQWV6ZnR4bXVsSkxWS01SYXNTQzFXaUl6VjJaUnJndll4Q0V0VUt0cjZ1elpDZDhBdHpCZz09Cg==",
-      "url": "https://github.com/puang59/nuza/releases/download/app-v0.1.11/nuza_0.1.11_x64-setup.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTcmZDb3kyak5vdWcwVldxdnlONTRoZ244TG9PZUJ4WU93L2Jhd1JLMHhNQWdnbTJjZGE2ell6RDBTZHRHdy9lZkQyVklkSHo0YmlEZUZBQzFFbFRKN3FoajJjYTNsR3dNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMzM3MTg4CWZpbGU6bnV6YV8wLjEuMTJfeDY0LXNldHVwLmV4ZQpWejl5UnJ2dWo2UkplYVVuRGtlZE5xaGZOd2w0b1Y3YzVxOEhGN1hsbVoyVHA5T2VPUVB0TnpQcUF5NFRNc3U2bG1lcnJsRTUydXp2alNnSVNMVnlEZz09Cg==",
+      "url": "https://github.com/puang59/nuza/releases/download/app-v0.1.12/nuza_0.1.12_x64-setup.exe"
     }
   }
 }
