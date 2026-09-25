@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Extension } from "@codemirror/state";
 import { FileEntry } from "@/lib/types";
-import { addEntry, addFile, joinPath, moveEntry as moveTreeEntry, removeEntry } from "@/lib/fileTree";
+import { addEntry, addFile, findEntry, joinPath, moveEntry as moveTreeEntry, removeEntry } from "@/lib/fileTree";
+import { readSession, writeSession } from "@/lib/session";
 import { ATTACHMENT_EVENT, announceAttachment, writeMedia } from "@/lib/media";
 import { useDocuments } from "./useDocuments";
 
@@ -105,6 +106,46 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
     openDocument(UNTITLED_FILE, "");
   }, [forgetDocuments, openDocument]);
 
+  /**
+   * The vault whose open tabs are being recorded, and whether the tabs on
+   * screen are its own yet. Nothing is written while a folder is being taken
+   * on: the tabs at that moment still belong to the folder being left, and
+   * recording them would overwrite what the new one is about to restore.
+   */
+  const sessionVault = useRef<string | null>(null);
+  const sessionReady = useRef(false);
+
+  /**
+   * Reopens the notes that were last open in `folder`, or leaves the editor on
+   * a scratch note if there is nothing to reopen. Only the note in front is
+   * read from disk - the other tabs are read when they are looked at, which is
+   * what keeps a vault with twenty tabs open as quick to launch as an empty one.
+   */
+  const restoreSession = useCallback(
+    async (folder: OpenedFolder) => {
+      const session = readSession(folder.path);
+      // Notes deleted or moved since last time are quietly dropped rather than
+      // reopened as tabs onto nothing.
+      const open = session.open.filter((path) => findEntry(folder.entries, path));
+      const current = open.includes(session.current) ? session.current : open[0];
+
+      try {
+        if (!current) throw new Error("nothing to reopen");
+        const content = await invoke<string>("read_file", { path: current });
+
+        recentRef.current = [current, ...open.filter((path) => path !== current)];
+        setOpenPaths(open);
+        setCurrentFile(current);
+        openDocument(current, content);
+      } catch {
+        resetToScratch();
+      } finally {
+        sessionReady.current = true;
+      }
+    },
+    [openDocument, resetToScratch]
+  );
+
   /** Switches the app over to a folder that has already been read. */
   const adoptFolder = useCallback(
     (folder: OpenedFolder) => {
@@ -114,10 +155,23 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
       forgetDocuments(() => true);
       resetToScratch();
 
+      sessionVault.current = folder.path;
+      sessionReady.current = false;
+      void restoreSession(folder);
+
       onFolderOpened?.(folder.path);
     },
-    [forgetDocuments, resetToScratch, onFolderOpened]
+    [forgetDocuments, resetToScratch, restoreSession, onFolderOpened]
   );
+
+  // What is open, kept for next time. The scratch note is left out: it is not
+  // a file, so there is nothing to reopen it from.
+  useEffect(() => {
+    if (!sessionReady.current || sessionVault.current !== rootPath || !rootPath) return;
+
+    const open = openPaths.filter((path) => path !== UNTITLED_FILE);
+    writeSession(rootPath, { open, current: open.includes(currentFile) ? currentFile : open[0] ?? "" });
+  }, [rootPath, openPaths, currentFile]);
 
   const openFolder = useCallback(async () => {
     try {
