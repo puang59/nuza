@@ -10,6 +10,7 @@ import { GFM } from "@lezer/markdown";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { isMacPlatform } from "../platform";
 import { attachments } from "./attachments";
+import { listIndent } from "./listIndent";
 import { liveMarkdownPreview } from "./livePreview";
 import { nuzaEditorTheme } from "./theme";
 
@@ -61,6 +62,7 @@ export const liveMarkdown: Extension = [
   EditorView.lineWrapping,
   nuzaEditorTheme,
   liveMarkdownPreview,
+  listIndent,
   openLinkOnModClick,
   attachments,
 ];

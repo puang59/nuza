@@ -74,6 +74,14 @@ const editorTheme = EditorView.theme(
     ".cm-line": {
       padding: "0",
     },
+    /* A wrapped list line hangs by carrying a negative `text-indent`, and
+       `text-indent` is inherited: anything in the line that lays out content
+       of its own - a bullet, a checkbox, a rendered table - would take that
+       indent as well and shift its contents out of place, or collapse to
+       nothing. It stops at the line's own text. */
+    ".cm-line > *": {
+      textIndent: "0",
+    },
 
     "&.cm-focused > .cm-scroller > .cm-cursorLayer .cm-cursor, .cm-cursor, .cm-dropCursor": {
       borderLeft: `2px solid ${ink.caret}`,
