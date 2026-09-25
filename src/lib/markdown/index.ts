@@ -3,6 +3,7 @@ import {
   insertNewlineContinueMarkupCommand,
   markdown,
 } from "@codemirror/lang-markdown";
+import { languages } from "@codemirror/language-data";
 import { Extension, Prec } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { GFM } from "@lezer/markdown";
@@ -51,7 +52,10 @@ const markdownEditingKeymap = Prec.high(
  * instead of throwing the rendered document away and rebuilding it.
  */
 export const liveMarkdown: Extension = [
-  markdown({ extensions: GFM, addKeymap: false }),
+  // `codeLanguages` is what gives a fenced block its own colours. Each grammar
+  // is fetched the first time a block asks for it, so a note that never shows
+  // code never pays for one.
+  markdown({ extensions: GFM, codeLanguages: languages, addKeymap: false }),
   markdownEditingKeymap,
   EditorView.lineWrapping,
   nuzaEditorTheme,
