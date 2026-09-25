@@ -219,12 +219,21 @@ export class ImageWidget extends WidgetType {
     image.src = this.src;
     image.alt = this.alt;
     image.loading = "lazy";
+
+    // Faded in once the bytes are there, so a picture arriving mid-scroll does
+    // not snap into place. One already in cache is marked loaded in the same
+    // frame, which is what keeps moving the caret past it from flickering.
+    const reveal = () => wrapper.classList.add("cm-md-image-loaded");
+    image.addEventListener("load", reveal);
+
     image.addEventListener("error", () => {
+      reveal();
       wrapper.classList.add("cm-md-image-broken");
       wrapper.textContent = this.alt || "image not found";
     });
 
     wrapper.appendChild(image);
+    if (image.complete) reveal();
     return wrapper;
   }
 }

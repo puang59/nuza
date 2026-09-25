@@ -363,7 +363,10 @@ const editorTheme = EditorView.theme(
       height: "auto",
       borderRadius: "0.5em",
       display: "block",
+      opacity: "0",
+      transition: "opacity 220ms ease",
     },
+    ".cm-md-image-loaded img": { opacity: "1" },
     ".cm-md-image-broken": {
       color: ink.muted,
       fontStyle: "italic",

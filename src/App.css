@@ -241,6 +241,25 @@ textarea,
   display: none;
 }
 
+/*
+ * The writing surface while a file is being dragged onto it. Drawn on the frame
+ * around the editor rather than the editor itself, which is pinned by the rules
+ * above, and kept to an outline so the text underneath stays readable.
+ */
+.cm-drop-target {
+  outline: 2px dashed rgba(255, 150, 150, 0.5);
+  outline-offset: -8px;
+  background-color: rgba(255, 150, 150, 0.045);
+}
+
+.cm-drop-target,
+.cm-md-image img {
+  transition:
+    background-color 160ms ease,
+    outline-color 160ms ease,
+    opacity 220ms ease;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-in,
   .animate-panel-in,
@@ -253,8 +272,14 @@ textarea,
   }
 
   .sidebar-transition,
-  .sidebar-search {
+  .sidebar-search,
+  .cm-drop-target,
+  .cm-md-image img {
     transition: none;
+  }
+
+  .cm-md-image img {
+    opacity: 1;
   }
 }
 
