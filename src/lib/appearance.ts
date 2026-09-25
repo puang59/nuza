@@ -103,5 +103,9 @@ export function appearanceVariables(
     "--nuza-surface": withAlpha(foreground, 0.045),
     "--nuza-surface-strong": withAlpha(foreground, 0.07),
     "--nuza-selection-idle": withAlpha(foreground, 0.09),
+
+    // Quiet enough to miss, there when looked for.
+    "--nuza-scrollbar": withAlpha(foreground, 0.14),
+    "--nuza-scrollbar-strong": withAlpha(foreground, 0.28),
   };
 }

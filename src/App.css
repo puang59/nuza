@@ -21,6 +21,8 @@
   --nuza-surface: rgba(212, 212, 216, 0.045);
   --nuza-surface-strong: rgba(212, 212, 216, 0.07);
   --nuza-selection-idle: rgba(212, 212, 216, 0.09);
+  --nuza-scrollbar: rgba(212, 212, 216, 0.14);
+  --nuza-scrollbar-strong: rgba(212, 212, 216, 0.28);
 }
 
 html,
@@ -279,6 +281,48 @@ textarea,
 .sidebar-search[data-open="true"] {
   max-height: 3rem;
   opacity: 1;
+}
+
+/*
+ * Scrollbars, everywhere there is one: the explorer, the settings panel, the
+ * vault list, the font list, quick open.
+ *
+ * The platform's own is a grey elevator in a window that has no other grey in
+ * it, and on Windows it is a wide one. This is the same hairline the rest of
+ * the app is drawn with - enough to find if you go looking for where you are
+ * in a long list, quiet enough that you never notice it while writing.
+ *
+ * Both syntaxes are set: the engines that understand `scrollbar-color` prefer
+ * it and ignore the pseudo-elements, and the ones that do not fall back to
+ * them. Anything that wants no scrollbar at all says so with `!important`
+ * further down, which still wins.
+ */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--nuza-scrollbar) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* The transparent border is what makes the thumb read as a 4px hairline in a
+   10px lane, rather than as a bar filling the gutter. */
+*::-webkit-scrollbar-thumb {
+  background-color: var(--nuza-scrollbar);
+  background-clip: content-box;
+  border: 3px solid transparent;
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--nuza-scrollbar-strong);
 }
 
 /* The tab strip scrolls, but a visible scrollbar in the title bar is noise. */
