@@ -18,17 +18,30 @@ struct FileEntry {
     children: Option<Vec<FileEntry>>,
 }
 
+/// Entries that are never notes: the dot-directories tools keep their own state
+/// in, and dependency folders. A vault that happens to sit inside a repository
+/// or a project can carry far more of these than it does notes, and walking
+/// them costs more than everything the sidebar is actually there to show.
+fn is_ignored(name: &str) -> bool {
+    name.starts_with('.') || name == "node_modules"
+}
+
 fn read_dir_recursive(path: &Path) -> Result<Vec<FileEntry>, String> {
     let mut entries = Vec::new();
-    
+
     if path.is_dir() {
         // Read the directory contents
         for entry in fs::read_dir(path).map_err(|e| e.to_string())? {
             let entry = entry.map_err(|e| e.to_string())?;
             let entry_path = entry.path();
             let name = entry.file_name().to_string_lossy().into_owned();
+
+            if is_ignored(&name) {
+                continue;
+            }
+
             let is_directory = entry_path.is_dir();
-            
+
             // If it's a directory, recursively read its children
             let children = if is_directory {
                 Some(read_dir_recursive(&entry_path)?)
@@ -92,13 +105,6 @@ async fn load_folder_picker(app_handle: tauri::AppHandle) -> Result<Option<Opene
             send(result);
         });
     })
-}
-
-/// Re-reads a previously opened folder's contents, used to refresh the tree
-/// after a create/rename/move/delete without reopening the picker.
-#[tauri::command]
-fn read_folder(path: String) -> Result<Vec<FileEntry>, String> {
-    read_dir_recursive(Path::new(&path))
 }
 
 #[tauri::command]
@@ -287,7 +293,6 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             save_file_picker,
             load_folder_picker,
-            read_folder,
             read_file,
             write_file,
             create_file,

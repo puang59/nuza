@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Extension } from "@codemirror/state";
 import { FileEntry } from "@/lib/types";
+import { addEntry, joinPath, moveEntry as moveTreeEntry, removeEntry } from "@/lib/fileTree";
 import { useDocuments } from "./useDocuments";
 
 const UNTITLED_FILE = "untitled.md";
@@ -82,17 +83,6 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
       console.error("Failed to load folder:", error);
     }
   }, [forgetDocuments, resetToScratch, onFolderOpened]);
-
-  const refreshFolder = useCallback(async () => {
-    const path = rootPathRef.current;
-    if (!path) return;
-    try {
-      const entries = await invoke<FileEntry[]>("read_folder", { path });
-      setFolderData(entries);
-    } catch (error) {
-      console.error("Failed to refresh folder:", error);
-    }
-  }, []);
 
   const save = useCallback(async () => {
     try {
@@ -213,44 +203,40 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
     [rewriteDocuments]
   );
 
-  const createFile = useCallback(
-    async (parentPath: string, name: string) => {
-      await invoke("create_file", { parentPath, name });
-      await refreshFolder();
-    },
-    [refreshFolder]
-  );
+  const createFile = useCallback(async (parentPath: string, name: string) => {
+    await invoke("create_file", { parentPath, name });
+    const entry = { name, path: joinPath(parentPath, name), isDirectory: false };
+    setFolderData((tree) => addEntry(tree, rootPathRef.current ?? "", entry));
+  }, []);
 
-  const createFolder = useCallback(
-    async (parentPath: string, name: string) => {
-      await invoke("create_folder", { parentPath, name });
-      await refreshFolder();
-    },
-    [refreshFolder]
-  );
+  const createFolder = useCallback(async (parentPath: string, name: string) => {
+    await invoke("create_folder", { parentPath, name });
+    const entry = { name, path: joinPath(parentPath, name), isDirectory: true, children: [] };
+    setFolderData((tree) => addEntry(tree, rootPathRef.current ?? "", entry));
+  }, []);
 
   const renameEntry = useCallback(
     async (path: string, newName: string) => {
       const newPath = await invoke<string>("rename_entry", { path, newName });
-      await refreshFolder();
+      setFolderData((tree) => moveTreeEntry(tree, rootPathRef.current ?? "", path, newPath));
       rewritePaths(path, newPath);
     },
-    [refreshFolder, rewritePaths]
+    [rewritePaths]
   );
 
   const moveEntry = useCallback(
     async (path: string, targetDir: string) => {
       const newPath = await invoke<string>("move_entry", { path, targetDir });
-      await refreshFolder();
+      setFolderData((tree) => moveTreeEntry(tree, rootPathRef.current ?? "", path, newPath));
       rewritePaths(path, newPath);
     },
-    [refreshFolder, rewritePaths]
+    [rewritePaths]
   );
 
   const deleteEntry = useCallback(
     async (path: string) => {
       await invoke("delete_entry", { path });
-      await refreshFolder();
+      setFolderData((tree) => removeEntry(tree, rootPathRef.current ?? "", path));
 
       forgetDocuments((open) => isWithin(open, path));
 
@@ -268,7 +254,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
         openDocument(remaining[0], null);
       }
     },
-    [forgetDocuments, openDocument, refreshFolder, resetToScratch]
+    [forgetDocuments, openDocument, resetToScratch]
   );
 
   return {
