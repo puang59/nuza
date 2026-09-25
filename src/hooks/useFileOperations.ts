@@ -8,6 +8,15 @@ import { useDocuments } from "./useDocuments";
 
 const UNTITLED_FILE = "untitled.md";
 
+/**
+ * How long after an edit a note is written back to disk. Long enough that a
+ * burst of typing is one write rather than thirty, short enough that quitting
+ * the app is never the thing that decides whether the last minute of work
+ * existed - there is no prompt on the way out, and an image dropped into a
+ * note has already been written to the vault by the time its link appears.
+ */
+const AUTOSAVE_DELAY = 800;
+
 interface UseFileOperationsOptions {
   /** Editor extensions that follow the app's settings. */
   preferences: Extension;
@@ -42,6 +51,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
     open: openDocument,
     isOpen: isDocumentOpen,
     read: readDocument,
+    revision: documentRevision,
     markSaved,
     forget: forgetDocuments,
     rewrite: rewriteDocuments,
@@ -135,16 +145,29 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
     [adoptFolder]
   );
 
+  /**
+   * Writes one document that already has somewhere to go. The dirty flag is
+   * only lowered if the text has not moved on since it was read, so an edit
+   * made while the write was in flight stays flagged for the next one.
+   */
+  const writeDocument = useCallback(
+    async (path: string) => {
+      const before = documentRevision(path);
+      await invoke("write_file", { path, content: readDocument(path) });
+      if (documentRevision(path) === before) markSaved(path);
+    },
+    [documentRevision, readDocument, markSaved]
+  );
+
   const save = useCallback(async () => {
     try {
       const path = currentFileRef.current;
-      const content = readDocument(path);
 
       if (path !== UNTITLED_FILE) {
         // Direct save if we already have a real file path
-        await invoke("write_file", { path, content });
-        markSaved(path);
+        await writeDocument(path);
       } else {
+        const content = readDocument(path);
         // Otherwise, open the picker for a new file
         const savedPath = await invoke<string | null>("save_file_picker", { content });
         if (savedPath) {
@@ -159,7 +182,42 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
     } catch (error) {
       console.error("Failed to save file:", error);
     }
-  }, [readDocument, markSaved, rewriteDocuments]);
+  }, [writeDocument, readDocument, markSaved, rewriteDocuments]);
+
+  // Everything that has drifted from disk, so the timer below can see what is
+  // outstanding without being restarted every time the set changes.
+  const dirtyPathsRef = useRef(dirtyPaths);
+  dirtyPathsRef.current = dirtyPaths;
+
+  /**
+   * Writes back every note that has somewhere to go. The scratch buffer is
+   * left out: it has no path yet, and saving it would mean putting a dialog
+   * in front of someone who only meant to type.
+   */
+  const saveDirty = useCallback(async () => {
+    const paths = Array.from(dirtyPathsRef.current).filter((path) => path !== UNTITLED_FILE);
+
+    await Promise.all(
+      paths.map(async (path) => {
+        try {
+          await writeDocument(path);
+        } catch (error) {
+          console.error(`Failed to save ${path}:`, error);
+        }
+      })
+    );
+  }, [writeDocument]);
+
+  // The dirty set only changes identity when a path joins or leaves it, so
+  // this schedules a write shortly after a note *becomes* dirty rather than
+  // restarting on every keystroke - a run of typing is saved every
+  // AUTOSAVE_DELAY rather than only once the typing stops.
+  useEffect(() => {
+    if (!Array.from(dirtyPaths).some((path) => path !== UNTITLED_FILE)) return;
+
+    const timer = setTimeout(() => void saveDirty(), AUTOSAVE_DELAY);
+    return () => clearTimeout(timer);
+  }, [dirtyPaths, saveDirty]);
 
   const selectFile = useCallback(
     async (path: string) => {
@@ -320,6 +378,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
     openFolder,
     openVault,
     save,
+    saveDirty,
     selectFile,
     closeFile,
     cycleFile,

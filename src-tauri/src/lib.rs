@@ -259,6 +259,38 @@ fn unused_path(directory: &Path, name: &str) -> std::path::PathBuf {
     directory.join(name)
 }
 
+/// The folder to actually file media in, preferring one already sitting there
+/// under a different case.
+///
+/// macOS and Windows are case-insensitive but case-preserving, so asking for
+/// "media" beside an existing "Media" quietly writes into the latter while
+/// every path handed back still says "media". The sidebar reads those paths
+/// literally and invents a second, empty folder that vanishes on the next
+/// restart - and on Linux, where the names really are distinct, the vault ends
+/// up with two media folders side by side.
+fn preferred_directory(directory: &Path) -> std::path::PathBuf {
+    if directory.exists() {
+        return directory.to_path_buf();
+    }
+
+    let (Some(parent), Some(name)) = (directory.parent(), directory.file_name()) else {
+        return directory.to_path_buf();
+    };
+
+    let wanted = name.to_string_lossy().to_lowercase();
+    let Ok(siblings) = fs::read_dir(parent) else {
+        return directory.to_path_buf();
+    };
+
+    for sibling in siblings.flatten() {
+        if sibling.file_name().to_string_lossy().to_lowercase() == wanted && sibling.path().is_dir() {
+            return sibling.path();
+        }
+    }
+
+    directory.to_path_buf()
+}
+
 /// Writes a dropped or pasted file into `directory`, creating it if it is not
 /// there yet. The bytes arrive base64-encoded because that survives the JSON
 /// the IPC bridge speaks at a third of the cost of an array of numbers.
@@ -272,10 +304,10 @@ fn write_media(directory: String, name: String, data: String) -> Result<String, 
         .decode(data.as_bytes())
         .map_err(|e| format!("Could not read the dropped file: {}", e))?;
 
-    let directory = Path::new(&directory);
-    fs::create_dir_all(directory).map_err(|e| e.to_string())?;
+    let directory = preferred_directory(Path::new(&directory));
+    fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
 
-    let path = unused_path(directory, &safe_file_name(&name)?);
+    let path = unused_path(&directory, &safe_file_name(&name)?);
     fs::write(&path, bytes).map_err(|e| e.to_string())?;
 
     Ok(path.to_string_lossy().into_owned())

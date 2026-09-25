@@ -79,6 +79,7 @@ function App() {
     openFolder,
     openVault,
     save,
+    saveDirty,
     selectFile,
     closeFile,
     cycleFile,
@@ -94,7 +95,14 @@ function App() {
     preferences: editorPreferences,
     onFolderOpened,
   });
-  const { status: updateStatus, checkForUpdates, installUpdate, openDownloadPage, version } = useAppUpdater({
+  const {
+    status: updateStatus,
+    checkForUpdates,
+    installUpdate,
+    openDownloadPage,
+    openChangelog,
+    version,
+  } = useAppUpdater({
     autoUpdate: autoUpdateEnabled,
   });
   const { bindings: keymapBindings, setBinding: setKeymapBinding, resetBinding: resetKeymapBinding, resetAll: resetAllKeymaps } = useKeymaps();
@@ -113,11 +121,16 @@ function App() {
 
   // The native effect only has to be on while something is meant to show
   // through; the amount itself is painted by the window's own background.
+  //
+  // Deliberately keyed on the switch rather than on the amount: applying it
+  // hangs a fresh NSVisualEffectView off the window, so depending on the number
+  // would rebuild the window's backing layer on every frame of a slider drag.
+  const wantsTransparency = appearance.transparency > 0;
   useEffect(() => {
-    invoke("set_transparency", { enabled: appearance.transparency > 0 }).catch((error) => {
+    invoke("set_transparency", { enabled: wantsTransparency }).catch((error) => {
       console.error("Failed to update transparency:", error);
     });
-  }, [appearance.transparency]);
+  }, [wantsTransparency]);
 
   const sidebarRef = useRef<SidebarHandle>(null);
 
@@ -191,10 +204,11 @@ function App() {
     vimModule.Vim.defineEx("write", "w", async () => {
       await save();
     });
+    // `:wa` means every buffer, not just the one in front of you.
     vimModule.Vim.defineEx("wall", "wa", async () => {
-      await save();
+      await saveDirty();
     });
-  }, [vimModule, save]);
+  }, [vimModule, save, saveDirty]);
 
   return (
     <main
@@ -305,6 +319,7 @@ function App() {
         appVersion={version}
         onCheckUpdates={checkForUpdates}
         onOpenDownloadPage={openDownloadPage}
+        onOpenChangelog={openChangelog}
       />
     </main>
   );

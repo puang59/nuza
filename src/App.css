@@ -295,6 +295,13 @@ textarea,
  * The transparency slider. A range input is styled per-engine rather than by
  * one standard, so the track and the thumb are drawn for both WebKit (macOS,
  * Linux) and Gecko/Blink rather than left to whatever the platform ships.
+ *
+ * The track behind the thumb is filled in the accent, so the slider reads as
+ * something filling up rather than a dot on a wire. WebKit has no element for
+ * that half, so it is painted as a hard-edged gradient on the track itself;
+ * Gecko has `::-moz-range-progress` and gets it for nothing. Either way the
+ * boundary is nudged by half a thumb at each end so the fill meets the middle
+ * of the thumb rather than running past it.
  */
 .nuza-slider {
   -webkit-appearance: none;
@@ -302,18 +309,37 @@ textarea,
   height: 1rem;
   background: transparent;
   cursor: pointer;
+
+  /* 0 to 1, written on the element by whatever is driving the slider. */
+  --nuza-slider-ratio: 0;
+  --nuza-slider-thumb: 12px;
+  --nuza-slider-fill: calc(
+    var(--nuza-slider-thumb) / 2 + (100% - var(--nuza-slider-thumb)) * var(--nuza-slider-ratio)
+  );
 }
 
 .nuza-slider::-webkit-slider-runnable-track {
   height: 3px;
   border-radius: 999px;
-  background: var(--nuza-surface-strong);
+  background: linear-gradient(
+    to right,
+    var(--nuza-accent) 0,
+    var(--nuza-accent) var(--nuza-slider-fill),
+    var(--nuza-surface-strong) var(--nuza-slider-fill),
+    var(--nuza-surface-strong) 100%
+  );
 }
 
 .nuza-slider::-moz-range-track {
   height: 3px;
   border-radius: 999px;
   background: var(--nuza-surface-strong);
+}
+
+.nuza-slider::-moz-range-progress {
+  height: 3px;
+  border-radius: 999px;
+  background: var(--nuza-accent);
 }
 
 .nuza-slider::-webkit-slider-thumb {

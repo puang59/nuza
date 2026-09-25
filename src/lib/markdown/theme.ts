@@ -363,7 +363,7 @@ const editorTheme = EditorView.theme(
     },
     ".cm-md-prop": {
       display: "grid",
-      gridTemplateColumns: "minmax(0, 9em) 1fr",
+      gridTemplateColumns: "minmax(0, 9em) 1fr auto",
       gap: "0 1.2em",
       alignItems: "baseline",
       padding: "0.16em 0.3em",
@@ -371,6 +371,26 @@ const editorTheme = EditorView.theme(
       cursor: "text",
     },
     ".cm-md-prop:hover, .cm-md-prop:focus-within": { backgroundColor: ink.surface },
+    /* One per property, and only there while the row is pointed at: a block of
+       notes is read far more often than it is edited. */
+    ".cm-md-prop-remove": {
+      width: "1.3em",
+      margin: "0",
+      padding: "0",
+      border: "none",
+      background: "none",
+      font: "inherit",
+      lineHeight: "1",
+      color: ink.muted,
+      opacity: "0",
+      cursor: "pointer",
+      transition: "opacity 120ms ease, color 120ms ease",
+    },
+    ".cm-md-prop:hover .cm-md-prop-remove, .cm-md-prop:focus-within .cm-md-prop-remove, .cm-md-prop-remove:focus-visible":
+      {
+        opacity: "1",
+      },
+    ".cm-md-prop-remove:hover": { color: ink.accent },
     /* The fields are form controls wearing the document's clothes: no border,
        no background, the editor's own type - so the block reads as text right
        up until the caret lands in it. */

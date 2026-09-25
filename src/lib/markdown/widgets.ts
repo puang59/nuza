@@ -437,6 +437,19 @@ export class PropertiesWidget extends WidgetType {
     view.dispatch({ changes: { from, to, insert } });
   }
 
+  /**
+   * Takes the whole property out, line and newline together - leaving the line
+   * behind would put a blank row in the block, and leaving the newline would
+   * weld the next property onto the one above it.
+   */
+  private remove(view: EditorView, index: number) {
+    const property = this.current(view, index);
+    if (!property) return;
+
+    const line = view.state.doc.lineAt(property.keyFrom);
+    view.dispatch({ changes: { from: line.from, to: Math.min(line.to + 1, view.state.doc.length) } });
+  }
+
   toDOM(view: EditorView) {
     const wrapper = document.createElement("div");
     wrapper.className = "cm-md-props";
@@ -460,7 +473,21 @@ export class PropertiesWidget extends WidgetType {
         onCommit: () => (document.activeElement as HTMLElement | null)?.blur(),
       });
 
-      row.append(key, value);
+      // Kept out of the way until the row is pointed at or typed in, so the
+      // block still reads as text rather than as a list of controls.
+      const remove = document.createElement("button");
+      remove.className = "cm-md-prop-remove";
+      remove.type = "button";
+      remove.textContent = "×";
+      remove.title = `Delete ${property.key || "property"}`;
+      remove.setAttribute("aria-label", `Delete ${property.key || "property"}`);
+      remove.addEventListener("mousedown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        this.remove(view, index);
+      });
+
+      row.append(key, value, remove);
       wrapper.appendChild(row);
     });
 
@@ -504,8 +531,14 @@ export class PropertiesWidget extends WidgetType {
       const row = rows[index];
       const key = row.querySelector<HTMLInputElement>(".cm-md-prop-key");
       const value = row.querySelector<HTMLTextAreaElement>(".cm-md-prop-value");
+      const remove = row.querySelector<HTMLButtonElement>(".cm-md-prop-remove");
       if (key) refresh(key, property.key);
       if (value) refresh(value, property.value);
+      if (remove) {
+        const label = `Delete ${property.key || "property"}`;
+        remove.title = label;
+        remove.setAttribute("aria-label", label);
+      }
     });
 
     void view;

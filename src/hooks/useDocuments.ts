@@ -235,6 +235,18 @@ export function useDocuments({ preferences: settings, initialPath, vault }: UseD
     []
   );
 
+  /**
+   * A handle on the document as it stands, for a save to hold on to. The text
+   * is immutable, so a new object here means an edit landed - which is how a
+   * save that has just written to disk tells whether what it wrote is still
+   * what the editor holds, rather than clearing the dirty flag over a
+   * keystroke that arrived while the write was in flight.
+   */
+  const revision = useCallback((path: string) => {
+    const state = path === currentPath.current ? editor.current?.state : states.current.get(path);
+    return state?.doc ?? null;
+  }, []);
+
   const markSaved = useCallback((path: string) => {
     setDirtyPaths((paths) => {
       if (!paths.has(path)) return paths;
@@ -278,5 +290,5 @@ export function useDocuments({ preferences: settings, initialPath, vault }: UseD
     []
   );
 
-  return { container, view, dirtyPaths, subscribeToStats, open, isOpen, read, markSaved, forget, rewrite };
+  return { container, view, dirtyPaths, subscribeToStats, open, isOpen, read, revision, markSaved, forget, rewrite };
 }

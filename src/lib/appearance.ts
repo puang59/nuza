@@ -1,23 +1,27 @@
 /**
  * The colours the app is painted in, and everything derived from them.
  *
- * Three are chosen: the accent, the background, and the ink. The rest - the
- * hairlines, the hover surfaces, the heading white, the selection wash - are
- * worked out from those, so a change to one of the three carries through the
- * whole window instead of leaving half of it behind.
+ * One is chosen - the accent. The background and the ink are fixed, and the
+ * rest - the hairlines, the hover surfaces, the heading white, the selection
+ * wash - are worked out from all three, so a change to the accent carries
+ * through the whole window instead of leaving half of it behind.
  */
 export interface Appearance {
   accent: string;
-  background: string;
-  foreground: string;
   /** How much of the desktop shows through, 0 (opaque) to 100 (invisible). */
   transparency: number;
 }
 
+/**
+ * The window behind everything, and the ink notes are written in. Not settings:
+ * a note app that lets you pick both ends of its own contrast is a note app you
+ * can make unreadable, so these stay where they were tuned.
+ */
+export const BACKGROUND = "#1E1E1E";
+export const FOREGROUND = "#D4D4D8";
+
 export const DEFAULT_APPEARANCE: Appearance = {
   accent: "#FF9696",
-  background: "#1E1E1E",
-  foreground: "#D4D4D8",
   transparency: 100,
 };
 
@@ -64,7 +68,9 @@ export function clampTransparency(value: number) {
  * editor being reconfigured or a single component re-rendering.
  */
 export function appearanceVariables(appearance: Appearance): Record<string, string> {
-  const { accent, background, foreground } = appearance;
+  const { accent } = appearance;
+  const background = BACKGROUND;
+  const foreground = FOREGROUND;
   const opaque = 1 - clampTransparency(appearance.transparency) / 100;
   // Headings step away from the background rather than always towards white,
   // so ink on a light background gets darker instead of vanishing.

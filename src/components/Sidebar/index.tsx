@@ -1,4 +1,4 @@
-import { memo, Ref, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { memo, Ref, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { ChevronsDownUp, FilePlus, FolderPlus, Search, X } from "lucide-react";
 import { cn } from "cn";
 import { searchFiles } from "@/lib/fileSearch";
@@ -193,6 +193,37 @@ function Sidebar({
       (el as HTMLDetailsElement).open = false;
     });
   }
+
+  /**
+   * Brings the open note into view: every folder on the way down to it is
+   * unfolded, and the row scrolled to if it is off screen.
+   *
+   * A file opened from the quick-open palette or a search hit is otherwise
+   * highlighted somewhere nobody can see, several collapsed folders deep -
+   * which leaves no clue where in the vault the thing you are now editing
+   * actually lives.
+   *
+   * The folds are read and written straight on the DOM rather than mirrored
+   * into state: `<details>` owns whether it is open, which is also what lets
+   * the whole tree stay uncontrolled and cheap. A closed `<details>` still
+   * keeps its contents in the document, so the row can be found before any of
+   * its ancestors have been opened.
+   */
+  useEffect(() => {
+    const tree = treeRef.current;
+    if (!tree || !currentFile || showResults) return;
+
+    const row = tree.querySelector<HTMLElement>(`[data-path="${CSS.escape(currentFile)}"]`);
+    if (!row) return;
+
+    for (let node = row.parentElement; node && node !== tree; node = node.parentElement) {
+      if (node instanceof HTMLDetailsElement) node.open = true;
+    }
+
+    // `nearest` so a row that is already visible is left where it is, rather
+    // than the panel jumping to centre it on every tab change.
+    row.scrollIntoView({ block: "nearest" });
+  }, [currentFile, data, showResults]);
 
   const contextItems: ContextMenuItem[] = useMemo(() => {
     if (!contextMenu) return [];

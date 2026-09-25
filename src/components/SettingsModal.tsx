@@ -1,18 +1,22 @@
 import { useEffect, useState } from "react";
-import { X, SlidersHorizontal, Keyboard, LucideIcon } from "lucide-react";
+import { X, SlidersHorizontal, Palette, Keyboard, Info, LucideIcon } from "lucide-react";
 import { cn } from "cn";
 import { useExitAnimation } from "@/hooks/useExitAnimation";
 import { KeymapAction } from "@/lib/keymaps";
 import { UpdateStatus } from "@/hooks/useAppUpdater";
 import GeneralSettings from "./settings/GeneralSettings";
 import { Appearance } from "@/lib/appearance";
+import AppearanceSettings from "./settings/AppearanceSettings";
 import KeymapSettings from "./settings/KeymapSettings";
+import InfoSettings from "./settings/InfoSettings";
 
-type SettingsSection = "general" | "keymaps";
+type SettingsSection = "general" | "appearance" | "keymaps" | "info";
 
 const SECTIONS: { id: SettingsSection; label: string; icon: LucideIcon }[] = [
   { id: "general", label: "General", icon: SlidersHorizontal },
+  { id: "appearance", label: "Appearance", icon: Palette },
   { id: "keymaps", label: "Keymaps", icon: Keyboard },
+  { id: "info", label: "Info", icon: Info },
 ];
 
 interface SettingsModalProps {
@@ -37,6 +41,7 @@ interface SettingsModalProps {
   appVersion: string | null;
   onCheckUpdates: () => void;
   onOpenDownloadPage: () => void;
+  onOpenChangelog: () => void;
 }
 
 export default function SettingsModal({
@@ -61,6 +66,7 @@ export default function SettingsModal({
   appVersion,
   onCheckUpdates,
   onOpenDownloadPage,
+  onOpenChangelog,
 }: SettingsModalProps) {
   const [activeSection, setActiveSection] = useState<SettingsSection>("general");
   const { isMounted, isClosing } = useExitAnimation(isOpen);
@@ -123,30 +129,40 @@ export default function SettingsModal({
           </nav>
 
           <div className="flex-1 min-w-0 overflow-y-auto p-4">
-            {activeSection === "general" ? (
-              <GeneralSettings
-                vimEnabled={vimEnabled}
-                setVimEnabled={setVimEnabled}
+            {activeSection === "general" && (
+              <GeneralSettings vimEnabled={vimEnabled} setVimEnabled={setVimEnabled} />
+            )}
+
+            {activeSection === "appearance" && (
+              <AppearanceSettings
                 appearance={appearance}
                 setAppearance={setAppearance}
                 resetAppearance={resetAppearance}
-                autoUpdateEnabled={autoUpdateEnabled}
-                setAutoUpdateEnabled={setAutoUpdateEnabled}
                 editorFont={editorFont}
                 setEditorFont={setEditorFont}
                 editorFontSize={editorFontSize}
                 setEditorFontSize={setEditorFontSize}
-                updateStatus={updateStatus}
-                appVersion={appVersion}
-                onCheckUpdates={onCheckUpdates}
-                onOpenDownloadPage={onOpenDownloadPage}
               />
-            ) : (
+            )}
+
+            {activeSection === "keymaps" && (
               <KeymapSettings
                 bindings={keymapBindings}
                 setBinding={setKeymapBinding}
                 resetBinding={resetKeymapBinding}
                 resetAll={resetAllKeymaps}
+              />
+            )}
+
+            {activeSection === "info" && (
+              <InfoSettings
+                autoUpdateEnabled={autoUpdateEnabled}
+                setAutoUpdateEnabled={setAutoUpdateEnabled}
+                updateStatus={updateStatus}
+                appVersion={appVersion}
+                onCheckUpdates={onCheckUpdates}
+                onOpenDownloadPage={onOpenDownloadPage}
+                onOpenChangelog={onOpenChangelog}
               />
             )}
           </div>

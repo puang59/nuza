@@ -114,7 +114,19 @@ export default function FileTreeNode({ entry }: { entry: FileEntry }) {
   if (entry.isDirectory) {
     return (
       <li>
-        <details ref={detailsRef} className="group">
+        {/*
+          Icon state is scoped to this node's own [open] attribute with an
+          arbitrary `&` selector rather than Tailwind's `group`/`group-open`.
+          `group` is an unnamed, un-scoped class: `.group[open] .group-open:*`
+          matches a descendant under *any* open ancestor, so nesting a folder
+          inside an open one flipped its chevron and icon to look expanded
+          while its own <details> was still closed - no content to show, and
+          no visible change once it was actually toggled open.
+        */}
+        <details
+          ref={detailsRef}
+          className="[&[open]>summary>.cm-tree-chevron]:rotate-90 [&[open]>summary>.cm-tree-folder]:hidden [&[open]>summary>.cm-tree-folder-open]:block"
+        >
           <summary
             draggable={!isRenaming}
             onDragStart={handleDragStart}
@@ -134,9 +146,9 @@ export default function FileTreeNode({ entry }: { entry: FileEntry }) {
               isDraggedOver ? "bg-zinc-700/50 outline outline-1 outline-zinc-500" : ""
             } ${isBeingDragged ? "opacity-40" : ""}`}
           >
-            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-zinc-500 transition-transform group-open:rotate-90" />
-            <Folder className="h-4 w-4 shrink-0 text-[var(--nuza-accent)] group-open:hidden" />
-            <FolderOpen className="hidden h-4 w-4 shrink-0 text-[var(--nuza-accent)] group-open:block" />
+            <ChevronRight className="cm-tree-chevron h-3.5 w-3.5 shrink-0 text-zinc-500 transition-transform" />
+            <Folder className="cm-tree-folder h-4 w-4 shrink-0 text-[var(--nuza-accent)]" />
+            <FolderOpen className="cm-tree-folder-open hidden h-4 w-4 shrink-0 text-[var(--nuza-accent)]" />
 
             {isRenaming ? (
               <InlineInput
@@ -166,6 +178,9 @@ export default function FileTreeNode({ entry }: { entry: FileEntry }) {
   return (
     <li>
       <button
+        // How the panel finds this row again when something outside the tree
+        // opens the file - a search hit, the quick-open palette, a tab.
+        data-path={entry.path}
         draggable={!isRenaming}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
@@ -182,7 +197,12 @@ export default function FileTreeNode({ entry }: { entry: FileEntry }) {
           openContextMenu(e, entry);
         }}
         className={`flex w-full cursor-pointer items-center gap-1.5 rounded-md py-1.5 pl-7 pr-2 text-left text-sm transition-colors [-webkit-user-drag:element] ${
-          currentFile === entry.path ? "bg-zinc-800 text-white" : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-100"
+          currentFile === entry.path
+            ? // The note the editor is actually showing: a plain grey wash, a
+              // step up from the hover behind it so it still reads as the open
+              // file once the pointer has moved on.
+              "bg-white/10 text-white"
+            : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-100"
         } ${isDraggedOver ? "bg-zinc-700/50 outline outline-1 outline-zinc-500" : ""} ${isBeingDragged ? "opacity-40" : ""}`}
       >
         <FileIcon name={entry.name} />
