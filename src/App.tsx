@@ -30,7 +30,9 @@ function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isQuickOpenOpen, setIsQuickOpenOpen] = useState(false);
-  const [vimEnabled, setVimEnabled] = usePersistedState("vimEnabled", true);
+  // Off by default: Vim is something you go and turn on, not something a note
+  // taking app should assume about whoever just opened it.
+  const [vimEnabled, setVimEnabled] = usePersistedState("vimEnabled", false);
   const [transparencyEnabled, setTransparencyEnabled] = usePersistedState("transparencyEnabled", true);
   const [autoUpdateEnabled, setAutoUpdateEnabled] = usePersistedState("autoUpdateEnabled", true);
   const [editorFont, setEditorFont] = usePersistedState("editorFont", DEFAULT_EDITOR_FONT);
