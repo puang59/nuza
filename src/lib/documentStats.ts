@@ -22,7 +22,7 @@ export const EMPTY_DOCUMENT_STATS: DocumentStats = {
 const READING_SPEED = 200;
 
 export function readingMinutes(words: number) {
-  return Math.max(1, Math.round(words / READING_SPEED));
+  return words === 0 ? 0 : Math.max(1, Math.round(words / READING_SPEED));
 }
 
 function isSpace(code: number) {

@@ -10,6 +10,8 @@ import { StatsSubscription, useDocumentStats } from "@/hooks/useDocumentStats";
 function WritingStats({ subscribeToStats }: { subscribeToStats: StatsSubscription }) {
   const { words, characters, paragraphs } = useDocumentStats(subscribeToStats);
 
+  // Shown from the first empty note onwards: a counter that appears once you
+  // have written enough to deserve one draws more attention than it saves.
   const counts = [
     [words, "word"],
     [characters, "character"],
@@ -17,15 +19,14 @@ function WritingStats({ subscribeToStats }: { subscribeToStats: StatsSubscriptio
   ] as const;
 
   return (
-    <div className="flex h-7 shrink-0 items-center justify-end gap-5 px-5 text-xs text-zinc-500 relative z-10">
-      {characters > 0 &&
-        counts.map(([value, noun]) => (
-          <span key={noun}>
-            {value.toLocaleString()} {noun}
-            {value === 1 ? "" : "s"}
-          </span>
-        ))}
-      {words > 0 && <span>{readingMinutes(words)} min read</span>}
+    <div className="animate-fade-in relative z-10 flex h-7 shrink-0 items-center justify-end gap-5 px-5 text-xs text-zinc-500">
+      {counts.map(([value, noun]) => (
+        <span key={noun} className="tabular-nums">
+          {value.toLocaleString()} {noun}
+          {value === 1 ? "" : "s"}
+        </span>
+      ))}
+      <span className="tabular-nums">{readingMinutes(words)} min read</span>
     </div>
   );
 }
