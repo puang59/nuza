@@ -88,6 +88,26 @@ struct OpenedFolder {
     entries: Vec<FileEntry>,
 }
 
+/// Takes a folder on as the open one: reads its tree, and lets the asset
+/// protocol reach inside it so a note's images resolve. Images embedded in a
+/// note are served over that protocol, which is handed this folder and nothing
+/// else - a note is text from disk that anything could have written, and it has
+/// no business reaching the rest of it.
+fn adopt_folder(app_handle: &tauri::AppHandle, path: String) -> Result<OpenedFolder, String> {
+    let directory = Path::new(&path);
+    if !directory.is_dir() {
+        return Err(format!("\"{}\" is not there any more", path));
+    }
+
+    app_handle
+        .asset_protocol_scope()
+        .allow_directory(&path, true)
+        .map_err(|e| e.to_string())?;
+
+    let entries = read_dir_recursive(directory)?;
+    Ok(OpenedFolder { path, entries })
+}
+
 /// Opens a native "open folder" dialog and returns the folder's path plus its
 /// contents as a tree, read recursively. Returns `None` if the user cancels.
 #[tauri::command]
@@ -96,24 +116,18 @@ async fn load_folder_picker(app_handle: tauri::AppHandle) -> Result<Option<Opene
     block_on_picker(|send| {
         app_handle.dialog().file().pick_folder(move |folder_path| {
             let result = match folder_path {
-                Some(path) => {
-                    let path_str = path.to_string();
-                    // Images embedded in a note are served over the asset
-                    // protocol, which is handed the opened folder and nothing
-                    // else - a note is text from disk that anything could have
-                    // written, and it has no business reaching the rest of it.
-                    scope
-                        .asset_protocol_scope()
-                        .allow_directory(&path_str, true)
-                        .map_err(|e| e.to_string())
-                        .and_then(|_| read_dir_recursive(Path::new(&path_str)))
-                        .map(|entries| Some(OpenedFolder { path: path_str, entries }))
-                }
+                Some(path) => adopt_folder(&scope, path.to_string()).map(Some),
                 None => Ok(None),
             };
             send(result);
         });
     })
+}
+
+/// Reopens a folder the app already knows about, without asking for it again.
+#[tauri::command]
+fn open_folder(app_handle: tauri::AppHandle, path: String) -> Result<OpenedFolder, String> {
+    adopt_folder(&app_handle, path)
 }
 
 #[tauri::command]
@@ -364,6 +378,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             save_file_picker,
             load_folder_picker,
+            open_folder,
             read_file,
             write_file,
             write_media,

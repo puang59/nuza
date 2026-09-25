@@ -11,8 +11,8 @@ const UNTITLED_FILE = "untitled.md";
 interface UseFileOperationsOptions {
   /** Editor extensions that follow the app's settings. */
   preferences: Extension;
-  /** Called after a folder is successfully opened, e.g. to reveal the sidebar. */
-  onFolderOpened?: () => void;
+  /** Called after a folder is successfully opened, with the folder's path. */
+  onFolderOpened?: (path: string) => void;
 }
 
 interface OpenedFolder {
@@ -94,22 +94,46 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
     openDocument(UNTITLED_FILE, "");
   }, [forgetDocuments, openDocument]);
 
+  /** Switches the app over to a folder that has already been read. */
+  const adoptFolder = useCallback(
+    (folder: OpenedFolder) => {
+      setRootPath(folder.path);
+      setFolderData(folder.entries);
+
+      forgetDocuments(() => true);
+      resetToScratch();
+
+      onFolderOpened?.(folder.path);
+    },
+    [forgetDocuments, resetToScratch, onFolderOpened]
+  );
+
   const openFolder = useCallback(async () => {
     try {
       const result = await invoke<OpenedFolder | null>("load_folder_picker");
-      if (result) {
-        setRootPath(result.path);
-        setFolderData(result.entries);
-
-        forgetDocuments(() => true);
-        resetToScratch();
-
-        onFolderOpened?.();
-      }
+      if (result) adoptFolder(result);
     } catch (error) {
       console.error("Failed to load folder:", error);
     }
-  }, [forgetDocuments, resetToScratch, onFolderOpened]);
+  }, [adoptFolder]);
+
+  /**
+   * Opens a folder the app already knows the path of, for the vault switcher.
+   * Returns false if it could not be read - a vault whose folder has been
+   * moved or deleted since it was last opened.
+   */
+  const openVault = useCallback(
+    async (path: string) => {
+      try {
+        adoptFolder(await invoke<OpenedFolder>("open_folder", { path }));
+        return true;
+      } catch (error) {
+        console.error("Failed to open vault:", error);
+        return false;
+      }
+    },
+    [adoptFolder]
+  );
 
   const save = useCallback(async () => {
     try {
@@ -294,6 +318,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
     folderData,
     rootPath,
     openFolder,
+    openVault,
     save,
     selectFile,
     closeFile,
