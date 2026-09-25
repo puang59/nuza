@@ -370,14 +370,30 @@ const editorTheme = EditorView.theme(
       borderRadius: "0.3em",
       cursor: "text",
     },
-    ".cm-md-prop:hover": { backgroundColor: ink.surface },
-    ".cm-md-prop-key": {
-      color: ink.muted,
+    ".cm-md-prop:hover, .cm-md-prop:focus-within": { backgroundColor: ink.surface },
+    /* The fields are form controls wearing the document's clothes: no border,
+       no background, the editor's own type - so the block reads as text right
+       up until the caret lands in it. */
+    ".cm-md-props input, .cm-md-props textarea": {
+      width: "100%",
+      margin: "0",
+      padding: "0",
+      border: "none",
+      outline: "none",
+      background: "transparent",
+      font: "inherit",
+      lineHeight: "inherit",
+      color: "inherit",
+      resize: "none",
       overflow: "hidden",
-      textOverflow: "ellipsis",
-      whiteSpace: "nowrap",
     },
-    ".cm-md-prop-value": { color: ink.text, fontWeight: "500", overflowWrap: "anywhere" },
+    ".cm-md-props input::placeholder, .cm-md-props textarea::placeholder": {
+      color: ink.muted,
+      opacity: "0.6",
+    },
+    ".cm-md-prop-key": { color: ink.muted },
+    ".cm-md-prop-value": { color: ink.text, fontWeight: "500" },
+    ".cm-md-props input:focus, .cm-md-props textarea:focus": { color: ink.heading },
     ".cm-md-prop-add": {
       display: "block",
       margin: "0.3em 0 0",

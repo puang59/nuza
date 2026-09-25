@@ -2,7 +2,7 @@ import { syntaxTree } from "@codemirror/language";
 import { EditorState, Range, StateField, Text } from "@codemirror/state";
 import { Decoration, DecorationSet, EditorView } from "@codemirror/view";
 import type { SyntaxNode, SyntaxNodeRef, Tree } from "@lezer/common";
-import { FrontmatterRange, frontmatterProperties, frontmatterRange } from "./frontmatter";
+import { FrontmatterRange, frontmatterRange, readFrontmatter } from "./frontmatter";
 import { rendersAnything, sanitizeHtml } from "./sanitize";
 import { noteDirectory, resolveImageSource, safeExternalHref } from "./sources";
 import {
@@ -433,6 +433,7 @@ function decorateNode(node: SyntaxNodeRef, build: Build): boolean | undefined {
   if (name === "Table") {
     const table = readTable(state, node.node, doc.lineAt(from).from);
     if (!table || isBeingEdited(state, from, to)) return;
+
     out.push(
       Decoration.replace({
         widget: new TableWidget(table.rows, table.alignment, table.key),
@@ -448,23 +449,30 @@ function decorateNode(node: SyntaxNodeRef, build: Build): boolean | undefined {
 }
 
 /**
- * The properties block, either drawn as properties or opened up as the YAML it
- * is. Either way the markdown parser's reading of it is thrown away: to the
- * parser a `---` beneath a line of text is a heading underline, which is what
- * turns a note's metadata into a wall of headings.
+ * The properties block, drawn as the form it is. The fields edit the YAML
+ * underneath directly, so unlike the rest of the rendered document this does
+ * not fall back to its source when the caret arrives - there is nowhere for the
+ * caret to arrive.
+ *
+ * Either way the markdown parser's reading of these lines is thrown away: to
+ * the parser a `---` beneath a line of text is a heading underline, which is
+ * what turns a note's metadata into a wall of headings.
  */
 function decorateFrontmatter(state: EditorState, range: FrontmatterRange, out: Range<Decoration>[]) {
-  if (isBeingEdited(state, range.from, range.to)) {
+  const properties = readFrontmatter(state.doc, range);
+
+  // Nesting, lists, a value carried across lines: honest YAML that a
+  // two-column form would misrepresent, so it stays text.
+  if (!properties) {
     eachLine(state.doc, range.from, range.to, (lineStart) => out.push(FRONTMATTER_LINE.range(lineStart)));
     return;
   }
 
-  const properties = frontmatterProperties(state.doc, range);
-  const key = properties.map((property) => `${property.at}:${property.key}=${property.value}`).join("|");
+  const key = properties.map((property) => `${property.key}=${property.value}`).join("|");
 
   out.push(
     Decoration.replace({
-      widget: new PropertiesWidget(properties, state.doc.line(range.closingLine).from, `${range.to}//${key}`),
+      widget: new PropertiesWidget(properties, `${properties.length}//${key}`),
       block: true,
     }).range(range.from, range.to)
   );

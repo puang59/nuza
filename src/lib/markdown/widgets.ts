@@ -1,5 +1,6 @@
 import { EditorView, WidgetType } from "@codemirror/view";
-import { Property } from "./frontmatter";
+import { areaField, refresh, textField } from "./fields";
+import { Property, frontmatterRange, readFrontmatter } from "./frontmatter";
 import { sanitizeHtml } from "./sanitize";
 import { safeExternalHref } from "./sources";
 
@@ -269,6 +270,51 @@ export class TableWidget extends WidgetType {
     return other.key === this.key;
   }
 
+  /** Where a cell's source sits right now, read back through the widget's own DOM. */
+  private rangeOf(view: EditorView, wrapper: HTMLElement, cell: HTMLElement) {
+    const from = view.posAtDOM(wrapper) + Number(cell.dataset.offset);
+    return { from, to: from + Number(cell.dataset.length) };
+  }
+
+  /** Draws a cell as markdown, which is how it sits when nobody is in it. */
+  private render(view: EditorView, wrapper: HTMLElement, cell: HTMLElement) {
+    const { from, to } = this.rangeOf(view, wrapper, cell);
+    cell.textContent = "";
+    renderInline(cell, unescapeCell(view.state.doc.sliceString(from, to)));
+  }
+
+  /**
+   * Turns one cell into a field, leaving the rest of the table as it is. The
+   * editor's own caret is deliberately left where it was: moving it into the
+   * table is what used to drop the whole thing back to its markdown.
+   */
+  private edit(view: EditorView, wrapper: HTMLElement, cell: HTMLElement) {
+    if (cell.querySelector("input")) return;
+
+    const { from, to } = this.rangeOf(view, wrapper, cell);
+    const field = textField({
+      className: "cm-md-cell",
+      value: view.state.doc.sliceString(from, to),
+      onInput: (text) => {
+        const range = this.rangeOf(view, wrapper, cell);
+        // A bare pipe would start a new column, and a newline a new row.
+        const insert = text.replace(/\r?\n/g, " ").replace(/\|/g, "\\|");
+        if (view.state.doc.sliceString(range.from, range.to) === insert) return;
+
+        cell.dataset.length = String(insert.length);
+        view.dispatch({ changes: { from: range.from, to: range.to, insert } });
+      },
+      onCommit: () => field.blur(),
+    });
+
+    field.addEventListener("blur", () => this.render(view, wrapper, cell));
+
+    cell.textContent = "";
+    cell.appendChild(field);
+    field.focus();
+    field.select();
+  }
+
   toDOM(view: EditorView) {
     const wrapper = document.createElement("div");
     wrapper.className = "cm-md-table-wrap";
@@ -286,6 +332,7 @@ export class TableWidget extends WidgetType {
         const align = this.alignment[index];
         if (align) td.style.textAlign = align;
         td.dataset.offset = String(cell.offset);
+        td.dataset.length = String(cell.text.length);
         renderInline(td, unescapeCell(cell.text));
         tr.appendChild(td);
       });
@@ -297,20 +344,50 @@ export class TableWidget extends WidgetType {
     if (body.childNodes.length) table.appendChild(body);
     wrapper.appendChild(table);
 
-    // Clicking a cell drops the caret into that cell's source text, which
-    // immediately swaps the rendered table back for the markdown behind it.
     wrapper.addEventListener("mousedown", (event) => {
-      const target = event.target as HTMLElement | null;
-      const cell = target?.closest<HTMLElement>("[data-offset]");
+      const cell = (event.target as HTMLElement | null)?.closest<HTMLElement>("[data-offset]");
+      if (!cell || cell.querySelector("input")) return;
+
+      event.preventDefault();
+      this.edit(view, wrapper, cell);
+    });
+
+    // Adding or removing whole rows is a thing you do to the markdown rather
+    // than to a cell, so a double click still hands the table's source over.
+    wrapper.addEventListener("dblclick", (event) => {
+      const cell = (event.target as HTMLElement | null)?.closest<HTMLElement>("[data-offset]");
       if (!cell) return;
 
       event.preventDefault();
-      const position = view.posAtDOM(wrapper) + Number(cell.dataset.offset);
-      view.dispatch({ selection: { anchor: Math.min(position, view.state.doc.length) } });
+      const { from } = this.rangeOf(view, wrapper, cell);
+      view.dispatch({ selection: { anchor: Math.min(from, view.state.doc.length) } });
       view.focus();
     });
 
     return wrapper;
+  }
+
+  /**
+   * Keeps the drawn cells in step with the document. The cell being typed in
+   * is left alone - it is the one thing on screen that is already right.
+   */
+  updateDOM(dom: HTMLElement, view: EditorView) {
+    const cells = dom.querySelectorAll<HTMLElement>("[data-offset]");
+    const flat = this.rows.flatMap((row) => row.cells);
+    if (cells.length !== flat.length) return false;
+
+    flat.forEach((cell, index) => {
+      const element = cells[index];
+      element.dataset.offset = String(cell.offset);
+      element.dataset.length = String(cell.text.length);
+      if (!element.querySelector("input")) {
+        element.textContent = "";
+        renderInline(element, unescapeCell(cell.text));
+      }
+    });
+
+    void view;
+    return true;
   }
 
   ignoreEvent() {
@@ -319,16 +396,17 @@ export class TableWidget extends WidgetType {
 }
 
 /**
- * A note's frontmatter, drawn as the handful of fields it actually is: the
- * key stepped back, the value in front of it, and a way to add another. The
- * source is what is being edited - clicking a row puts the caret on its line,
- * the same bargain the table widget strikes.
+ * A note's frontmatter, as the short form it actually is: the key stepped
+ * back, the value in front of it, and a way to add another.
+ *
+ * The fields write straight back into the YAML underneath, so the block never
+ * has to fall back to its source to be edited. Where each property lives is
+ * looked up at the moment of the keystroke rather than remembered, because the
+ * positions move as the text does and this widget outlives its own edits.
  */
 export class PropertiesWidget extends WidgetType {
   constructor(
     readonly properties: Property[],
-    /** Start of the closing fence's line, where a new property is inserted. */
-    readonly insertAt: number,
     /** Identity of the rendered result, so it only redraws on real change. */
     readonly key: string
   ) {
@@ -339,55 +417,99 @@ export class PropertiesWidget extends WidgetType {
     return other.key === this.key;
   }
 
+  /** The property at `index` as it stands right now, or null if it has gone. */
+  private current(view: EditorView, index: number) {
+    const range = frontmatterRange(view.state.doc);
+    if (!range) return null;
+    return readFrontmatter(view.state.doc, range)?.[index] ?? null;
+  }
+
+  private write(view: EditorView, index: number, part: "key" | "value", text: string) {
+    const property = this.current(view, index);
+    if (!property) return;
+
+    const [from, to] = part === "key" ? [property.keyFrom, property.keyTo] : [property.valueFrom, property.valueTo];
+    // A newline would end the property, and a stray one arriving by paste
+    // would quietly break the block in half.
+    const insert = text.replace(/\r?\n/g, " ");
+    if (view.state.doc.sliceString(from, to) === insert) return;
+
+    view.dispatch({ changes: { from, to, insert } });
+  }
+
   toDOM(view: EditorView) {
     const wrapper = document.createElement("div");
     wrapper.className = "cm-md-props";
 
-    for (const property of this.properties) {
+    this.properties.forEach((property, index) => {
       const row = document.createElement("div");
       row.className = "cm-md-prop";
-      row.dataset.pos = String(property.at);
 
-      const key = document.createElement("span");
-      key.className = "cm-md-prop-key";
-      key.textContent = property.key;
+      const key = textField({
+        className: "cm-md-prop-key",
+        value: property.key,
+        placeholder: "key",
+        onInput: (text) => this.write(view, index, "key", text),
+        onCommit: () => row.querySelector<HTMLTextAreaElement>(".cm-md-prop-value")?.focus(),
+      });
 
-      const value = document.createElement("span");
-      value.className = "cm-md-prop-value";
-      value.textContent = property.value;
+      const value = areaField({
+        className: "cm-md-prop-value",
+        value: property.value,
+        onInput: (text) => this.write(view, index, "value", text),
+        onCommit: () => (document.activeElement as HTMLElement | null)?.blur(),
+      });
 
       row.append(key, value);
       wrapper.appendChild(row);
-    }
+    });
 
     const add = document.createElement("button");
     add.className = "cm-md-prop-add";
     add.textContent = "+ Add property";
     add.addEventListener("mousedown", (event) => {
       event.preventDefault();
-      // The placeholder key is left selected, so whatever is typed next
-      // replaces it rather than landing beside it.
-      const insert = "key: \n";
-      view.dispatch({
-        changes: { from: this.insertAt, insert },
-        selection: { anchor: this.insertAt, head: this.insertAt + 3 },
-        scrollIntoView: true,
+
+      const range = frontmatterRange(view.state.doc);
+      if (!range) return;
+
+      const at = view.state.doc.line(range.closingLine).from;
+      view.dispatch({ changes: { from: at, insert: "key: \n" } });
+
+      // The new row only exists once the editor has drawn it, and drawing it
+      // may have replaced this whole block - so the field is looked for in the
+      // editor rather than in the wrapper this handler was built with.
+      requestAnimationFrame(() => {
+        const keys = view.dom.querySelectorAll<HTMLInputElement>(".cm-md-prop-key");
+        const last = keys[keys.length - 1];
+        last?.focus();
+        last?.select();
       });
-      view.focus();
     });
     wrapper.appendChild(add);
 
-    wrapper.addEventListener("mousedown", (event) => {
-      const row = (event.target as HTMLElement | null)?.closest<HTMLElement>("[data-pos]");
-      if (!row) return;
+    return wrapper;
+  }
 
-      event.preventDefault();
-      const position = Math.min(Number(row.dataset.pos), view.state.doc.length);
-      view.dispatch({ selection: { anchor: position } });
-      view.focus();
+  /**
+   * Keeps the fields in step with the document without rebuilding them - the
+   * one being typed into is left alone, since replacing its contents would
+   * throw the caret to the end on every keystroke.
+   */
+  updateDOM(dom: HTMLElement, view: EditorView) {
+    const rows = dom.querySelectorAll<HTMLElement>(".cm-md-prop");
+    if (rows.length !== this.properties.length) return false;
+
+    this.properties.forEach((property, index) => {
+      const row = rows[index];
+      const key = row.querySelector<HTMLInputElement>(".cm-md-prop-key");
+      const value = row.querySelector<HTMLTextAreaElement>(".cm-md-prop-value");
+      if (key) refresh(key, property.key);
+      if (value) refresh(value, property.value);
     });
 
-    return wrapper;
+    void view;
+    return true;
   }
 
   ignoreEvent() {

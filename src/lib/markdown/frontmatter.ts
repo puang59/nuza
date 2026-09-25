@@ -36,46 +36,65 @@ export function frontmatterRange(doc: Text): FrontmatterRange | null {
 export interface Property {
   key: string;
   value: string;
-  /** Start of the line this came from, so a click can land the caret in it. */
-  at: number;
+  /** The key's own text, so editing a field can write back over just the key. */
+  keyFrom: number;
+  keyTo: number;
+  /**
+   * The value's text, inside its quotes where it has them - so typing into the
+   * field replaces what the value says without disturbing how it is written.
+   */
+  valueFrom: number;
+  valueTo: number;
 }
 
-const PROPERTY = /^([A-Za-z0-9_][\w .-]*)\s*:\s?(.*)$/;
-
-/** Strips the quotes YAML allows around a scalar, and any trailing spaces. */
-function unquote(value: string) {
-  const trimmed = value.trim();
-  const quote = trimmed[0];
-  if (trimmed.length >= 2 && (quote === '"' || quote === "'") && trimmed.endsWith(quote)) {
-    return trimmed.slice(1, -1);
-  }
-  return trimmed;
-}
+/** A key has to look like a name, or `https://x` would read as one. */
+const KEY = /^[A-Za-z0-9_][\w .-]*$/;
 
 /**
- * The `key: value` pairs in the block. A value written across following
- * indented lines - which is how YAML spells a list - is folded onto one line
- * for display; the source itself is never touched.
+ * The properties in the block, or null if it holds anything a two-column form
+ * cannot honestly represent - nesting, lists, a value carried across lines.
+ * Those blocks are left as text rather than shown as something they are not.
  */
-export function frontmatterProperties(doc: Text, range: FrontmatterRange): Property[] {
+export function readFrontmatter(doc: Text, range: FrontmatterRange): Property[] | null {
   const properties: Property[] = [];
 
   for (let number = 2; number < range.closingLine; number++) {
     const line = doc.line(number);
-    const match = PROPERTY.exec(line.text);
+    if (!line.text.trim()) continue;
 
-    if (match) {
-      properties.push({ key: match[1].trim(), value: unquote(match[2]), at: line.from });
-      continue;
+    const colon = line.text.indexOf(":");
+    if (colon < 0) return null;
+
+    const rawKey = line.text.slice(0, colon);
+    if (!KEY.test(rawKey)) return null;
+
+    const rawValue = line.text.slice(colon + 1);
+    const indent = rawValue.length - rawValue.trimStart().length;
+    const trimmed = rawValue.trim();
+
+    // An empty value is where a list or a nested block would hang off, and
+    // neither belongs in a form.
+    if (!trimmed && number + 1 < range.closingLine && /^\s+\S/.test(doc.line(number + 1).text)) return null;
+
+    let valueFrom = line.from + colon + 1 + indent;
+    let valueTo = valueFrom + trimmed.length;
+    let value = trimmed;
+
+    const quote = trimmed[0];
+    if (trimmed.length >= 2 && (quote === '"' || quote === "'") && trimmed.endsWith(quote)) {
+      value = trimmed.slice(1, -1);
+      valueFrom += 1;
+      valueTo -= 1;
     }
 
-    // An indented line carries on the property above it.
-    const previous = properties[properties.length - 1];
-    const continuation = line.text.trim().replace(/^-\s*/, "");
-    if (!previous || !continuation || !/^\s/.test(line.text)) continue;
-
-    const folded = unquote(continuation);
-    previous.value = previous.value ? `${previous.value}, ${folded}` : folded;
+    properties.push({
+      key: rawKey.trim(),
+      value,
+      keyFrom: line.from,
+      keyTo: line.from + rawKey.trimEnd().length,
+      valueFrom,
+      valueTo,
+    });
   }
 
   return properties;
