@@ -37,6 +37,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
     container: editorContainer,
     view: editorView,
     dirtyPaths,
+    subscribeToStats,
     open: openDocument,
     isOpen: isDocumentOpen,
     read: readDocument,
@@ -260,6 +261,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
   return {
     editorContainer,
     editorView,
+    subscribeToStats,
     currentFile,
     openPaths,
     dirtyPaths,

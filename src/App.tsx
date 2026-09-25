@@ -3,6 +3,7 @@ import { EditorView } from "@codemirror/view";
 import { invoke } from "@tauri-apps/api/core";
 import EditorHeader from "./components/EditorHeader";
 import StatusBar from "./components/StatusBar";
+import WritingStats from "./components/WritingStats";
 import Sidebar, { SidebarHandle } from "./components/Sidebar";
 import SettingsModal from "./components/SettingsModal";
 import FileSearchPalette from "./components/FileSearchPalette";
@@ -56,6 +57,7 @@ function App() {
   const {
     editorContainer,
     editorView,
+    subscribeToStats,
     currentFile,
     openPaths,
     dirtyPaths,
@@ -227,7 +229,14 @@ function App() {
         </div>
       </div>
 
-      <StatusBar vimEnabled={vimEnabled} mode={mode} currentFile={currentFile} />
+      {/* The Vim bar earns its place for someone who is tracking a mode;
+          without Vim there is no mode to track, so the footer steps back to
+          what a writer actually wants from it. */}
+      {vimEnabled ? (
+        <StatusBar mode={mode} currentFile={currentFile} subscribeToStats={subscribeToStats} />
+      ) : (
+        <WritingStats subscribeToStats={subscribeToStats} />
+      )}
 
       <FileSearchPalette
         isOpen={isQuickOpenOpen}

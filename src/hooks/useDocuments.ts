@@ -4,6 +4,7 @@ import { EditorView, keymap } from "@codemirror/view";
 import { indentWithTab } from "@codemirror/commands";
 import { basicSetup } from "@uiw/codemirror-extensions-basic-setup";
 import { directoryOf, liveMarkdown, noteDirectory } from "@/lib/markdown";
+import { countDocument, DocumentStats, EMPTY_DOCUMENT_STATS } from "@/lib/documentStats";
 
 /**
  * Nothing in the margins and nothing highlighted: the rendered markdown is the
@@ -19,6 +20,14 @@ const writingSurface: Extension = [
   keymap.of([indentWithTab]),
   liveMarkdown,
 ];
+
+/**
+ * How long typing has to stop before the words are counted again. Counting
+ * walks the whole document, so it waits for a pause rather than joining in on
+ * every keystroke; the character count and the caret position come for free
+ * and are published immediately.
+ */
+const COUNT_DELAY = 250;
 
 /** Settings that change while the app is running: the font, and Vim mode. */
 const preferences = new Compartment();
@@ -54,6 +63,51 @@ export function useDocuments({ preferences: settings, initialPath }: UseDocument
   const swapping = useRef(false);
   const [dirtyPaths, setDirtyPaths] = useState<ReadonlySet<string>>(() => new Set());
 
+  // Statistics are pushed to whoever is showing them rather than held as state
+  // here: the footer changes on every keystroke, and nothing else should have
+  // to re-render because of it.
+  const listeners = useRef(new Set<(stats: DocumentStats) => void>());
+  const latestStats = useRef<DocumentStats>(EMPTY_DOCUMENT_STATS);
+  const countTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const publish = useCallback((stats: DocumentStats) => {
+    latestStats.current = stats;
+    for (const listener of listeners.current) listener(stats);
+  }, []);
+
+  const scheduleCount = useCallback(() => {
+    if (countTimer.current) clearTimeout(countTimer.current);
+    countTimer.current = setTimeout(() => {
+      countTimer.current = null;
+      const doc = editor.current?.state.doc;
+      if (doc) publish({ ...latestStats.current, ...countDocument(doc) });
+    }, COUNT_DELAY);
+  }, [publish]);
+
+  const reportStats = useCallback(
+    (state: EditorState) => {
+      const head = state.selection.main.head;
+      const line = state.doc.lineAt(head);
+      publish({
+        ...latestStats.current,
+        characters: state.doc.length,
+        line: line.number,
+        column: head - line.from + 1,
+      });
+      scheduleCount();
+    },
+    [publish, scheduleCount]
+  );
+
+  /** Adds a listener for the open document's statistics, called straight away. */
+  const subscribeToStats = useCallback((listener: (stats: DocumentStats) => void) => {
+    listeners.current.add(listener);
+    listener(latestStats.current);
+    return () => {
+      listeners.current.delete(listener);
+    };
+  }, []);
+
   /**
    * Flags the open document as having drifted from disk. This runs on every
    * keystroke, so once the flag is up it does nothing at all - returning the
@@ -63,9 +117,11 @@ export function useDocuments({ preferences: settings, initialPath }: UseDocument
   const trackEdits = useRef<Extension>(null);
   if (!trackEdits.current) {
     trackEdits.current = EditorView.updateListener.of((update) => {
-      if (!update.docChanged || swapping.current) return;
-      const path = currentPath.current;
-      setDirtyPaths((paths) => (paths.has(path) ? paths : new Set(paths).add(path)));
+      if (update.docChanged && !swapping.current) {
+        const path = currentPath.current;
+        setDirtyPaths((paths) => (paths.has(path) ? paths : new Set(paths).add(path)));
+      }
+      if (update.docChanged || update.selectionSet) reportStats(update.state);
     });
   }
 
@@ -96,8 +152,10 @@ export function useDocuments({ preferences: settings, initialPath }: UseDocument
     editor.current = view;
     setView(view);
     view.focus();
+    reportStats(view.state);
 
     return () => {
+      if (countTimer.current) clearTimeout(countTimer.current);
       // The state stays in the map, so a remount picks every document back up
       // exactly where it was left.
       states.current.set(currentPath.current, view.state);
@@ -105,7 +163,7 @@ export function useDocuments({ preferences: settings, initialPath }: UseDocument
       editor.current = null;
       setView(null);
     };
-  }, [stateFor]);
+  }, [stateFor, reportStats]);
 
   // A document created before the settings changed still carries the old ones
   // in its compartment, so opening one reapplies them rather than trusting this.
@@ -134,11 +192,12 @@ export function useDocuments({ preferences: settings, initialPath }: UseDocument
         ],
       });
       swapping.current = false;
+      reportStats(view.state);
       // Opening a note is a request to write in it, so the caret goes there
       // rather than leaving the sidebar holding focus.
       view.focus();
     },
-    [stateFor]
+    [stateFor, reportStats]
   );
 
   /** Whether `path` has already been read off disk. */
@@ -200,5 +259,5 @@ export function useDocuments({ preferences: settings, initialPath }: UseDocument
     []
   );
 
-  return { container, view, dirtyPaths, open, isOpen, read, markSaved, forget, rewrite };
+  return { container, view, dirtyPaths, subscribeToStats, open, isOpen, read, markSaved, forget, rewrite };
 }
