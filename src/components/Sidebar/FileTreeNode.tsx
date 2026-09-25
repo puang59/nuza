@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { ChevronRight, File, Folder, FolderOpen } from "lucide-react";
+import { setDraggedEntry } from "@/lib/dragSource";
 import { parentOf } from "@/lib/fileTree";
 import { FileIcon } from "@/lib/utils";
 import { FileEntry } from "@/lib/types";
@@ -66,12 +67,14 @@ export default function FileTreeNode({ entry }: { entry: FileEntry }) {
   function handleDragStart(e: React.DragEvent) {
     e.stopPropagation();
     e.dataTransfer.setData("text/plain", entry.path);
-    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.effectAllowed = "all";
+    setDraggedEntry({ path: entry.path, isDirectory: entry.isDirectory });
     setDraggingPath(entry.path);
   }
 
   function handleDragEnd(e: React.DragEvent) {
     e.stopPropagation();
+    setDraggedEntry(null);
     setDraggingPath(null);
     setDragOverPath(null);
   }
@@ -89,7 +92,8 @@ export default function FileTreeNode({ entry }: { entry: FileEntry }) {
     if (!external && (!draggingPath || draggingPath === entry.path)) return;
     e.preventDefault();
     e.stopPropagation();
-    if (external) e.dataTransfer.dropEffect = "copy";
+    // Copying something in from outside, moving something already in the vault.
+    e.dataTransfer.dropEffect = external ? "copy" : "move";
     setDragOverPath(entry.path);
   }
 

@@ -6,11 +6,13 @@ import {
   encodeLinkTarget,
   fileNameOf,
   isImage,
+  isImagePath,
   joinPath,
   pastedName,
   relativePath,
   writeMedia,
 } from "../media";
+import { draggedEntry, setDraggedEntry } from "../dragSource";
 import { noteDirectory } from "./sources";
 
 /**
@@ -58,11 +60,56 @@ function nameFor(file: File) {
   return PLACEHOLDER_NAMES.has(file.name.toLowerCase()) ? pastedName(file.type) : file.name;
 }
 
-/** What to write into the note for a file that has just been saved. */
-function linkFor(saved: string, directory: string, type: string) {
-  const target = encodeLinkTarget(relativePath(directory, saved));
-  const name = fileNameOf(saved);
-  return isImage(type) ? `![${name}](${target})` : `[${name}](${target})`;
+/** The markdown for a link to `file`, written relative to the note holding it. */
+function linkFor(file: string, directory: string, image: boolean) {
+  const target = encodeLinkTarget(relativePath(directory, file));
+  const name = fileNameOf(file);
+  return image ? `![${name}](${target})` : `[${name}](${target})`;
+}
+
+/**
+ * Puts `markdown` on a line of its own and leaves the caret on the line after
+ * it. An image only renders once the caret is off its line, and what you want
+ * to see having just dropped one in is the picture. Returns where the caret
+ * ended up, so a run of files can be inserted one after another.
+ */
+function insertLink(view: EditorView, at: number, markdown: string) {
+  const onOwnLine = at === 0 || view.state.doc.sliceString(at - 1, at) === "\n";
+  const insert = `${onOwnLine ? "" : "\n"}${markdown}\n`;
+
+  view.dispatch({
+    changes: { from: at, insert },
+    selection: { anchor: at + insert.length },
+    scrollIntoView: true,
+  });
+
+  return at + insert.length;
+}
+
+/** Where in the document a drop landed. */
+function dropPosition(view: EditorView, event: DragEvent) {
+  return view.posAtCoords({ x: event.clientX, y: event.clientY }) ?? view.state.selection.main.from;
+}
+
+/**
+ * A file dragged out of the sidebar and onto a note. Rather than the path as
+ * text - which is what a plain drop would leave behind - it is written as a
+ * link, so an image dragged in from the tree shows up as the image.
+ */
+function linkDraggedEntry(view: EditorView, event: DragEvent) {
+  const entry = draggedEntry();
+  if (!entry || entry.isDirectory) return false;
+
+  const directory = view.state.facet(noteDirectory) || view.state.facet(vaultDirectory);
+  if (!directory) return false;
+
+  event.preventDefault();
+  setDraggedEntry(null);
+  dropZone(view).classList.remove(DRAGGING_CLASS);
+
+  insertLink(view, dropPosition(view, event), linkFor(entry.path, directory, isImagePath(entry.path)));
+  view.focus();
+  return true;
 }
 
 /**
@@ -85,19 +132,7 @@ async function attach(view: EditorView, files: File[], at: number) {
       const saved = await writeMedia(directory, nameFor(file), file);
       announceAttachment(saved);
 
-      const link = linkFor(saved, note || base, file.type);
-      // The link gets a line of its own, and the caret is left on the line
-      // after it - an image only renders once the caret is off its line, and
-      // what you want to see having just dropped one in is the picture.
-      const onOwnLine = position === 0 || view.state.doc.sliceString(position - 1, position) === "\n";
-      const insert = `${onOwnLine ? "" : "\n"}${link}\n`;
-
-      view.dispatch({
-        changes: { from: position, insert },
-        selection: { anchor: position + insert.length },
-        scrollIntoView: true,
-      });
-      position += insert.length;
+      position = insertLink(view, position, linkFor(saved, note || base, isImage(file.type)));
     } catch (error) {
       console.error("Failed to attach file:", error);
     }
@@ -126,18 +161,21 @@ export const attachments = EditorView.domEventHandlers({
   drop(event, view) {
     const files = filesFrom(event.dataTransfer);
     dropZone(view).classList.remove(DRAGGING_CLASS);
-    if (!files.length) return false;
+
+    if (!files.length) return linkDraggedEntry(view, event);
 
     event.preventDefault();
-    const at = view.posAtCoords({ x: event.clientX, y: event.clientY }) ?? view.state.selection.main.from;
-    void attach(view, files, at);
+    void attach(view, files, dropPosition(view, event));
     return true;
   },
 
   dragover(event, view) {
-    if (!event.dataTransfer?.types.includes("Files")) return false;
+    const external = event.dataTransfer?.types.includes("Files") ?? false;
+    const fromTree = draggedEntry() !== null && !draggedEntry()!.isDirectory;
+    if (!external && !fromTree) return false;
+
     event.preventDefault();
-    event.dataTransfer.dropEffect = "copy";
+    if (event.dataTransfer) event.dataTransfer.dropEffect = external ? "copy" : "link";
     dropZone(view).classList.add(DRAGGING_CLASS);
     return false;
   },

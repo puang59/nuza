@@ -60,6 +60,15 @@ export function isImage(type: string) {
   return type.startsWith("image/");
 }
 
+const IMAGE_SUFFIXES = new Set(["png", "jpg", "jpeg", "gif", "webp", "avif", "svg", "bmp", "ico"]);
+
+/** Whether a path names an image, judged by its extension - a file on disk
+ * arrives without the media type a dropped or pasted one carries. */
+export function isImagePath(path: string) {
+  const dot = path.lastIndexOf(".");
+  return dot >= 0 && IMAGE_SUFFIXES.has(path.slice(dot + 1).toLowerCase());
+}
+
 /**
  * A name for something pasted straight from the clipboard, which arrives with
  * no name of its own. Dashes rather than spaces: it ends up in a link.
