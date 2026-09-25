@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import CodeMirror, { ReactCodeMirrorRef } from "@uiw/react-codemirror";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getCM, vim, Vim } from "@replit/codemirror-vim";
 import { EditorView } from "@codemirror/view";
 import { invoke } from "@tauri-apps/api/core";
@@ -13,7 +12,6 @@ import { useFileOperations } from "./hooks/useFileOperations";
 import { useAppUpdater } from "./hooks/useAppUpdater";
 import { usePersistedState } from "./hooks/usePersistedState";
 import { useResizableSidebar } from "./hooks/useResizableSidebar";
-import { directoryOf, liveMarkdown, noteDirectory } from "./lib/markdown";
 import { isMacPlatform } from "./lib/platform";
 import {
   DEFAULT_EDITOR_FONT,
@@ -40,9 +38,25 @@ function App() {
   const [editorFont, setEditorFont] = usePersistedState("editorFont", DEFAULT_EDITOR_FONT);
   const [editorFontSize, setEditorFontSize] = usePersistedState("editorFontSize", DEFAULT_EDITOR_FONT_SIZE);
 
+  const editorFontTheme = useMemo(
+    () =>
+      EditorView.theme({
+        ".cm-scroller": { fontFamily: editorFontFamily(editorFont), fontSize: `${editorFontSize}px` },
+      }),
+    [editorFont, editorFontSize]
+  );
+
+  // Memoised because the editor reconfigures itself whenever this array's
+  // identity changes - rebuilding it every render would put the documents
+  // through a reconfiguration on every keystroke.
+  const editorPreferences = useMemo(
+    () => [...(vimEnabled ? [vimExtension] : []), editorFontTheme],
+    [vimEnabled, editorFontTheme]
+  );
+
   const {
-    value,
-    setValue,
+    editorContainer,
+    editorView,
     currentFile,
     openPaths,
     dirtyPaths,
@@ -61,6 +75,7 @@ function App() {
     moveEntry,
     deleteEntry,
   } = useFileOperations({
+    preferences: editorPreferences,
     onFolderOpened: () => setIsSidebarOpen(true),
   });
   const { status: updateStatus, checkForUpdates, installUpdate, openDownloadPage, version } = useAppUpdater({
@@ -75,28 +90,6 @@ function App() {
     });
   }, [transparencyEnabled]);
 
-  const editorFontTheme = useMemo(
-    () =>
-      EditorView.theme({
-        ".cm-scroller": { fontFamily: editorFontFamily(editorFont), fontSize: `${editorFontSize}px` },
-      }),
-    [editorFont, editorFontSize]
-  );
-
-  // Memoised because CodeMirror reconfigures itself whenever this array's
-  // identity changes - rebuilding it every render would throw away the
-  // rendered document and the Vim state on each keystroke.
-  const editorExtensions = useMemo(
-    () => [
-      liveMarkdown,
-      noteDirectory.of(directoryOf(currentFile)),
-      ...(vimEnabled ? [vimExtension] : []),
-      editorFontTheme,
-    ],
-    [currentFile, vimEnabled, editorFontTheme]
-  );
-
-  const editorRef = useRef<ReactCodeMirrorRef>(null);
   const sidebarRef = useRef<SidebarHandle>(null);
   const now = new Date().toLocaleString();
 
@@ -145,22 +138,28 @@ function App() {
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [jumpToFile]);
 
-  const handleEditorCreated = useCallback(
-    (view: EditorView) => {
-      const cm = getCM(view);
-      if (!cm) return;
-      // @ts-ignore - codemirror-vim's event isn't typed
-      cm.on("vim-mode-change", (e) => setMode(e.mode));
+  // The Vim adapter only exists on the editor while the extension is part of
+  // its configuration, so the mode indicator is wired up after the editor has
+  // been reconfigured rather than when it was first created.
+  useEffect(() => {
+    if (!vimEnabled || !editorView) return;
 
-      Vim.defineEx("write", "w", async () => {
-        await save();
-      });
-      Vim.defineEx("wall", "wa", async () => {
-        await save();
-      });
-    },
-    [save]
-  );
+    const cm = getCM(editorView);
+    if (!cm) return;
+
+    const onModeChange = (event: { mode: string }) => setMode(event.mode);
+    cm.on("vim-mode-change", onModeChange);
+    return () => cm.off("vim-mode-change", onModeChange);
+  }, [vimEnabled, editorView]);
+
+  useEffect(() => {
+    Vim.defineEx("write", "w", async () => {
+      await save();
+    });
+    Vim.defineEx("wall", "wa", async () => {
+      await save();
+    });
+  }, [save]);
 
   return (
     <main className={`h-screen flex flex-col text-white overflow-hidden ${transparencyEnabled ? "bg-transparent" : "bg-[#1E1E1E]"}`}>
@@ -185,24 +184,10 @@ function App() {
             above it. Tinted rather than filled so window vibrancy still shows
             through when transparency is on. */}
         <div className="flex-1 min-w-0 h-full relative overflow-hidden rounded-t-lg bg-black/20">
-          <CodeMirror
-            ref={editorRef}
-            value={value}
-            height="100%"
-            theme="none"
-            extensions={editorExtensions}
-            onChange={setValue}
-            className="h-full border-none outline-none"
-            basicSetup={{
-              // Nothing in the margins and nothing highlighted: the rendered
-              // markdown is the only thing on screen worth looking at.
-              lineNumbers: false,
-              foldGutter: false,
-              highlightActiveLine: false,
-              highlightActiveLineGutter: false,
-            }}
-            onCreateEditor={handleEditorCreated}
-          />
+          {/* CodeMirror mounts itself in here and owns the document from then
+              on. Nothing about the text passes back through React, which is
+              what keeps a keystroke from costing anything at the app level. */}
+          <div ref={editorContainer} className="h-full" />
         </div>
 
         {/*

@@ -8,7 +8,7 @@ interface EditorHeaderProps {
   version: string | null;
   openPaths: string[];
   currentFile: string;
-  dirtyPaths: Set<string>;
+  dirtyPaths: ReadonlySet<string>;
   onSelectTab: (path: string) => void;
   onCloseTab: (path: string) => void;
   onCheckUpdates: () => void;

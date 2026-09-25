@@ -7,7 +7,7 @@ const FADE_WIDTH = 28;
 interface TabBarProps {
   paths: string[];
   activePath: string;
-  dirtyPaths: Set<string>;
+  dirtyPaths: ReadonlySet<string>;
   onSelect: (path: string) => void;
   onClose: (path: string) => void;
 }
