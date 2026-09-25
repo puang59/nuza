@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { getCM, vim, Vim } from "@replit/codemirror-vim";
 import { EditorView } from "@codemirror/view";
 import { invoke } from "@tauri-apps/api/core";
 import EditorHeader from "./components/EditorHeader";
@@ -9,6 +8,7 @@ import SettingsModal from "./components/SettingsModal";
 import FileSearchPalette from "./components/FileSearchPalette";
 import { useKeymaps, useKeymapListener } from "./hooks/useKeymaps";
 import { useFileOperations } from "./hooks/useFileOperations";
+import { useVimMode } from "./hooks/useVimMode";
 import { useAppUpdater } from "./hooks/useAppUpdater";
 import { usePersistedState } from "./hooks/usePersistedState";
 import { useResizableSidebar } from "./hooks/useResizableSidebar";
@@ -24,9 +24,6 @@ import {
 /** Space between the editor and the sidebar, collapsed with the panel itself. */
 const SIDEBAR_GAP = 12;
 
-/** Built once: a fresh instance would reset Vim's state on every rebuild. */
-const vimExtension = vim();
-
 function App() {
   const [mode, setMode] = useState<string>("normal");
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
@@ -37,6 +34,8 @@ function App() {
   const [autoUpdateEnabled, setAutoUpdateEnabled] = usePersistedState("autoUpdateEnabled", true);
   const [editorFont, setEditorFont] = usePersistedState("editorFont", DEFAULT_EDITOR_FONT);
   const [editorFontSize, setEditorFontSize] = usePersistedState("editorFontSize", DEFAULT_EDITOR_FONT_SIZE);
+
+  const { module: vimModule, extension: vimExtension } = useVimMode(vimEnabled);
 
   const editorFontTheme = useMemo(
     () =>
@@ -50,8 +49,8 @@ function App() {
   // identity changes - rebuilding it every render would put the documents
   // through a reconfiguration on every keystroke.
   const editorPreferences = useMemo(
-    () => [...(vimEnabled ? [vimExtension] : []), editorFontTheme],
-    [vimEnabled, editorFontTheme]
+    () => [...(vimExtension ? [vimExtension] : []), editorFontTheme],
+    [vimExtension, editorFontTheme]
   );
 
   const {
@@ -142,24 +141,25 @@ function App() {
   // its configuration, so the mode indicator is wired up after the editor has
   // been reconfigured rather than when it was first created.
   useEffect(() => {
-    if (!vimEnabled || !editorView) return;
+    if (!vimModule || !vimEnabled || !editorView) return;
 
-    const cm = getCM(editorView);
+    const cm = vimModule.getCM(editorView);
     if (!cm) return;
 
     const onModeChange = (event: { mode: string }) => setMode(event.mode);
     cm.on("vim-mode-change", onModeChange);
     return () => cm.off("vim-mode-change", onModeChange);
-  }, [vimEnabled, editorView]);
+  }, [vimModule, vimEnabled, editorView]);
 
   useEffect(() => {
-    Vim.defineEx("write", "w", async () => {
+    if (!vimModule) return;
+    vimModule.Vim.defineEx("write", "w", async () => {
       await save();
     });
-    Vim.defineEx("wall", "wa", async () => {
+    vimModule.Vim.defineEx("wall", "wa", async () => {
       await save();
     });
-  }, [save]);
+  }, [vimModule, save]);
 
   return (
     <main className={`h-screen flex flex-col text-white overflow-hidden ${transparencyEnabled ? "bg-transparent" : "bg-[#1E1E1E]"}`}>
