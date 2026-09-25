@@ -3,7 +3,7 @@ import { Appearance, DEFAULT_APPEARANCE, appearanceVariables, clampTransparency,
 import { usePersistedState } from "./usePersistedState";
 
 /** The chosen colours, kept on the document root rather than in React state. */
-export function useAppearance() {
+export function useAppearance(hasBackdrop = true) {
   const [stored, setStored] = usePersistedState<Appearance>("appearance", DEFAULT_APPEARANCE);
 
   // Storage can hold anything; a colour that is not a colour would leave the
@@ -30,14 +30,14 @@ export function useAppearance() {
 
   useEffect(() => {
     const root = document.documentElement;
-    const variables = appearanceVariables(appearance);
+    const variables = appearanceVariables(appearance, hasBackdrop);
 
     for (const [name, value] of Object.entries(variables)) {
       if (applied.current[name] === value) continue;
       root.style.setProperty(name, value);
       applied.current[name] = value;
     }
-  }, [appearance]);
+  }, [appearance, hasBackdrop]);
 
   const update = useCallback(
     (change: Partial<Appearance>) => setStored((current) => ({ ...(current ?? DEFAULT_APPEARANCE), ...change })),

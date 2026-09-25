@@ -67,11 +67,20 @@ export function clampTransparency(value: number) {
  * the document root, so changing a colour restyles the window without the
  * editor being reconfigured or a single component re-rendering.
  */
-export function appearanceVariables(appearance: Appearance): Record<string, string> {
+export function appearanceVariables(
+  appearance: Appearance,
+  /**
+   * Whether the window has an OS-level backdrop behind it. Without one there
+   * is nothing for the desktop to show through - the window would be a hole
+   * rather than a pane - so the background is painted solid whatever the
+   * transparency setting says.
+   */
+  hasBackdrop = true
+): Record<string, string> {
   const { accent } = appearance;
   const background = BACKGROUND;
   const foreground = FOREGROUND;
-  const opaque = 1 - clampTransparency(appearance.transparency) / 100;
+  const opaque = hasBackdrop ? 1 - clampTransparency(appearance.transparency) / 100 : 1;
   // Headings step away from the background rather than always towards white,
   // so ink on a light background gets darker instead of vanishing.
   const emphasis = isLight(foreground) ? "#FFFFFF" : "#000000";

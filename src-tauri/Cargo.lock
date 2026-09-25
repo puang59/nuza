@@ -2311,6 +2311,7 @@ dependencies = [
  "tauri-plugin-updater",
  "ttf-parser",
  "window-vibrancy 0.8.0",
+ "windows-version",
 ]
 
 [[package]]

@@ -30,6 +30,11 @@ fontdb = "0.24.0"
 ttf-parser = "0.25"
 base64 = "0.22"
 
+# Which Windows this is, so the window gets the backdrop that does not make
+# dragging it crawl. window-vibrancy reads the same crate for the same reason.
+[target.'cfg(windows)'.dependencies]
+windows-version = "0.1"
+
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]

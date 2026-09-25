@@ -42,7 +42,10 @@ function App() {
 
   const { module: vimModule, extension: vimExtension } = useVimMode(vimEnabled);
   const { vaults, remember: rememberVault, rename: renameVault, forget: forgetVault } = useVaults();
-  const { appearance, update: setAppearance, reset: resetAppearance } = useAppearance();
+  // Assumed until the window has answered, so the app does not flash opaque on
+  // the way up on the platforms that do have a backdrop.
+  const [hasBackdrop, setHasBackdrop] = useState(true);
+  const { appearance, update: setAppearance, reset: resetAppearance } = useAppearance(hasBackdrop);
 
   const onFolderOpened = useCallback(
     (path: string) => {
@@ -129,9 +132,12 @@ function App() {
   // would rebuild the window's backing layer on every frame of a slider drag.
   const wantsTransparency = appearance.transparency > 0;
   useEffect(() => {
-    invoke("set_transparency", { enabled: wantsTransparency }).catch((error) => {
-      console.error("Failed to update transparency:", error);
-    });
+    invoke<boolean>("set_transparency", { enabled: wantsTransparency })
+      .then(setHasBackdrop)
+      .catch((error) => {
+        console.error("Failed to update transparency:", error);
+        setHasBackdrop(false);
+      });
   }, [wantsTransparency]);
 
   const sidebarRef = useRef<SidebarHandle>(null);

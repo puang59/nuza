@@ -6,7 +6,7 @@ use tauri::{Emitter, Wry};
 #[cfg(target_os = "macos")]
 use window_vibrancy::{apply_vibrancy, clear_vibrancy, NSVisualEffectMaterial};
 #[cfg(target_os = "windows")]
-use window_vibrancy::{apply_blur, clear_blur};
+use window_vibrancy::{apply_acrylic, apply_mica, clear_acrylic, clear_mica};
 use std::fs;
 use tauri_plugin_dialog::DialogExt;
 use std::path::Path;
@@ -359,10 +359,50 @@ async fn list_system_fonts() -> Vec<String> {
     families
 }
 
-/// Applies or clears the OS-level window transparency/vibrancy effect.
-/// No-op on platforms window-vibrancy doesn't support (e.g. Linux); the
-/// frontend falls back to a plain opaque background there via CSS.
-fn apply_transparency(window: &tauri::WebviewWindow, enabled: bool) -> Result<(), String> {
+/// The Windows backdrop that does not make the window crawl.
+///
+/// DWM's blur-behind - what `apply_blur` reaches for - redraws the entire
+/// window on every frame of a drag or a resize on anything past Windows 10
+/// v1809, which is why dragging nuza across a Windows desktop took seconds
+/// rather than following the pointer. Mica is the documented replacement and
+/// costs nothing to move, so Windows 11 gets that, the one Windows 10 build
+/// where acrylic is still cheap gets acrylic, and anything older goes without
+/// a backdrop rather than going slow.
+#[cfg(target_os = "windows")]
+fn apply_windows_backdrop(window: &tauri::WebviewWindow, enabled: bool) -> Result<bool, String> {
+    /// Windows 11, where mica exists.
+    const MICA: u32 = 22000;
+    /// Windows 10 v1809, where acrylic arrived.
+    const ACRYLIC: u32 = 17763;
+    /// Windows 10 v1903, from which acrylic drags as badly as blur does.
+    const ACRYLIC_SLOWED: u32 = 18362;
+
+    let build = windows_version::OsVersion::current().build;
+
+    if build >= MICA {
+        if enabled {
+            apply_mica(window, Some(true)).map_err(|e| e.to_string())?;
+        } else {
+            clear_mica(window).map_err(|e| e.to_string())?;
+        }
+        Ok(true)
+    } else if (ACRYLIC..ACRYLIC_SLOWED).contains(&build) {
+        if enabled {
+            apply_acrylic(window, Some((18, 18, 18, 125))).map_err(|e| e.to_string())?;
+        } else {
+            clear_acrylic(window).map_err(|e| e.to_string())?;
+        }
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
+/// Applies or clears the OS-level window transparency/vibrancy effect, and
+/// says whether this platform has one at all. Where it does not - Linux, or a
+/// Windows build with no backdrop worth the frame rate - the frontend paints
+/// the window opaque instead of leaving a hole through to the desktop.
+fn apply_transparency(window: &tauri::WebviewWindow, enabled: bool) -> Result<bool, String> {
     #[cfg(target_os = "macos")]
     {
         if enabled {
@@ -371,29 +411,25 @@ fn apply_transparency(window: &tauri::WebviewWindow, enabled: bool) -> Result<()
         } else {
             clear_vibrancy(window).map_err(|e| e.to_string())?;
         }
+        Ok(true)
     }
 
     #[cfg(target_os = "windows")]
     {
-        if enabled {
-            apply_blur(window, Some((18, 18, 18, 125))).map_err(|e| e.to_string())?;
-        } else {
-            clear_blur(window).map_err(|e| e.to_string())?;
-        }
+        apply_windows_backdrop(window, enabled)
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
         let _ = (window, enabled);
+        Ok(false)
     }
-
-    Ok(())
 }
 
 /// Tauri command wrapper around [`apply_transparency`] for toggling the
 /// effect at runtime from the frontend's settings panel.
 #[tauri::command]
-fn set_transparency(window: tauri::WebviewWindow, enabled: bool) -> Result<(), String> {
+fn set_transparency(window: tauri::WebviewWindow, enabled: bool) -> Result<bool, String> {
     apply_transparency(&window, enabled)
 }
 
