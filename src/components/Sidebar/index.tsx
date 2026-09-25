@@ -25,6 +25,7 @@ interface SidebarProps {
   onRename: (path: string, newName: string) => Promise<void> | void;
   onDelete: (path: string) => Promise<void> | void;
   onMove: (path: string, targetDir: string) => Promise<void> | void;
+  onAttachFiles: (directory: string, files: File[]) => Promise<void> | void;
   onResizeStart: (event: React.PointerEvent) => void;
   onResizeReset: () => void;
   isResizing: boolean;
@@ -42,6 +43,7 @@ function Sidebar({
   onRename,
   onDelete,
   onMove,
+  onAttachFiles,
   onResizeStart,
   onResizeReset,
   isResizing,
@@ -152,6 +154,10 @@ function Sidebar({
     }
   }
 
+  function attachFiles(directory: string, files: File[]) {
+    void onAttachFiles(directory, files);
+  }
+
   async function moveEntry(path: string, targetDir: string) {
     if (path === targetDir) return;
     try {
@@ -219,6 +225,7 @@ function Sidebar({
     dragOverPath,
     setDragOverPath,
     moveEntry,
+    attachFiles,
   };
 
   return (
@@ -331,13 +338,18 @@ function Sidebar({
           openContextMenu(e, null);
         }}
         onDragOver={(e) => {
-          if (!draggingPath || !rootPath) return;
+          if (!rootPath) return;
+          if (!draggingPath && !e.dataTransfer.types.includes("Files")) return;
           e.preventDefault();
         }}
         onDrop={(e) => {
-          if (!draggingPath || !rootPath) return;
+          if (!rootPath) return;
+          const files = Array.from(e.dataTransfer.files);
+          if (!files.length && !draggingPath) return;
+
           e.preventDefault();
-          moveEntry(draggingPath, rootPath);
+          if (files.length) attachFiles(rootPath, files);
+          else if (draggingPath) moveEntry(draggingPath, rootPath);
           setDraggingPath(null);
           setDragOverPath(null);
         }}

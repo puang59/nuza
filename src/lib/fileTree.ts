@@ -20,13 +20,13 @@ function lastSeparator(path: string) {
 }
 
 /** The directory part of a path, for either separator style. */
-function parentOf(path: string) {
+export function parentOf(path: string) {
   const index = lastSeparator(path);
   return index < 0 ? "" : path.slice(0, index);
 }
 
 /** The final segment of a path, for either separator style. */
-function nameOf(path: string) {
+export function nameOf(path: string) {
   return path.slice(lastSeparator(path) + 1);
 }
 
@@ -113,4 +113,25 @@ export function moveEntry(
   const entry = findEntry(tree, path);
   if (!entry) return tree;
   return addEntry(removeEntry(tree, rootPath, path), rootPath, relocate(entry, path, newPath));
+}
+
+/**
+ * Makes sure the tree has a row for the directory at `path`, adding it - and
+ * any missing directory above it - if it does not. Used when a file lands
+ * somewhere the sidebar has never shown, such as a `media` folder created on
+ * the first paste.
+ */
+export function ensureDirectory(tree: FileEntry[], rootPath: string, path: string): FileEntry[] {
+  if (!path || path === rootPath || findEntry(tree, path)) return tree;
+
+  const parent = parentOf(path);
+  const withParent = parent && parent !== rootPath ? ensureDirectory(tree, rootPath, parent) : tree;
+  return addEntry(withParent, rootPath, { name: nameOf(path), path, isDirectory: true, children: [] });
+}
+
+/** Adds a file that has just been written, creating its folder if need be. */
+export function addFile(tree: FileEntry[], rootPath: string, path: string): FileEntry[] {
+  if (findEntry(tree, path)) return tree;
+  const withFolder = ensureDirectory(tree, rootPath, parentOf(path));
+  return addEntry(withFolder, rootPath, { name: nameOf(path), path, isDirectory: false });
 }

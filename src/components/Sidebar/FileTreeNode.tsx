@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { ChevronRight, File, Folder, FolderOpen } from "lucide-react";
+import { parentOf } from "@/lib/fileTree";
 import { FileIcon } from "@/lib/utils";
 import { FileEntry } from "@/lib/types";
 import { useTreeContext } from "./TreeContext";
@@ -47,6 +48,7 @@ export default function FileTreeNode({ entry }: { entry: FileEntry }) {
     dragOverPath,
     setDragOverPath,
     moveEntry,
+    attachFiles,
   } = useTreeContext();
 
   const detailsRef = useRef<HTMLDetailsElement>(null);
@@ -74,6 +76,37 @@ export default function FileTreeNode({ entry }: { entry: FileEntry }) {
     setDragOverPath(null);
   }
 
+  /** True while something from outside the app is being dragged over a row. */
+  function carriesFiles(e: React.DragEvent) {
+    return e.dataTransfer.types.includes("Files");
+  }
+
+  /** A folder takes the files itself; a file hands them to the folder it is in. */
+  const dropTarget = entry.isDirectory ? entry.path : parentOf(entry.path);
+
+  function handleDragOver(e: React.DragEvent) {
+    const external = carriesFiles(e);
+    if (!external && (!draggingPath || draggingPath === entry.path)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (external) e.dataTransfer.dropEffect = "copy";
+    setDragOverPath(entry.path);
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverPath(null);
+
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length) {
+      attachFiles(dropTarget, files);
+    } else if (draggingPath && draggingPath !== entry.path && entry.isDirectory) {
+      moveEntry(draggingPath, entry.path);
+    }
+    setDraggingPath(null);
+  }
+
   if (entry.isDirectory) {
     return (
       <li>
@@ -82,23 +115,12 @@ export default function FileTreeNode({ entry }: { entry: FileEntry }) {
             draggable={!isRenaming}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
-            onDragOver={(e) => {
-              if (!draggingPath || draggingPath === entry.path) return;
-              e.preventDefault();
-              e.stopPropagation();
-              setDragOverPath(entry.path);
-            }}
+            onDragOver={handleDragOver}
             onDragLeave={(e) => {
               e.stopPropagation();
               if (dragOverPath === entry.path) setDragOverPath(null);
             }}
-            onDrop={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setDragOverPath(null);
-              if (draggingPath && draggingPath !== entry.path) moveEntry(draggingPath, entry.path);
-              setDraggingPath(null);
-            }}
+            onDrop={handleDrop}
             onContextMenu={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -143,6 +165,12 @@ export default function FileTreeNode({ entry }: { entry: FileEntry }) {
         draggable={!isRenaming}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
+        onDragOver={handleDragOver}
+        onDragLeave={(e) => {
+          e.stopPropagation();
+          if (dragOverPath === entry.path) setDragOverPath(null);
+        }}
+        onDrop={handleDrop}
         onClick={() => !isRenaming && onFileSelect && onFileSelect(entry.path)}
         onContextMenu={(e) => {
           e.preventDefault();
@@ -151,7 +179,7 @@ export default function FileTreeNode({ entry }: { entry: FileEntry }) {
         }}
         className={`flex w-full cursor-pointer items-center gap-1.5 rounded-md py-1.5 pl-7 pr-2 text-left text-sm transition-colors [-webkit-user-drag:element] ${
           currentFile === entry.path ? "bg-zinc-800 text-white" : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-100"
-        } ${isBeingDragged ? "opacity-40" : ""}`}
+        } ${isDraggedOver ? "bg-zinc-700/50 outline outline-1 outline-zinc-500" : ""} ${isBeingDragged ? "opacity-40" : ""}`}
       >
         <FileIcon name={entry.name} />
         {isRenaming ? (

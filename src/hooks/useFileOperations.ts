@@ -1,8 +1,9 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Extension } from "@codemirror/state";
 import { FileEntry } from "@/lib/types";
-import { addEntry, joinPath, moveEntry as moveTreeEntry, removeEntry } from "@/lib/fileTree";
+import { addEntry, addFile, joinPath, moveEntry as moveTreeEntry, removeEntry } from "@/lib/fileTree";
+import { ATTACHMENT_EVENT, announceAttachment, writeMedia } from "@/lib/media";
 import { useDocuments } from "./useDocuments";
 
 const UNTITLED_FILE = "untitled.md";
@@ -44,7 +45,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
     markSaved,
     forget: forgetDocuments,
     rewrite: rewriteDocuments,
-  } = useDocuments({ preferences, initialPath: UNTITLED_FILE });
+  } = useDocuments({ preferences, initialPath: UNTITLED_FILE, vault: rootPath ?? "" });
 
   // Vim's `:w` command runs outside of React, from a closure captured once
   // when the editor mounts, so it can't see state updates directly - it
@@ -58,6 +59,31 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
   currentFileRef.current = currentFile;
   rootPathRef.current = rootPath;
   openPathsRef.current = openPaths;
+
+  // A file dropped on the note is written by the editor itself, which has no
+  // way back into React - it says so on the window instead, and the sidebar
+  // puts the new row in without going back to disk for it.
+  useEffect(() => {
+    function onAttachment(event: Event) {
+      const { path } = (event as CustomEvent<{ path: string }>).detail;
+      setFolderData((tree) => addFile(tree, rootPathRef.current ?? "", path));
+    }
+
+    window.addEventListener(ATTACHMENT_EVENT, onAttachment);
+    return () => window.removeEventListener(ATTACHMENT_EVENT, onAttachment);
+  }, []);
+
+  /** Copies dropped files into `directory`, e.g. from a drag onto the sidebar. */
+  const attachFiles = useCallback(async (directory: string, files: File[]) => {
+    for (const file of files) {
+      try {
+        const saved = await writeMedia(directory, file.name, file);
+        announceAttachment(saved);
+      } catch (error) {
+        console.error("Failed to save dropped file:", error);
+      }
+    }
+  }, []);
 
   /** Puts the editor back on a single empty scratch document. */
   const resetToScratch = useCallback(() => {
@@ -279,5 +305,6 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
     renameEntry,
     moveEntry,
     deleteEntry,
+    attachFiles,
   };
 }

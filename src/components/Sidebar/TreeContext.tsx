@@ -25,6 +25,8 @@ export interface TreeActions {
   dragOverPath: string | null;
   setDragOverPath: (path: string | null) => void;
   moveEntry: (path: string, targetDir: string) => void;
+  /** Files dragged in from outside the app, to be copied into `directory`. */
+  attachFiles: (directory: string, files: File[]) => void;
 }
 
 export const TreeContext = createContext<TreeActions | null>(null);

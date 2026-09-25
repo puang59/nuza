@@ -3,7 +3,7 @@ import { Compartment, EditorState, Extension } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { indentWithTab } from "@codemirror/commands";
 import { basicSetup } from "@uiw/codemirror-extensions-basic-setup";
-import { directoryOf, liveMarkdown, noteDirectory } from "@/lib/markdown";
+import { directoryOf, liveMarkdown, noteDirectory, vaultDirectory } from "@/lib/markdown";
 import { countDocument, DocumentStats, EMPTY_DOCUMENT_STATS } from "@/lib/documentStats";
 
 /**
@@ -39,6 +39,17 @@ interface UseDocumentsOptions {
   preferences: Extension;
   /** The document the editor opens on. */
   initialPath: string;
+  /** The open folder, where dropped and pasted files are filed. */
+  vault: string;
+}
+
+/**
+ * Where a note resolves its relative links from, and where anything dropped on
+ * it is filed. A scratch note has no directory of its own, so it borrows the
+ * open folder's rather than leaving its images unresolvable.
+ */
+function placeOf(path: string, vault: string): Extension {
+  return [noteDirectory.of(directoryOf(path) || vault), vaultDirectory.of(vault)];
 }
 
 /**
@@ -51,7 +62,7 @@ interface UseDocumentsOptions {
  * it, which is to say on save. Each file keeps its own undo history and cursor
  * as a side effect of owning its state.
  */
-export function useDocuments({ preferences: settings, initialPath }: UseDocumentsOptions) {
+export function useDocuments({ preferences: settings, initialPath, vault }: UseDocumentsOptions) {
   const container = useRef<HTMLDivElement>(null);
   const states = useRef(new Map<string, EditorState>());
   /** The editor, as a ref for callbacks and as state for effects that follow it. */
@@ -59,6 +70,7 @@ export function useDocuments({ preferences: settings, initialPath }: UseDocument
   const [view, setView] = useState<EditorView | null>(null);
   const currentPath = useRef(initialPath);
   const latestSettings = useRef(settings);
+  const latestVault = useRef(vault);
   /** Set while a document is being swapped in, so the swap is not read as an edit. */
   const swapping = useRef(false);
   const [dirtyPaths, setDirtyPaths] = useState<ReadonlySet<string>>(() => new Set());
@@ -134,7 +146,7 @@ export function useDocuments({ preferences: settings, initialPath }: UseDocument
       extensions: [
         writingSurface,
         trackEdits.current!,
-        location.of(noteDirectory.of(directoryOf(path))),
+        location.of(placeOf(path, latestVault.current)),
         preferences.of(latestSettings.current),
       ],
     });
@@ -172,6 +184,13 @@ export function useDocuments({ preferences: settings, initialPath }: UseDocument
     editor.current?.dispatch({ effects: preferences.reconfigure(settings) });
   }, [settings]);
 
+  // Opening a folder changes where the open note files its attachments, and
+  // gives a scratch note somewhere to resolve its links from.
+  useEffect(() => {
+    latestVault.current = vault;
+    editor.current?.dispatch({ effects: location.reconfigure(placeOf(currentPath.current, vault)) });
+  }, [vault]);
+
   /** Shows `path`, creating its document from `content` if it has none yet. */
   const open = useCallback(
     (path: string, content: string | null) => {
@@ -188,7 +207,7 @@ export function useDocuments({ preferences: settings, initialPath }: UseDocument
       view.dispatch({
         effects: [
           preferences.reconfigure(latestSettings.current),
-          location.reconfigure(noteDirectory.of(directoryOf(path))),
+          location.reconfigure(placeOf(path, latestVault.current)),
         ],
       });
       swapping.current = false;
@@ -250,7 +269,7 @@ export function useDocuments({ preferences: settings, initialPath }: UseDocument
       if (current !== currentPath.current) {
         currentPath.current = current;
         editor.current?.dispatch({
-          effects: location.reconfigure(noteDirectory.of(directoryOf(current))),
+          effects: location.reconfigure(placeOf(current, latestVault.current)),
         });
       }
 

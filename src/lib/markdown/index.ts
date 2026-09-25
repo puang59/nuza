@@ -9,6 +9,7 @@ import { EditorView, keymap } from "@codemirror/view";
 import { GFM } from "@lezer/markdown";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { isMacPlatform } from "../platform";
+import { attachments } from "./attachments";
 import { liveMarkdownPreview } from "./livePreview";
 import { nuzaEditorTheme } from "./theme";
 
@@ -61,6 +62,8 @@ export const liveMarkdown: Extension = [
   nuzaEditorTheme,
   liveMarkdownPreview,
   openLinkOnModClick,
+  attachments,
 ];
 
 export { directoryOf, noteDirectory } from "./sources";
+export { vaultDirectory } from "./attachments";

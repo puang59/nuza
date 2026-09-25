@@ -205,6 +205,68 @@ async fn save_file_picker(app_handle: tauri::AppHandle, content: String) -> Resu
     })
 }
 
+/// The final component of `name`, with anything that could climb out of the
+/// target directory removed. A dropped file's name is whatever the sending app
+/// put there, so it is treated as a suggestion rather than a path.
+fn safe_file_name(name: &str) -> Result<String, String> {
+    let cleaned = name
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or("")
+        .trim()
+        .trim_start_matches('.')
+        .replace('\0', "");
+
+    if cleaned.is_empty() || cleaned == "." || cleaned == ".." {
+        Err("Invalid file name".to_string())
+    } else {
+        Ok(cleaned)
+    }
+}
+
+/// A path in `directory` named after `name` that nothing is using yet, adding
+/// " 1", " 2" and so on before the extension the way a file manager would.
+fn unused_path(directory: &Path, name: &str) -> std::path::PathBuf {
+    let candidate = directory.join(name);
+    if !candidate.exists() {
+        return candidate;
+    }
+
+    let stem = Path::new(name).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    let extension = Path::new(name).extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+
+    for n in 1..10_000 {
+        let candidate = directory.join(format!("{} {}{}", stem, n, extension));
+        if !candidate.exists() {
+            return candidate;
+        }
+    }
+
+    directory.join(name)
+}
+
+/// Writes a dropped or pasted file into `directory`, creating it if it is not
+/// there yet. The bytes arrive base64-encoded because that survives the JSON
+/// the IPC bridge speaks at a third of the cost of an array of numbers.
+/// Returns the full path actually written, which may have been renamed to
+/// avoid overwriting something.
+#[tauri::command]
+fn write_media(directory: String, name: String, data: String) -> Result<String, String> {
+    use base64::Engine;
+
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(data.as_bytes())
+        .map_err(|e| format!("Could not read the dropped file: {}", e))?;
+
+    let directory = Path::new(&directory);
+    fs::create_dir_all(directory).map_err(|e| e.to_string())?;
+
+    let path = unused_path(directory, &safe_file_name(&name)?);
+    fs::write(&path, bytes).map_err(|e| e.to_string())?;
+
+    Ok(path.to_string_lossy().into_owned())
+}
+
 #[tauri::command]
 fn read_file(path: String) -> Result<String, String> {
     std::fs::read_to_string(path).map_err(|e| e.to_string())
@@ -304,6 +366,7 @@ pub fn run() {
             load_folder_picker,
             read_file,
             write_file,
+            write_media,
             create_file,
             create_folder,
             rename_entry,

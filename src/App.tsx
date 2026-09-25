@@ -77,6 +77,7 @@ function App() {
     renameEntry,
     moveEntry,
     deleteEntry,
+    attachFiles,
   } = useFileOperations({
     preferences: editorPreferences,
     onFolderOpened: () => setIsSidebarOpen(true),
@@ -223,6 +224,7 @@ function App() {
               onRename={renameEntry}
               onDelete={deleteEntry}
               onMove={moveEntry}
+              onAttachFiles={attachFiles}
               onResizeStart={startResize}
               onResizeReset={resetWidth}
               isResizing={isResizing}
