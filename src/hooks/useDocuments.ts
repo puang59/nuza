@@ -68,6 +68,12 @@ export function useDocuments({ preferences: settings, initialPath, vault }: UseD
   /** The editor, as a ref for callbacks and as state for effects that follow it. */
   const editor = useRef<EditorView | null>(null);
   const [view, setView] = useState<EditorView | null>(null);
+  /**
+   * Counts the times the view has been handed a new document. Extensions that
+   * keep an object of their own per view - Vim's adapter, for one - are rebuilt
+   * at that point, so anything holding on to one has to go and fetch it again.
+   */
+  const [viewGeneration, setViewGeneration] = useState(0);
   const currentPath = useRef(initialPath);
   const latestSettings = useRef(settings);
   const latestVault = useRef(vault);
@@ -211,6 +217,7 @@ export function useDocuments({ preferences: settings, initialPath, vault }: UseD
         ],
       });
       swapping.current = false;
+      setViewGeneration((generation) => generation + 1);
       reportStats(view.state);
       // Opening a note is a request to write in it, so the caret goes there
       // rather than leaving the sidebar holding focus.
@@ -290,5 +297,18 @@ export function useDocuments({ preferences: settings, initialPath, vault }: UseD
     []
   );
 
-  return { container, view, dirtyPaths, subscribeToStats, open, isOpen, read, revision, markSaved, forget, rewrite };
+  return {
+    container,
+    view,
+    viewGeneration,
+    dirtyPaths,
+    subscribeToStats,
+    open,
+    isOpen,
+    read,
+    revision,
+    markSaved,
+    forget,
+    rewrite,
+  };
 }

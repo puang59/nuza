@@ -46,6 +46,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
   const {
     container: editorContainer,
     view: editorView,
+    viewGeneration,
     dirtyPaths,
     subscribeToStats,
     open: openDocument,
@@ -369,6 +370,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
   return {
     editorContainer,
     editorView,
+    viewGeneration,
     subscribeToStats,
     currentFile,
     openPaths,

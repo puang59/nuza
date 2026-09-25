@@ -28,6 +28,7 @@ interface StatusBarProps {
 const VIM_MODE_STYLES: Record<string, string> = {
   insert: "bg-[#96FF96] text-black",
   normal: "bg-[#9696FF] text-black",
+  replace: "bg-[#FF9696] text-black",
   visual: "bg-[#FFFF96] text-black",
 };
 

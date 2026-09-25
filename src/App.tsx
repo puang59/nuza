@@ -70,6 +70,7 @@ function App() {
   const {
     editorContainer,
     editorView,
+    viewGeneration,
     subscribeToStats,
     currentFile,
     openPaths,
@@ -187,17 +188,23 @@ function App() {
 
   // The Vim adapter only exists on the editor while the extension is part of
   // its configuration, so the mode indicator is wired up after the editor has
-  // been reconfigured rather than when it was first created.
+  // been reconfigured rather than when it was first created. Opening a document
+  // builds a new adapter, which is what viewGeneration follows: without it the
+  // listener stays on the adapter the old document left behind and the
+  // indicator sits on whichever mode it was last told about.
   useEffect(() => {
     if (!vimModule || !vimEnabled || !editorView) return;
 
     const cm = vimModule.getCM(editorView);
     if (!cm) return;
 
+    // A new adapter starts in normal mode, whatever the last one was showing.
+    setMode("normal");
+
     const onModeChange = (event: { mode: string }) => setMode(event.mode);
     cm.on("vim-mode-change", onModeChange);
     return () => cm.off("vim-mode-change", onModeChange);
-  }, [vimModule, vimEnabled, editorView]);
+  }, [vimModule, vimEnabled, editorView, viewGeneration]);
 
   useEffect(() => {
     if (!vimModule) return;
