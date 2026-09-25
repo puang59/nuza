@@ -1,4 +1,5 @@
 import { EditorView, WidgetType } from "@codemirror/view";
+import { Property } from "./frontmatter";
 import { sanitizeHtml } from "./sanitize";
 import { safeExternalHref } from "./sources";
 
@@ -89,18 +90,17 @@ export class BulletWidget extends WidgetType {
   }
 }
 
+/** The length of `[ ]` / `[x]`, the marker a checkbox stands in for. */
+const MARKER_LENGTH = 3;
+
 /** A real checkbox in place of `[ ]` / `[x]`, which writes back on click. */
 export class TaskWidget extends WidgetType {
-  constructor(
-    readonly checked: boolean,
-    readonly from: number,
-    readonly to: number
-  ) {
+  constructor(readonly checked: boolean) {
     super();
   }
 
   eq(other: TaskWidget) {
-    return other.checked === this.checked && other.from === this.from && other.to === this.to;
+    return other.checked === this.checked;
   }
 
   toDOM(view: EditorView) {
@@ -118,16 +118,18 @@ export class TaskWidget extends WidgetType {
     // click instead would not help: the browser restores the pre-click state
     // *after* the listener runs, undoing whatever we had just written.
     //
-    // The marker's position is read off the element rather than closed over,
-    // because `updateDOM` reuses this input across edits - a closure over
-    // `this.from` would go stale as soon as anything above it changed.
+    // Where the marker is gets asked for at the moment of the click rather
+    // than remembered: this widget outlives edits made above it, and a
+    // position captured when it was built would by then point somewhere else.
     box.addEventListener("click", () => {
+      const at = view.posAtDOM(box);
+      const marker = view.state.doc.sliceString(at, at + MARKER_LENGTH);
+      // If that is not a task marker the position is not to be trusted, and
+      // writing to it would corrupt whatever is actually there.
+      if (!/^\[[ xX]\]$/.test(marker)) return;
+
       view.dispatch({
-        changes: {
-          from: Number(box.dataset.from),
-          to: Number(box.dataset.to),
-          insert: box.checked ? "[x]" : "[ ]",
-        },
+        changes: { from: at, to: at + MARKER_LENGTH, insert: box.checked ? "[x]" : "[ ]" },
       });
     });
 
@@ -141,10 +143,7 @@ export class TaskWidget extends WidgetType {
    * Updating the one that is already there lets the tick animate in.
    */
   updateDOM(dom: HTMLElement) {
-    const box = dom as HTMLInputElement;
-    box.checked = this.checked;
-    box.dataset.from = String(this.from);
-    box.dataset.to = String(this.to);
+    (dom as HTMLInputElement).checked = this.checked;
     return true;
   }
 
@@ -242,8 +241,12 @@ export type TableAlignment = "left" | "center" | "right" | null;
 
 export type TableCell = {
   text: string;
-  /** Where this cell's text starts in the document, so a click can land there. */
-  from: number;
+  /**
+   * Where this cell's text starts, counted from the start of the table rather
+   * than from the start of the document - the table survives edits made above
+   * it, which would leave an absolute position pointing at the wrong text.
+   */
+  offset: number;
 };
 
 export type TableRow = {
@@ -282,7 +285,7 @@ export class TableWidget extends WidgetType {
         const td = document.createElement(row.header ? "th" : "td");
         const align = this.alignment[index];
         if (align) td.style.textAlign = align;
-        td.dataset.pos = String(cell.from);
+        td.dataset.offset = String(cell.offset);
         renderInline(td, unescapeCell(cell.text));
         tr.appendChild(td);
       });
@@ -298,12 +301,89 @@ export class TableWidget extends WidgetType {
     // immediately swaps the rendered table back for the markdown behind it.
     wrapper.addEventListener("mousedown", (event) => {
       const target = event.target as HTMLElement | null;
-      const cell = target?.closest<HTMLElement>("[data-pos]");
+      const cell = target?.closest<HTMLElement>("[data-offset]");
       if (!cell) return;
 
       event.preventDefault();
-      const position = Number(cell.dataset.pos);
+      const position = view.posAtDOM(wrapper) + Number(cell.dataset.offset);
       view.dispatch({ selection: { anchor: Math.min(position, view.state.doc.length) } });
+      view.focus();
+    });
+
+    return wrapper;
+  }
+
+  ignoreEvent() {
+    return true;
+  }
+}
+
+/**
+ * A note's frontmatter, drawn as the handful of fields it actually is: the
+ * key stepped back, the value in front of it, and a way to add another. The
+ * source is what is being edited - clicking a row puts the caret on its line,
+ * the same bargain the table widget strikes.
+ */
+export class PropertiesWidget extends WidgetType {
+  constructor(
+    readonly properties: Property[],
+    /** Start of the closing fence's line, where a new property is inserted. */
+    readonly insertAt: number,
+    /** Identity of the rendered result, so it only redraws on real change. */
+    readonly key: string
+  ) {
+    super();
+  }
+
+  eq(other: PropertiesWidget) {
+    return other.key === this.key;
+  }
+
+  toDOM(view: EditorView) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "cm-md-props";
+
+    for (const property of this.properties) {
+      const row = document.createElement("div");
+      row.className = "cm-md-prop";
+      row.dataset.pos = String(property.at);
+
+      const key = document.createElement("span");
+      key.className = "cm-md-prop-key";
+      key.textContent = property.key;
+
+      const value = document.createElement("span");
+      value.className = "cm-md-prop-value";
+      value.textContent = property.value;
+
+      row.append(key, value);
+      wrapper.appendChild(row);
+    }
+
+    const add = document.createElement("button");
+    add.className = "cm-md-prop-add";
+    add.textContent = "+ Add property";
+    add.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+      // The placeholder key is left selected, so whatever is typed next
+      // replaces it rather than landing beside it.
+      const insert = "key: \n";
+      view.dispatch({
+        changes: { from: this.insertAt, insert },
+        selection: { anchor: this.insertAt, head: this.insertAt + 3 },
+        scrollIntoView: true,
+      });
+      view.focus();
+    });
+    wrapper.appendChild(add);
+
+    wrapper.addEventListener("mousedown", (event) => {
+      const row = (event.target as HTMLElement | null)?.closest<HTMLElement>("[data-pos]");
+      if (!row) return;
+
+      event.preventDefault();
+      const position = Math.min(Number(row.dataset.pos), view.state.doc.length);
+      view.dispatch({ selection: { anchor: position } });
       view.focus();
     });
 

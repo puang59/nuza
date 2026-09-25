@@ -2,12 +2,14 @@ import { syntaxTree } from "@codemirror/language";
 import { EditorState, Range, StateField, Text } from "@codemirror/state";
 import { Decoration, DecorationSet, EditorView } from "@codemirror/view";
 import type { SyntaxNode, SyntaxNodeRef, Tree } from "@lezer/common";
+import { FrontmatterRange, frontmatterProperties, frontmatterRange } from "./frontmatter";
 import { rendersAnything, sanitizeHtml } from "./sanitize";
 import { noteDirectory, resolveImageSource, safeExternalHref } from "./sources";
 import {
   BulletWidget,
   HtmlWidget,
   ImageWidget,
+  PropertiesWidget,
   RuleWidget,
   TableAlignment,
   TableRow,
@@ -26,6 +28,8 @@ const ORDERED_MARK = Decoration.mark({ class: "cm-md-ordered-mark" });
 const QUOTE_LINE = Decoration.line({ class: "cm-md-quote" });
 const TASK_DONE = Decoration.mark({ class: "cm-md-task-done" });
 const RULE_LINE = Decoration.line({ class: "cm-md-mark" });
+/** Frontmatter with the caret in it: plain text, and plainly not prose. */
+const FRONTMATTER_LINE = Decoration.line({ class: "cm-md-frontmatter" });
 
 const INLINE_CLASSES: Record<string, Decoration> = {
   StrongEmphasis: Decoration.mark({ class: "cm-md-strong" }),
@@ -125,7 +129,7 @@ function parseAlignment(delimiterRow: string): TableAlignment[] {
  * inside a quote or a list item, where replacing whole lines would swallow the
  * enclosing markup along with the table.
  */
-function readTable(state: EditorState, table: SyntaxNode) {
+function readTable(state: EditorState, table: SyntaxNode, origin: number) {
   if (hasAncestor(table, "Blockquote", "ListItem")) return null;
 
   const rows: TableRow[] = [];
@@ -143,7 +147,7 @@ function readTable(state: EditorState, table: SyntaxNode) {
     const cells = [];
     for (let cell = child.firstChild; cell; cell = cell.nextSibling) {
       if (cell.name !== "TableCell") continue;
-      cells.push({ text: state.doc.sliceString(cell.from, cell.to), from: cell.from });
+      cells.push({ text: state.doc.sliceString(cell.from, cell.to), offset: cell.from - origin });
     }
     rows.push({ cells, header: child.name === "TableHeader" });
   }
@@ -154,7 +158,7 @@ function readTable(state: EditorState, table: SyntaxNode) {
   // contents or positions actually move.
   const key = [
     alignment.join(","),
-    ...rows.map((row) => `${row.header}:${row.cells.map((cell) => `${cell.from}=${cell.text}`).join("|")}`),
+    ...rows.map((row) => `${row.header}:${row.cells.map((cell) => `${cell.offset}=${cell.text}`).join("|")}`),
   ].join("//");
 
   return { rows, alignment, key };
@@ -175,6 +179,13 @@ type Build = {
   state: EditorState;
   directory: string;
   out: Range<Decoration>[];
+  /**
+   * End of the properties block, whose lines are YAML rather than markdown and
+   * so are left to `decorateFrontmatter`. Nodes that sit entirely inside it are
+   * skipped; one that merely spans it - the document node, above all - is not,
+   * or the whole note would be skipped along with its metadata.
+   */
+  frontmatterEnd: number;
   /**
    * End of the last range swallowed by a widget. Inline HTML is rendered as a
    * run of sibling nodes rather than one subtree, so the nodes inside that run
@@ -213,6 +224,7 @@ function decorateNode(node: SyntaxNodeRef, build: Build): boolean | undefined {
   const { name, from, to } = node;
   const doc = state.doc;
 
+  if (to <= build.frontmatterEnd) return false;
   if (from < build.coveredUntil) return false;
 
   const headingLevel = HEADING_LEVELS[name];
@@ -294,7 +306,7 @@ function decorateNode(node: SyntaxNodeRef, build: Build): boolean | undefined {
 
   if (name === "TaskMarker") {
     const checked = /^\[[xX]\]$/.test(doc.sliceString(from, to));
-    out.push(Decoration.replace({ widget: new TaskWidget(checked, from, to) }).range(from, to));
+    out.push(Decoration.replace({ widget: new TaskWidget(checked) }).range(from, to));
 
     // Strike the text, not the line: a line decoration draws the rule straight
     // through the checkbox, since the rule is painted across everything in the
@@ -419,7 +431,7 @@ function decorateNode(node: SyntaxNodeRef, build: Build): boolean | undefined {
   }
 
   if (name === "Table") {
-    const table = readTable(state, node.node);
+    const table = readTable(state, node.node, doc.lineAt(from).from);
     if (!table || isBeingEdited(state, from, to)) return;
     out.push(
       Decoration.replace({
@@ -435,6 +447,29 @@ function decorateNode(node: SyntaxNodeRef, build: Build): boolean | undefined {
   return;
 }
 
+/**
+ * The properties block, either drawn as properties or opened up as the YAML it
+ * is. Either way the markdown parser's reading of it is thrown away: to the
+ * parser a `---` beneath a line of text is a heading underline, which is what
+ * turns a note's metadata into a wall of headings.
+ */
+function decorateFrontmatter(state: EditorState, range: FrontmatterRange, out: Range<Decoration>[]) {
+  if (isBeingEdited(state, range.from, range.to)) {
+    eachLine(state.doc, range.from, range.to, (lineStart) => out.push(FRONTMATTER_LINE.range(lineStart)));
+    return;
+  }
+
+  const properties = frontmatterProperties(state.doc, range);
+  const key = properties.map((property) => `${property.at}:${property.key}=${property.value}`).join("|");
+
+  out.push(
+    Decoration.replace({
+      widget: new PropertiesWidget(properties, state.doc.line(range.closingLine).from, `${range.to}//${key}`),
+      block: true,
+    }).range(range.from, range.to)
+  );
+}
+
 /** Decorations for the part of `state` between `from` and `to`, in document order. */
 function decorationsIn(state: EditorState, from: number, to: number) {
   const build: Build = {
@@ -442,7 +477,15 @@ function decorationsIn(state: EditorState, from: number, to: number) {
     directory: state.facet(noteDirectory),
     out: [],
     coveredUntil: -1,
+    frontmatterEnd: -1,
   };
+
+  const front = frontmatterRange(state.doc);
+  if (front) {
+    // Everything the parser made of those lines is thrown away.
+    build.frontmatterEnd = front.to;
+    if (from <= front.to) decorateFrontmatter(state, front, build.out);
+  }
 
   syntaxTree(state).iterate({
     from,
@@ -552,6 +595,19 @@ export const liveMarkdownPreview = StateField.define<DecorationSet>({
       carryOver({ from: fromA, to: toA });
       spans.push(widen(state, newTree, { from: fromB, to: toB }));
     });
+
+    // The properties block is decided as a whole - a caret arriving anywhere in
+    // it swaps the entire thing between drawn and open - so anything touching
+    // it takes all of it, in whichever of the two states it is longer.
+    const before = frontmatterRange(startState.doc);
+    const after = frontmatterRange(state.doc);
+    const frontEnd = Math.max(
+      after ? after.to : -1,
+      before ? changes.mapPos(before.to, 1) : -1
+    );
+    if (frontEnd >= 0 && spans.some((span) => span.from <= frontEnd)) {
+      spans.push({ from: 0, to: Math.min(frontEnd, state.doc.length) });
+    }
 
     let updated = decorations.map(changes);
     for (const span of merge(spans)) {

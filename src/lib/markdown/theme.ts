@@ -351,6 +351,55 @@ const editorTheme = EditorView.theme(
       backgroundColor: "rgba(255, 255, 255, 0.025)",
     },
 
+    /* ---- Frontmatter ---------------------------------------------------- */
+
+    /* A note's properties: the key stepped back, the value in front of it.
+       Quiet enough to scroll past, close enough to read at a glance. */
+    ".cm-md-props": {
+      margin: "0 0 1.4em",
+      paddingBottom: "0.7em",
+      borderBottom: `1px solid ${ink.hairline}`,
+      fontSize: "0.88em",
+    },
+    ".cm-md-prop": {
+      display: "grid",
+      gridTemplateColumns: "minmax(0, 9em) 1fr",
+      gap: "0 1.2em",
+      alignItems: "baseline",
+      padding: "0.16em 0.3em",
+      borderRadius: "0.3em",
+      cursor: "text",
+    },
+    ".cm-md-prop:hover": { backgroundColor: ink.surface },
+    ".cm-md-prop-key": {
+      color: ink.muted,
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap",
+    },
+    ".cm-md-prop-value": { color: ink.text, fontWeight: "500", overflowWrap: "anywhere" },
+    ".cm-md-prop-add": {
+      display: "block",
+      margin: "0.3em 0 0",
+      padding: "0.16em 0.3em",
+      border: "none",
+      background: "none",
+      font: "inherit",
+      fontSize: "0.95em",
+      color: ink.muted,
+      cursor: "pointer",
+      transition: "color 120ms ease",
+    },
+    ".cm-md-prop-add:hover": { color: ink.accent },
+
+    /* The same block with the caret in it: the YAML behind the properties,
+       left as plain text rather than read as markdown. */
+    ".cm-md-frontmatter": {
+      fontFamily: CODE_FONT_FAMILY,
+      fontSize: "0.85em",
+      color: ink.muted,
+    },
+
     /* ---- Images --------------------------------------------------------- */
 
     ".cm-md-image": {
