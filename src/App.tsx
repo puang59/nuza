@@ -10,6 +10,7 @@ import FileSearchPalette from "./components/FileSearchPalette";
 import { useKeymaps, useKeymapListener } from "./hooks/useKeymaps";
 import { useFileOperations } from "./hooks/useFileOperations";
 import { useVimMode } from "./hooks/useVimMode";
+import { useVaults } from "./hooks/useVaults";
 import { useAppUpdater } from "./hooks/useAppUpdater";
 import { usePersistedState } from "./hooks/usePersistedState";
 import { useResizableSidebar } from "./hooks/useResizableSidebar";
@@ -39,6 +40,15 @@ function App() {
   const [editorFontSize, setEditorFontSize] = usePersistedState("editorFontSize", DEFAULT_EDITOR_FONT_SIZE);
 
   const { module: vimModule, extension: vimExtension } = useVimMode(vimEnabled);
+  const { vaults, remember: rememberVault, rename: renameVault, forget: forgetVault } = useVaults();
+
+  const onFolderOpened = useCallback(
+    (path: string) => {
+      rememberVault(path);
+      setIsSidebarOpen(true);
+    },
+    [rememberVault]
+  );
 
   const editorFontTheme = useMemo(
     () =>
@@ -66,6 +76,7 @@ function App() {
     folderData,
     rootPath,
     openFolder,
+    openVault,
     save,
     selectFile,
     closeFile,
@@ -80,13 +91,24 @@ function App() {
     attachFiles,
   } = useFileOperations({
     preferences: editorPreferences,
-    onFolderOpened: () => setIsSidebarOpen(true),
+    onFolderOpened,
   });
   const { status: updateStatus, checkForUpdates, installUpdate, openDownloadPage, version } = useAppUpdater({
     autoUpdate: autoUpdateEnabled,
   });
   const { bindings: keymapBindings, setBinding: setKeymapBinding, resetBinding: resetKeymapBinding, resetAll: resetAllKeymaps } = useKeymaps();
   const { width: sidebarWidth, isResizing, startResize, resetWidth } = useResizableSidebar();
+
+  // Picking up where you left off: the vault most recently opened is reopened
+  // on launch, so the app starts in a folder rather than on an empty picker.
+  const reopened = useRef(false);
+  useEffect(() => {
+    if (reopened.current) return;
+    reopened.current = true;
+
+    const [lastUsed] = vaults;
+    if (lastUsed) void openVault(lastUsed.path);
+  }, [vaults, openVault]);
 
   useEffect(() => {
     invoke("set_transparency", { enabled: transparencyEnabled }).catch((error) => {
@@ -225,6 +247,10 @@ function App() {
               onDelete={deleteEntry}
               onMove={moveEntry}
               onAttachFiles={attachFiles}
+              vaults={vaults}
+              onSelectVault={openVault}
+              onRenameVault={renameVault}
+              onForgetVault={forgetVault}
               onResizeStart={startResize}
               onResizeReset={resetWidth}
               isResizing={isResizing}

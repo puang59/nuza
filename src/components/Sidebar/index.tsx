@@ -8,6 +8,8 @@ import FileTreeNode, { NewEntryRow } from "./FileTreeNode";
 import ContextMenu, { ContextMenuItem } from "./ContextMenu";
 import ConfirmDeleteModal from "./ConfirmDeleteModal";
 import SearchResults from "./SearchResults";
+import VaultSwitcher from "./VaultSwitcher";
+import { Vault } from "@/lib/vaults";
 
 /** What the rest of the app can ask the sidebar to do. */
 export interface SidebarHandle {
@@ -26,6 +28,10 @@ interface SidebarProps {
   onDelete: (path: string) => Promise<void> | void;
   onMove: (path: string, targetDir: string) => Promise<void> | void;
   onAttachFiles: (directory: string, files: File[]) => Promise<void> | void;
+  vaults: Vault[];
+  onSelectVault: (path: string) => Promise<boolean> | boolean;
+  onRenameVault: (path: string, name: string) => void;
+  onForgetVault: (path: string) => void;
   onResizeStart: (event: React.PointerEvent) => void;
   onResizeReset: () => void;
   isResizing: boolean;
@@ -44,6 +50,10 @@ function Sidebar({
   onDelete,
   onMove,
   onAttachFiles,
+  vaults,
+  onSelectVault,
+  onRenameVault,
+  onForgetVault,
   onResizeStart,
   onResizeReset,
   isResizing,
@@ -387,6 +397,15 @@ function Sidebar({
           </TreeContext.Provider>
         )}
       </div>
+
+      <VaultSwitcher
+        vaults={vaults}
+        currentPath={rootPath ?? null}
+        onSelect={onSelectVault}
+        onOpenFolder={onOpenFolder}
+        onRename={onRenameVault}
+        onForget={onForgetVault}
+      />
 
       {contextMenu && (
         <ContextMenu x={contextMenu.x} y={contextMenu.y} items={contextItems} onClose={() => setContextMenu(null)} />
