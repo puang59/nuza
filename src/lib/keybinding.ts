@@ -120,3 +120,34 @@ export function formatBinding(binding: string, isMac: boolean = isMacPlatform())
     })
     .join(isMac ? "" : "+");
 }
+
+/**
+ * A binding in the syntax the native menu bar speaks, or null when it has no
+ * equivalent there. Only macOS needs this: a menu item's key equivalent is
+ * taken by the system before the webview is offered the key at all, so a
+ * shortcut that collides with one has to be served by the menu instead.
+ */
+export function toAccelerator(binding: string): string | null {
+  if (!isCompleteBinding(binding)) return null;
+
+  const parts = binding.split("+");
+  const key = parts[parts.length - 1];
+
+  const modifiers = parts.slice(0, -1).map((part) => {
+    switch (part) {
+      case "mod":
+        return "CmdOrCtrl";
+      case "ctrl":
+        return "Control";
+      case "alt":
+        return "Alt";
+      case "shift":
+        return "Shift";
+      default:
+        return "";
+    }
+  });
+
+  if (modifiers.some((modifier) => !modifier)) return null;
+  return [...modifiers, key.toUpperCase()].join("+");
+}

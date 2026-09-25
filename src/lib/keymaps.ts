@@ -102,13 +102,13 @@ export const KEYMAP_ACTIONS: KeymapDefinition[] = [
     defaultBinding: "ctrl+tab",
   },
   {
-    // Deliberately not mod+w: on macOS that's the native "Close Window" menu
-    // shortcut, which fires before the webview ever sees the key and would
-    // close the whole app instead of the tab.
+    // On macOS this is the native "Close Window" shortcut, which fires before
+    // the webview ever sees the key - so the app replaces that menu item with
+    // one of its own rather than leaving mod+w closing the whole window.
     id: "close-tab",
     label: "Close Tab",
     description: "Close the current tab",
-    defaultBinding: "mod+shift+w",
+    defaultBinding: "mod+w",
   },
 ];
 

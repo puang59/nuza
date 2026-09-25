@@ -8,6 +8,7 @@ import Sidebar, { SidebarHandle } from "./components/Sidebar";
 import SettingsModal from "./components/SettingsModal";
 import FileSearchPalette from "./components/FileSearchPalette";
 import { useKeymaps, useKeymapListener } from "./hooks/useKeymaps";
+import { useCloseTabMenu } from "./hooks/useCloseTabMenu";
 import { useFileOperations } from "./hooks/useFileOperations";
 import { useVimMode } from "./hooks/useVimMode";
 import { useVaults } from "./hooks/useVaults";
@@ -141,6 +142,11 @@ function App() {
   const openSettings = useCallback(() => setIsSettingsOpen(true), []);
   const closeQuickOpen = useCallback(() => setIsQuickOpenOpen(false), []);
 
+  // Named rather than inlined into the handler table: the macOS menu bar needs
+  // the same action, since ⌘W is a key equivalent there and never reaches the
+  // keymap listener.
+  const closeCurrentTab = useCallback(() => closeFile(currentFile), [closeFile, currentFile]);
+
   const keymapHandlers = useMemo(
     () => ({
       "toggle-sidebar": toggleSidebar,
@@ -161,12 +167,13 @@ function App() {
       "next-tab": () => cycleFile(1),
       "previous-tab": () => cycleFile(-1),
       "recent-tab": switchToRecent,
-      "close-tab": () => closeFile(currentFile),
+      "close-tab": closeCurrentTab,
     }),
-    [save, openFolder, checkForUpdates, setVimEnabled, setEditorFontSize, cycleFile, switchToRecent, closeFile, currentFile, toggleSidebar]
+    [save, openFolder, checkForUpdates, setVimEnabled, setEditorFontSize, cycleFile, switchToRecent, closeCurrentTab, toggleSidebar]
   );
 
   useKeymapListener(keymapBindings, keymapHandlers);
+  useCloseTabMenu(keymapBindings["close-tab"], closeCurrentTab);
 
   // mod+1..8 jump to that tab and mod+9 to the last, matching what browsers and
   // editors do. These stay fixed rather than joining the rebindable keymap list,
