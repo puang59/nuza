@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { ArrowDownCircle, PanelLeft, RefreshCw, Save, Settings } from "lucide-react";
 import { UpdateStatus } from "@/hooks/useAppUpdater";
 import { isMacPlatform } from "@/lib/platform";
@@ -122,7 +123,7 @@ function UpdateButton({
 }
 
 /** The draggable title bar: app name on the left, action buttons on the right. */
-export default function EditorHeader({
+function EditorHeader({
   updateStatus,
   version,
   openPaths,
@@ -196,3 +197,5 @@ export default function EditorHeader({
     </header>
   );
 }
+
+export default memo(EditorHeader);

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 
 /** Width of the fade at each end of the strip when there's more to scroll to. */
@@ -30,7 +30,7 @@ function prefersReducedMotion() {
  * The strip is sized to its content rather than filling the bar, so whatever
  * space the tabs don't need stays draggable for moving the window.
  */
-export default function TabBar({ paths, activePath, dirtyPaths, onSelect, onClose }: TabBarProps) {
+function TabBar({ paths, activePath, dirtyPaths, onSelect, onClose }: TabBarProps) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [fade, setFade] = useState({ start: false, end: false });
 
@@ -155,3 +155,5 @@ export default function TabBar({ paths, activePath, dirtyPaths, onSelect, onClos
     </div>
   );
 }
+
+export default memo(TabBar);

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EditorView } from "@codemirror/view";
 import { invoke } from "@tauri-apps/api/core";
 import EditorHeader from "./components/EditorHeader";
@@ -90,11 +90,16 @@ function App() {
   }, [transparencyEnabled]);
 
   const sidebarRef = useRef<SidebarHandle>(null);
-  const now = new Date().toLocaleString();
+
+  // Stable identities, so the memoised chrome around the editor is not
+  // re-rendered by a handler that was rebuilt for no reason.
+  const toggleSidebar = useCallback(() => setIsSidebarOpen((open) => !open), []);
+  const openSettings = useCallback(() => setIsSettingsOpen(true), []);
+  const closeQuickOpen = useCallback(() => setIsQuickOpenOpen(false), []);
 
   const keymapHandlers = useMemo(
     () => ({
-      "toggle-sidebar": () => setIsSidebarOpen((open) => !open),
+      "toggle-sidebar": toggleSidebar,
       "save-file": save,
       "open-folder": openFolder,
       "quick-open": () => setIsQuickOpenOpen((open) => !open),
@@ -114,7 +119,7 @@ function App() {
       "recent-tab": switchToRecent,
       "close-tab": () => closeFile(currentFile),
     }),
-    [save, openFolder, checkForUpdates, setVimEnabled, setEditorFontSize, cycleFile, switchToRecent, closeFile, currentFile]
+    [save, openFolder, checkForUpdates, setVimEnabled, setEditorFontSize, cycleFile, switchToRecent, closeFile, currentFile, toggleSidebar]
   );
 
   useKeymapListener(keymapBindings, keymapHandlers);
@@ -173,9 +178,9 @@ function App() {
         onCloseTab={closeFile}
         onCheckUpdates={checkForUpdates}
         onInstallUpdate={installUpdate}
-        onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenSettings={openSettings}
         onSave={save}
-        onToggleSidebar={() => setIsSidebarOpen((open) => !open)}
+        onToggleSidebar={toggleSidebar}
       />
 
       <div className="flex-1 min-h-0 px-4 flex w-full relative z-20">
@@ -222,11 +227,11 @@ function App() {
         </div>
       </div>
 
-      <StatusBar vimEnabled={vimEnabled} mode={mode} currentFile={currentFile} timestamp={now} />
+      <StatusBar vimEnabled={vimEnabled} mode={mode} currentFile={currentFile} />
 
       <FileSearchPalette
         isOpen={isQuickOpenOpen}
-        onClose={() => setIsQuickOpenOpen(false)}
+        onClose={closeQuickOpen}
         data={folderData}
         openPaths={openPaths}
         currentFile={currentFile}

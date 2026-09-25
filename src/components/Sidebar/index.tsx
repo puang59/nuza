@@ -1,4 +1,4 @@
-import { Ref, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { memo, Ref, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { ChevronsDownUp, FilePlus, FolderPlus, Search, X } from "lucide-react";
 import { cn } from "cn";
 import { searchFiles } from "@/lib/fileSearch";
@@ -31,7 +31,7 @@ interface SidebarProps {
   ref?: Ref<SidebarHandle>;
 }
 
-export default function Sidebar({
+function Sidebar({
   data,
   rootPath,
   onOpenFolder,
@@ -390,3 +390,5 @@ export default function Sidebar({
     </aside>
   );
 }
+
+export default memo(Sidebar);

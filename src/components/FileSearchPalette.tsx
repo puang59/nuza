@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import { cn } from "cn";
 import { useExitAnimation } from "@/hooks/useExitAnimation";
@@ -22,7 +22,7 @@ interface FileSearchPaletteProps {
  * the sidebar being open at all. Translucent over the document rather than
  * opaque, so it reads as sitting above the note you were just reading.
  */
-export default function FileSearchPalette({
+function FileSearchPalette({
   isOpen,
   onClose,
   data,
@@ -151,3 +151,5 @@ export default function FileSearchPalette({
     </div>
   );
 }
+
+export default memo(FileSearchPalette);
