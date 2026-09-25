@@ -1,7 +1,7 @@
 import { syntaxTree } from "@codemirror/language";
 import { EditorState, Range, StateField, Text } from "@codemirror/state";
 import { Decoration, DecorationSet, EditorView } from "@codemirror/view";
-import type { SyntaxNode, SyntaxNodeRef } from "@lezer/common";
+import type { SyntaxNode, SyntaxNodeRef, Tree } from "@lezer/common";
 import { rendersAnything, sanitizeHtml } from "./sanitize";
 import { noteDirectory, resolveImageSource, safeExternalHref } from "./sources";
 import {
@@ -435,7 +435,8 @@ function decorateNode(node: SyntaxNodeRef, build: Build): boolean | undefined {
   return;
 }
 
-function buildDecorations(state: EditorState): DecorationSet {
+/** Decorations for the part of `state` between `from` and `to`, in document order. */
+function decorationsIn(state: EditorState, from: number, to: number) {
   const build: Build = {
     state,
     directory: state.facet(noteDirectory),
@@ -444,13 +445,62 @@ function buildDecorations(state: EditorState): DecorationSet {
   };
 
   syntaxTree(state).iterate({
+    from,
+    to,
     enter: (node) => decorateNode(node, build),
   });
 
-  // Sorted on the way in rather than built with a RangeSetBuilder: a pre-order
-  // walk hands us a block's line decoration after the inline decorations that
-  // belong to it, so the ranges do not arrive in document order.
-  return Decoration.set(build.out, true);
+  // Left unsorted for the caller to sort: a pre-order walk hands us a block's
+  // line decoration after the inline decorations that belong to it, so the
+  // ranges do not arrive in document order.
+  return build.out;
+}
+
+function buildDecorations(state: EditorState): DecorationSet {
+  return Decoration.set(decorationsIn(state, 0, state.doc.length), true);
+}
+
+/** A stretch of the document whose decorations have to be worked out again. */
+type Span = { from: number; to: number };
+
+/**
+ * The outermost block `pos` sits in - a paragraph, a list, a fenced code block.
+ * Rebuilding is done a block at a time because a block's decorations are
+ * decided together: a table's rows, a quote's lines, the run of text a fence
+ * swallows. Re-doing half of one would leave the other half stale.
+ */
+function enclosingBlock(tree: Tree, pos: number): Span {
+  let node = tree.resolveInner(pos, 1);
+  while (node.parent && node.parent.parent) node = node.parent;
+  return node.parent ? { from: node.from, to: node.to } : { from: pos, to: pos };
+}
+
+/** Grows `span` to whole lines, and to the blocks those lines belong to. */
+function widen(state: EditorState, tree: Tree, span: Span): Span {
+  const length = state.doc.length;
+  const start = state.doc.lineAt(Math.max(0, Math.min(span.from, length)));
+  const end = state.doc.lineAt(Math.max(0, Math.min(span.to, length)));
+  const head = enclosingBlock(tree, start.from);
+  const tail = enclosingBlock(tree, end.to);
+
+  return {
+    from: Math.max(0, Math.min(start.from, head.from)),
+    to: Math.min(length, Math.max(end.to, tail.to)),
+  };
+}
+
+/** Overlapping spans folded together, in document order. */
+function merge(spans: Span[]): Span[] {
+  const sorted = spans.slice().sort((a, b) => a.from - b.from);
+  const merged: Span[] = [];
+
+  for (const span of sorted) {
+    const last = merged[merged.length - 1];
+    if (last && span.from <= last.to) last.to = Math.max(last.to, span.to);
+    else merged.push({ ...span });
+  }
+
+  return merged;
 }
 
 /**
@@ -458,18 +508,65 @@ function buildDecorations(state: EditorState): DecorationSet {
  * because rules and tables are replaced with *block* widgets, and CodeMirror
  * only accepts those from state - it has to know a line's height before it
  * decides what to draw.
+ *
+ * A state field sees the whole document rather than the part of it on screen,
+ * so the work is kept down by only ever redoing the blocks that an edit or a
+ * caret move could have changed, and carrying the rest across untouched. That
+ * matters most on a long document, where rebuilding everything would put the
+ * length of the file into the cost of a single keystroke.
  */
 export const liveMarkdownPreview = StateField.define<DecorationSet>({
   create: (state) => buildDecorations(state),
 
   update(decorations, transaction) {
-    const changed =
-      transaction.docChanged ||
-      !transaction.state.selection.eq(transaction.startState.selection) ||
-      syntaxTree(transaction.state) !== syntaxTree(transaction.startState) ||
-      transaction.state.facet(noteDirectory) !== transaction.startState.facet(noteDirectory);
+    const { startState, state, changes } = transaction;
+    const oldTree = syntaxTree(startState);
+    const newTree = syntaxTree(state);
 
-    return changed ? buildDecorations(transaction.state) : decorations;
+    // Parsing in the background hands us a tree for text nobody touched, and
+    // there is no telling from here which part of it just became known - so
+    // this is the one case still worth a walk of the whole document. It
+    // happens while a file is being taken in, not while it is being written in.
+    if (
+      state.facet(noteDirectory) !== startState.facet(noteDirectory) ||
+      (newTree !== oldTree && !transaction.docChanged)
+    ) {
+      return buildDecorations(state);
+    }
+
+    const selectionMoved = !state.selection.eq(startState.selection);
+    if (!transaction.docChanged && !selectionMoved) return decorations;
+
+    // Both sides of the transaction have a say. What was edited or had the
+    // caret in it needs redoing, and so does wherever those things were
+    // before - the blocks they used to belong to are read differently now.
+    const spans: Span[] = [];
+    const carryOver = (span: Span) => {
+      const widened = widen(startState, oldTree, span);
+      spans.push({ from: changes.mapPos(widened.from, -1), to: changes.mapPos(widened.to, 1) });
+    };
+
+    for (const range of startState.selection.ranges) carryOver(range);
+    for (const range of state.selection.ranges) spans.push(widen(state, newTree, range));
+    changes.iterChangedRanges((fromA, toA, fromB, toB) => {
+      carryOver({ from: fromA, to: toA });
+      spans.push(widen(state, newTree, { from: fromB, to: toB }));
+    });
+
+    let updated = decorations.map(changes);
+    for (const span of merge(spans)) {
+      updated = updated.update({
+        // Everything the span touches is thrown away and worked out again;
+        // whole blocks are in there, so nothing half-decorated survives.
+        filter: () => false,
+        filterFrom: span.from,
+        filterTo: span.to,
+        add: decorationsIn(state, span.from, span.to),
+        sort: true,
+      });
+    }
+
+    return updated;
   },
 
   provide: (field) => EditorView.decorations.from(field),
