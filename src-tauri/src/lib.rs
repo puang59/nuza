@@ -92,12 +92,21 @@ struct OpenedFolder {
 /// contents as a tree, read recursively. Returns `None` if the user cancels.
 #[tauri::command]
 async fn load_folder_picker(app_handle: tauri::AppHandle) -> Result<Option<OpenedFolder>, String> {
+    let scope = app_handle.clone();
     block_on_picker(|send| {
         app_handle.dialog().file().pick_folder(move |folder_path| {
             let result = match folder_path {
                 Some(path) => {
                     let path_str = path.to_string();
-                    read_dir_recursive(Path::new(&path_str))
+                    // Images embedded in a note are served over the asset
+                    // protocol, which is handed the opened folder and nothing
+                    // else - a note is text from disk that anything could have
+                    // written, and it has no business reaching the rest of it.
+                    scope
+                        .asset_protocol_scope()
+                        .allow_directory(&path_str, true)
+                        .map_err(|e| e.to_string())
+                        .and_then(|_| read_dir_recursive(Path::new(&path_str)))
                         .map(|entries| Some(OpenedFolder { path: path_str, entries }))
                 }
                 None => Ok(None),
