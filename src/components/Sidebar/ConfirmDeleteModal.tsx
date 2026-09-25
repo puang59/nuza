@@ -47,7 +47,7 @@ export default function ConfirmDeleteModal({ target, onConfirm, onCancel }: Conf
       <div
         onClick={(e) => e.stopPropagation()}
         className={cn(
-          "w-[360px] max-w-full rounded-lg border border-zinc-700 bg-[#1E1E1E] p-5 shadow-xl",
+          "w-[360px] max-w-full rounded-lg border border-zinc-700 bg-[var(--nuza-bg)] p-5 shadow-xl",
           isClosing ? "animate-panel-out" : "animate-panel-in"
         )}
       >

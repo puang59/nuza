@@ -11,6 +11,7 @@ import { useKeymaps, useKeymapListener } from "./hooks/useKeymaps";
 import { useFileOperations } from "./hooks/useFileOperations";
 import { useVimMode } from "./hooks/useVimMode";
 import { useVaults } from "./hooks/useVaults";
+import { useAppearance } from "./hooks/useAppearance";
 import { useAppUpdater } from "./hooks/useAppUpdater";
 import { usePersistedState } from "./hooks/usePersistedState";
 import { useResizableSidebar } from "./hooks/useResizableSidebar";
@@ -34,13 +35,13 @@ function App() {
   // Off by default: Vim is something you go and turn on, not something a note
   // taking app should assume about whoever just opened it.
   const [vimEnabled, setVimEnabled] = usePersistedState("vimEnabled", false);
-  const [transparencyEnabled, setTransparencyEnabled] = usePersistedState("transparencyEnabled", true);
   const [autoUpdateEnabled, setAutoUpdateEnabled] = usePersistedState("autoUpdateEnabled", true);
   const [editorFont, setEditorFont] = usePersistedState("editorFont", DEFAULT_EDITOR_FONT);
   const [editorFontSize, setEditorFontSize] = usePersistedState("editorFontSize", DEFAULT_EDITOR_FONT_SIZE);
 
   const { module: vimModule, extension: vimExtension } = useVimMode(vimEnabled);
   const { vaults, remember: rememberVault, rename: renameVault, forget: forgetVault } = useVaults();
+  const { appearance, update: setAppearance, reset: resetAppearance } = useAppearance();
 
   const onFolderOpened = useCallback(
     (path: string) => {
@@ -110,11 +111,13 @@ function App() {
     if (lastUsed) void openVault(lastUsed.path);
   }, [vaults, openVault]);
 
+  // The native effect only has to be on while something is meant to show
+  // through; the amount itself is painted by the window's own background.
   useEffect(() => {
-    invoke("set_transparency", { enabled: transparencyEnabled }).catch((error) => {
+    invoke("set_transparency", { enabled: appearance.transparency > 0 }).catch((error) => {
       console.error("Failed to update transparency:", error);
     });
-  }, [transparencyEnabled]);
+  }, [appearance.transparency]);
 
   const sidebarRef = useRef<SidebarHandle>(null);
 
@@ -194,7 +197,10 @@ function App() {
   }, [vimModule, save]);
 
   return (
-    <main className={`h-screen flex flex-col text-white overflow-hidden ${transparencyEnabled ? "bg-transparent" : "bg-[#1E1E1E]"}`}>
+    <main
+      className="h-screen flex flex-col text-white overflow-hidden"
+      style={{ backgroundColor: "var(--nuza-bg-alpha)" }}
+    >
       <EditorHeader
         updateStatus={updateStatus}
         version={version}
@@ -282,8 +288,9 @@ function App() {
         onClose={() => setIsSettingsOpen(false)}
         vimEnabled={vimEnabled}
         setVimEnabled={setVimEnabled}
-        transparencyEnabled={transparencyEnabled}
-        setTransparencyEnabled={setTransparencyEnabled}
+        appearance={appearance}
+        setAppearance={setAppearance}
+        resetAppearance={resetAppearance}
         autoUpdateEnabled={autoUpdateEnabled}
         setAutoUpdateEnabled={setAutoUpdateEnabled}
         editorFont={editorFont}

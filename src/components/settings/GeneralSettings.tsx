@@ -9,14 +9,17 @@ import {
   clampEditorFontSize,
   listSystemFonts,
 } from "@/lib/fonts";
+import { Appearance, clampTransparency } from "@/lib/appearance";
+import ColorField from "./ColorField";
 import FontPicker from "./FontPicker";
 import SettingRow from "./SettingRow";
 
 interface GeneralSettingsProps {
   vimEnabled: boolean;
   setVimEnabled: (enabled: boolean) => void;
-  transparencyEnabled: boolean;
-  setTransparencyEnabled: (enabled: boolean) => void;
+  appearance: Appearance;
+  setAppearance: (change: Partial<Appearance>) => void;
+  resetAppearance: () => void;
   autoUpdateEnabled: boolean;
   setAutoUpdateEnabled: (enabled: boolean) => void;
   editorFont: string;
@@ -50,8 +53,9 @@ function macUpdateDescription(status: UpdateStatus, appVersion: string | null) {
 export default function GeneralSettings({
   vimEnabled,
   setVimEnabled,
-  transparencyEnabled,
-  setTransparencyEnabled,
+  appearance,
+  setAppearance,
+  resetAppearance,
   autoUpdateEnabled,
   setAutoUpdateEnabled,
   editorFont,
@@ -87,9 +91,54 @@ export default function GeneralSettings({
 
       <SettingRow
         title="Transparency"
-        description={`Use a translucent window background (${vibrancyLabel})`}
+        description={`How much of the desktop shows through (${vibrancyLabel})`}
       >
-        <Switch checked={transparencyEnabled} onCheckedChange={setTransparencyEnabled} />
+        <div className="flex w-40 items-center gap-3">
+          <input
+            type="range"
+            aria-label="Window transparency"
+            min={0}
+            max={100}
+            step={5}
+            value={appearance.transparency}
+            onChange={(event) => setAppearance({ transparency: clampTransparency(Number(event.target.value)) })}
+            className="nuza-slider min-w-0 flex-1"
+          />
+          <span className="w-9 shrink-0 text-right font-mono text-xs text-gray-400">
+            {appearance.transparency}%
+          </span>
+        </div>
+      </SettingRow>
+
+      <SettingRow title="Accent" description="Links, bullets, the caret and anything you can act on">
+        <ColorField label="Accent colour" value={appearance.accent} onChange={(accent) => setAppearance({ accent })} />
+      </SettingRow>
+
+      <SettingRow title="Background" description="The window behind everything, tinted by the transparency above">
+        <ColorField
+          label="Background colour"
+          value={appearance.background}
+          onChange={(background) => setAppearance({ background })}
+        />
+      </SettingRow>
+
+      <SettingRow title="Text" description="The ink notes are written in; headings and dimmed text follow it">
+        <div className="flex w-40 items-center gap-2">
+          <ColorField
+            label="Text colour"
+            value={appearance.foreground}
+            onChange={(foreground) => setAppearance({ foreground })}
+          />
+        </div>
+      </SettingRow>
+
+      <SettingRow title="Reset Colours" description="Put the accent, background and text back to how they started">
+        <button
+          onClick={resetAppearance}
+          className="cursor-pointer rounded-md border border-zinc-700 bg-zinc-800 px-3 py-1 text-xs text-white transition-colors hover:border-[var(--nuza-accent)]"
+        >
+          Reset
+        </button>
       </SettingRow>
 
       <SettingRow
@@ -108,7 +157,7 @@ export default function GeneralSettings({
           {updateStatus.state === "available" ? (
             <button
               onClick={onOpenDownloadPage}
-              className="bg-[#FF9696] hover:bg-[#FFB0B0] rounded-md px-3 py-1 text-xs font-medium text-black transition-colors cursor-pointer"
+              className="bg-[var(--nuza-accent)] hover:bg-[var(--nuza-accent-strong)] rounded-md px-3 py-1 text-xs font-medium text-black transition-colors cursor-pointer"
             >
               Download v{updateStatus.version}
             </button>
@@ -116,7 +165,7 @@ export default function GeneralSettings({
             <button
               onClick={onCheckUpdates}
               disabled={updateStatus.state === "checking"}
-              className="bg-zinc-800 border border-zinc-700 rounded-md px-3 py-1 text-xs text-white hover:border-[#FF9696] transition-colors cursor-pointer disabled:cursor-default disabled:opacity-70"
+              className="bg-zinc-800 border border-zinc-700 rounded-md px-3 py-1 text-xs text-white hover:border-[var(--nuza-accent)] transition-colors cursor-pointer disabled:cursor-default disabled:opacity-70"
             >
               {updateStatus.state === "checking" ? "Checking…" : "Check for Updates"}
             </button>
@@ -144,7 +193,7 @@ export default function GeneralSettings({
             onKeyDown={(e) => {
               if (e.key === "Enter") e.currentTarget.blur();
             }}
-            className="w-full bg-zinc-800 border border-zinc-700 rounded-md pl-2 pr-16 py-1 text-xs text-white text-right outline-none focus-visible:border-[#FF9696] [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            className="w-full bg-zinc-800 border border-zinc-700 rounded-md pl-2 pr-16 py-1 text-xs text-white text-right outline-none focus-visible:border-[var(--nuza-accent)] [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
           />
           {/* Native number-input spinner arrows render black on some platforms and are
               unreadable on this dark background, so we hide them (above) and drive the

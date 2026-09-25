@@ -75,7 +75,7 @@ function VaultSwitcher({ vaults, currentPath, onSelect, onOpenFolder, onRename, 
       {isMounted && (
         <div
           className={cn(
-            "absolute bottom-full left-2 right-2 z-50 mb-1 overflow-hidden rounded-md border border-zinc-700 bg-[#252526] shadow-xl",
+            "absolute bottom-full left-2 right-2 z-50 mb-1 overflow-hidden rounded-md border border-zinc-700 bg-[var(--nuza-bg)] shadow-xl",
             // On the way out it stops taking clicks: a row that is fading
             // away should not still be pressable.
             isClosing ? "animate-rise-out pointer-events-none" : "animate-rise-in"
@@ -107,7 +107,7 @@ function VaultSwitcher({ vaults, currentPath, onSelect, onOpenFolder, onRename, 
                       title={vault.path}
                       className={cn(
                         "min-w-0 flex-1 cursor-pointer truncate px-1.5 py-1 text-left text-sm",
-                        vault.path === currentPath ? "text-[#FF9696]" : "text-zinc-300"
+                        vault.path === currentPath ? "text-[var(--nuza-accent)]" : "text-zinc-300"
                       )}
                     >
                       {vault.name}

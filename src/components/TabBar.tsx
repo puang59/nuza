@@ -112,7 +112,7 @@ function TabBar({ paths, activePath, dirtyPaths, onSelect, onClose }: TabBarProp
                 onSelect(path);
               }
             }}
-            className={`animate-fade-in group relative flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-md pl-2.5 pr-1 text-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-[#FF9696] ${
+            className={`animate-fade-in group relative flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-md pl-2.5 pr-1 text-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-[var(--nuza-accent)] ${
               isActive
                 ? "bg-zinc-800 text-white"
                 : "text-zinc-500 hover:bg-zinc-800/40 hover:text-zinc-300"
@@ -122,7 +122,7 @@ function TabBar({ paths, activePath, dirtyPaths, onSelect, onClose }: TabBarProp
                 so the accent stays a straight line instead of bending around the
                 pill's radius. */}
             {isActive && (
-              <span className="pointer-events-none absolute inset-x-2 bottom-0 h-[2px] rounded-full bg-[#FF9696]" />
+              <span className="pointer-events-none absolute inset-x-2 bottom-0 h-[2px] rounded-full bg-[var(--nuza-accent)]" />
             )}
 
             <span className="max-w-[140px] truncate">{fileName(path)}</span>

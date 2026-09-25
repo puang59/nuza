@@ -10,21 +10,21 @@ import { tags as t } from "@lezer/highlight";
  * off without a second palette.
  */
 const ink = {
-  text: "#D4D4D8",
-  heading: "#FAFAFA",
-  muted: "#8A8A93",
-  accent: "#FF9696",
+  text: "var(--nuza-fg)",
+  heading: "var(--nuza-heading)",
+  muted: "var(--nuza-muted)",
+  accent: "var(--nuza-accent)",
   code: "#9696FF",
-  caret: "#FF9696",
+  caret: "var(--nuza-accent)",
   /* Warm, and keyed to the caret: a drag-select reads as one gesture rather
      than as the browser's default blue turning up uninvited. */
-  selection: "rgba(255, 150, 150, 0.24)",
+  selection: "var(--nuza-accent-wash)",
   /* Neutral when the editor does not have focus, so it is obvious that a
      highlighted run is a leftover rather than a live selection. */
-  selectionInactive: "rgba(255, 255, 255, 0.09)",
-  hairline: "rgba(255, 255, 255, 0.10)",
-  surface: "rgba(255, 255, 255, 0.045)",
-  surfaceStrong: "rgba(255, 255, 255, 0.07)",
+  selectionInactive: "var(--nuza-selection-idle)",
+  hairline: "var(--nuza-hairline)",
+  surface: "var(--nuza-surface)",
+  surfaceStrong: "var(--nuza-surface-strong)",
 };
 
 /**
@@ -81,7 +81,7 @@ const editorTheme = EditorView.theme(
     /* Vim's block cursor draws itself as a background, not a border. */
     ".cm-fat-cursor": {
       background: `${ink.caret} !important`,
-      color: "#1E1E1E !important",
+      color: "var(--nuza-bg) !important",
     },
     "&:not(.cm-focused) .cm-fat-cursor": {
       background: "none !important",
@@ -119,7 +119,7 @@ const editorTheme = EditorView.theme(
        a mid-grey bar with borderless, transparent controls. Only the colours
        are restated here - the layout is left to the base theme. */
     ".cm-panels": {
-      backgroundColor: "#1E1E1E",
+      backgroundColor: "var(--nuza-bg)",
       color: ink.text,
       fontSize: "12px",
     },
@@ -190,7 +190,7 @@ const editorTheme = EditorView.theme(
     /* ---- Lists --------------------------------------------------------- */
 
     ".cm-md-bullet": {
-      color: "rgba(255, 150, 150, 0.85)",
+      color: "var(--nuza-accent-strong)",
       display: "inline-block",
       fontSize: "1.25em",
       lineHeight: "1",
@@ -269,7 +269,7 @@ const editorTheme = EditorView.theme(
     ".cm-md-link": {
       color: ink.accent,
       textDecoration: "underline",
-      textDecorationColor: "rgba(255, 150, 150, 0.35)",
+      textDecorationColor: "var(--nuza-accent-underline)",
       textUnderlineOffset: "0.2em",
       cursor: "pointer",
       transition: "text-decoration-color 140ms ease",
@@ -533,14 +533,14 @@ const markdownHighlighting = HighlightStyle.define([
   { tag: [t.processingInstruction, t.meta], color: ink.muted },
 
   { tag: [t.keyword, t.moduleKeyword], color: "#C792EA" },
-  { tag: [t.controlKeyword, t.operatorKeyword], color: "#FF9696" },
+  { tag: [t.controlKeyword, t.operatorKeyword], color: "var(--nuza-accent)" },
   { tag: [t.string, t.regexp], color: "#96FF96" },
   { tag: [t.number, t.bool, t.null], color: "#F5C97B" },
   { tag: [t.variableName, t.propertyName], color: ink.text },
   { tag: [t.function(t.variableName), t.function(t.propertyName)], color: "#9696FF" },
   { tag: [t.typeName, t.className, t.namespace], color: "#7BD7F5" },
   { tag: t.comment, color: ink.muted, fontStyle: "italic" },
-  { tag: t.invalid, color: "#FF9696" },
+  { tag: t.invalid, color: "var(--nuza-accent)" },
 ]);
 
 /** The complete look of the writing surface: layout, colours and highlighting. */

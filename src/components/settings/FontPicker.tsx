@@ -156,7 +156,7 @@ export default function FontPicker({ fonts, value, onChange }: FontPickerProps) 
         onClick={() => (isOpen ? setIsOpen(false) : open())}
         className={cn(
           "flex w-40 cursor-pointer items-center justify-between gap-2 rounded-md border bg-zinc-800 px-2 py-1 text-xs text-white outline-none transition-colors",
-          isOpen ? "border-[#FF9696]" : "border-zinc-700 hover:border-zinc-600"
+          isOpen ? "border-[var(--nuza-accent)]" : "border-zinc-700 hover:border-zinc-600"
         )}
       >
         <span className="truncate" style={{ fontFamily: editorFontFamily(value) }}>
@@ -175,7 +175,7 @@ export default function FontPicker({ fonts, value, onChange }: FontPickerProps) 
             ref={popupRef}
             style={placement}
             onKeyDown={onKeyDown}
-            className="animate-menu-in z-60 flex flex-col overflow-hidden rounded-md border border-zinc-700 bg-[#1E1E1E] shadow-xl"
+            className="animate-menu-in z-60 flex flex-col overflow-hidden rounded-md border border-zinc-700 bg-[var(--nuza-bg)] shadow-xl"
           >
             <div className="flex items-center gap-2 border-b border-zinc-800 px-2 py-1.5">
               <Search size={12} className="shrink-0 text-gray-500" />
@@ -208,7 +208,7 @@ export default function FontPicker({ fonts, value, onChange }: FontPickerProps) 
                   <span className="truncate" style={{ fontFamily: editorFontFamily(font) }}>
                     {labelFor(font)}
                   </span>
-                  {font === value && <Check size={12} className="shrink-0 text-[#FF9696]" />}
+                  {font === value && <Check size={12} className="shrink-0 text-[var(--nuza-accent)]" />}
                 </button>
               ))}
 

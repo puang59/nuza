@@ -14,7 +14,7 @@ export default function MatchedText({ name, highlight }: { name: string; highlig
         // splitOnHighlight always starts with an unmatched run, so the odd
         // ones are the matches.
         index % 2 === 1 ? (
-          <mark key={index} className="bg-transparent font-medium text-[#FF9696]">
+          <mark key={index} className="bg-transparent font-medium text-[var(--nuza-accent)]">
             {run}
           </mark>
         ) : (

@@ -1,6 +1,28 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap");
 @import "tailwindcss";
 
+/*
+ * The defaults, so the window is painted before any JavaScript has run. From
+ * then on these are overwritten on the root element by the appearance hook.
+ */
+:root {
+  --nuza-accent: #ff9696;
+  --nuza-accent-strong: rgba(255, 150, 150, 0.85);
+  --nuza-accent-wash: rgba(255, 150, 150, 0.24);
+  --nuza-accent-faint: rgba(255, 150, 150, 0.045);
+  --nuza-accent-line: rgba(255, 150, 150, 0.5);
+  --nuza-accent-underline: rgba(255, 150, 150, 0.35);
+  --nuza-bg: #1e1e1e;
+  --nuza-bg-alpha: rgba(30, 30, 30, 0);
+  --nuza-fg: #d4d4d8;
+  --nuza-heading: rgb(226, 226, 230);
+  --nuza-muted: rgb(139, 139, 146);
+  --nuza-hairline: rgba(212, 212, 216, 0.1);
+  --nuza-surface: rgba(212, 212, 216, 0.045);
+  --nuza-surface-strong: rgba(212, 212, 216, 0.07);
+  --nuza-selection-idle: rgba(212, 212, 216, 0.09);
+}
+
 html,
 body,
 #root {
@@ -30,7 +52,7 @@ textarea,
 
 /* The editor draws its own selection layer; this covers the text fields. */
 ::selection {
-  background-color: rgba(255, 150, 150, 0.24);
+  background-color: var(--nuza-accent-wash);
 }
 
 .cm-editor {
@@ -65,7 +87,7 @@ textarea,
   right: 0 !important;
   z-index: 50;
 
-  background-color: #1E1E1E !important;
+  background-color: var(--nuza-bg) !important;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
   font-weight: bold !important;
   
@@ -79,7 +101,7 @@ textarea,
 
 .cm-vim-panel input {
   background: transparent !important;
-  color: #A1A1AA !important; /* text-gray-400 */
+  color: var(--nuza-muted) !important;
   border: none !important;
   outline: none !important;
   font-family: inherit !important;
@@ -270,14 +292,67 @@ textarea,
 }
 
 /*
+ * The transparency slider. A range input is styled per-engine rather than by
+ * one standard, so the track and the thumb are drawn for both WebKit (macOS,
+ * Linux) and Gecko/Blink rather than left to whatever the platform ships.
+ */
+.nuza-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 1rem;
+  background: transparent;
+  cursor: pointer;
+}
+
+.nuza-slider::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 999px;
+  background: var(--nuza-surface-strong);
+}
+
+.nuza-slider::-moz-range-track {
+  height: 3px;
+  border-radius: 999px;
+  background: var(--nuza-surface-strong);
+}
+
+.nuza-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4.5px;
+  border: none;
+  border-radius: 999px;
+  background: var(--nuza-accent);
+  transition: transform 120ms ease;
+}
+
+.nuza-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: none;
+  border-radius: 999px;
+  background: var(--nuza-accent);
+}
+
+.nuza-slider:hover::-webkit-slider-thumb {
+  transform: scale(1.15);
+}
+
+.nuza-slider:focus-visible {
+  outline: none;
+}
+
+/*
  * The writing surface while a file is being dragged onto it. Drawn on the frame
  * around the editor rather than the editor itself, which is pinned by the rules
  * above, and kept to an outline so the text underneath stays readable.
  */
 .cm-drop-target {
-  outline: 2px dashed rgba(255, 150, 150, 0.5);
+  outline: 2px dashed var(--nuza-accent-line);
   outline-offset: -8px;
-  background-color: rgba(255, 150, 150, 0.045);
+  background-color: var(--nuza-accent-faint);
 }
 
 .cm-drop-target,
@@ -304,7 +379,8 @@ textarea,
   .sidebar-transition,
   .sidebar-search,
   .cm-drop-target,
-  .cm-md-image img {
+  .cm-md-image img,
+  .nuza-slider::-webkit-slider-thumb {
     transition: none;
   }
 

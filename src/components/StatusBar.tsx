@@ -42,7 +42,7 @@ function StatusBar({ mode, currentFile, subscribeToStats }: StatusBarProps) {
   const { words, line, column } = useDocumentStats(subscribeToStats);
 
   return (
-    <div className="bg-[#1E1E1E] flex items-center justify-between font-bold font-mono shrink-0 h-7 relative z-10">
+    <div className="bg-[var(--nuza-bg)] flex items-center justify-between font-bold font-mono shrink-0 h-7 relative z-10">
       <div className="flex items-center h-full">
         <span className={`text-xs uppercase px-4 h-full flex items-center w-fit ${modeStyle ?? ""}`}>
           {modeStyle ? `--${mode}--` : ""}
@@ -57,7 +57,7 @@ function StatusBar({ mode, currentFile, subscribeToStats }: StatusBarProps) {
 
       <span className="font-light text-xs text-gray-400 flex items-center gap-2 h-full">
         {fileName}
-        <span className="text-xs font-medium uppercase px-4 h-full flex items-center bg-[#FF9696] text-black w-fit ml-2">
+        <span className="text-xs font-medium uppercase px-4 h-full flex items-center bg-[var(--nuza-accent)] text-black w-fit ml-2">
           {timestamp}
         </span>
       </span>

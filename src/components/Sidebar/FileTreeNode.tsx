@@ -19,7 +19,7 @@ export function NewEntryRow({
   return (
     <li className="flex items-center gap-1.5 py-1 pl-2 pr-2">
       {type === "folder" ? (
-        <Folder className="h-4 w-4 shrink-0 text-[#FF9696]" />
+        <Folder className="h-4 w-4 shrink-0 text-[var(--nuza-accent)]" />
       ) : (
         <File className="h-4 w-4 shrink-0 text-zinc-500" />
       )}
@@ -135,8 +135,8 @@ export default function FileTreeNode({ entry }: { entry: FileEntry }) {
             } ${isBeingDragged ? "opacity-40" : ""}`}
           >
             <ChevronRight className="h-3.5 w-3.5 shrink-0 text-zinc-500 transition-transform group-open:rotate-90" />
-            <Folder className="h-4 w-4 shrink-0 text-[#FF9696] group-open:hidden" />
-            <FolderOpen className="hidden h-4 w-4 shrink-0 text-[#FF9696] group-open:block" />
+            <Folder className="h-4 w-4 shrink-0 text-[var(--nuza-accent)] group-open:hidden" />
+            <FolderOpen className="hidden h-4 w-4 shrink-0 text-[var(--nuza-accent)] group-open:block" />
 
             {isRenaming ? (
               <InlineInput

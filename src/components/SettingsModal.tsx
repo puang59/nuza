@@ -5,6 +5,7 @@ import { useExitAnimation } from "@/hooks/useExitAnimation";
 import { KeymapAction } from "@/lib/keymaps";
 import { UpdateStatus } from "@/hooks/useAppUpdater";
 import GeneralSettings from "./settings/GeneralSettings";
+import { Appearance } from "@/lib/appearance";
 import KeymapSettings from "./settings/KeymapSettings";
 
 type SettingsSection = "general" | "keymaps";
@@ -19,8 +20,9 @@ interface SettingsModalProps {
   onClose: () => void;
   vimEnabled: boolean;
   setVimEnabled: (enabled: boolean) => void;
-  transparencyEnabled: boolean;
-  setTransparencyEnabled: (enabled: boolean) => void;
+  appearance: Appearance;
+  setAppearance: (change: Partial<Appearance>) => void;
+  resetAppearance: () => void;
   autoUpdateEnabled: boolean;
   setAutoUpdateEnabled: (enabled: boolean) => void;
   editorFont: string;
@@ -42,8 +44,9 @@ export default function SettingsModal({
   onClose,
   vimEnabled,
   setVimEnabled,
-  transparencyEnabled,
-  setTransparencyEnabled,
+  appearance,
+  setAppearance,
+  resetAppearance,
   autoUpdateEnabled,
   setAutoUpdateEnabled,
   editorFont,
@@ -86,7 +89,7 @@ export default function SettingsModal({
       <div
         onClick={(e) => e.stopPropagation()}
         className={cn(
-          "bg-[#1E1E1E] border border-zinc-700 rounded-lg shadow-xl w-[640px] h-[520px] max-w-full max-h-full overflow-hidden flex flex-col",
+          "bg-[var(--nuza-bg)] border border-zinc-700 rounded-lg shadow-xl w-[640px] h-[520px] max-w-full max-h-full overflow-hidden flex flex-col",
           isClosing ? "animate-panel-out" : "animate-panel-in"
         )}
       >
@@ -124,8 +127,9 @@ export default function SettingsModal({
               <GeneralSettings
                 vimEnabled={vimEnabled}
                 setVimEnabled={setVimEnabled}
-                transparencyEnabled={transparencyEnabled}
-                setTransparencyEnabled={setTransparencyEnabled}
+                appearance={appearance}
+                setAppearance={setAppearance}
+                resetAppearance={resetAppearance}
                 autoUpdateEnabled={autoUpdateEnabled}
                 setAutoUpdateEnabled={setAutoUpdateEnabled}
                 editorFont={editorFont}

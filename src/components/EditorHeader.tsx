@@ -67,7 +67,7 @@ function UpdateButton({
     return (
       <button
         data-tauri-drag-region="false"
-        className="flex items-center gap-1.5 rounded-full bg-[#FF9696] px-2.5 py-0.5 text-xs font-medium text-black hover:bg-[#FFB0B0] cursor-pointer transition-colors"
+        className="flex items-center gap-1.5 rounded-full bg-[var(--nuza-accent)] px-2.5 py-0.5 text-xs font-medium text-black hover:bg-[var(--nuza-accent-strong)] cursor-pointer transition-colors"
         onClick={onOpenSettings}
         title={`nuza v${status.version} is available - open Settings to download it`}
       >
@@ -83,7 +83,7 @@ function UpdateButton({
       <button
         data-tauri-drag-region="false"
         className={`flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium text-black cursor-pointer transition-colors disabled:cursor-default disabled:opacity-70 ${
-          failed ? "bg-red-400 hover:bg-red-300" : "bg-[#FF9696] hover:bg-[#FFB0B0]"
+          failed ? "bg-red-400 hover:bg-red-300" : "bg-[var(--nuza-accent)] hover:bg-[var(--nuza-accent-strong)]"
         }`}
         onClick={onInstallUpdate}
         disabled={status.state === "installing"}
@@ -110,7 +110,7 @@ function UpdateButton({
     <button
       data-tauri-drag-region="false"
       className={`flex items-center gap-1.5 text-sm hover:text-white cursor-pointer transition-colors disabled:cursor-default ${
-        status.state === "error" ? "text-[#FF9696]" : "text-gray-400"
+        status.state === "error" ? "text-[var(--nuza-accent)]" : "text-gray-400"
       }`}
       onClick={onCheckUpdates}
       disabled={busy}

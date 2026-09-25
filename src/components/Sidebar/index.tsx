@@ -251,7 +251,7 @@ function Sidebar({
         aria-label="Resize sidebar"
         title="Drag to resize, double-click to reset"
         className={`absolute -left-1 top-0 z-10 h-full w-2 cursor-col-resize after:absolute after:inset-y-0 after:left-1 after:w-px after:transition-colors ${
-          isResizing ? "after:bg-[#FF9696]" : "after:bg-transparent hover:after:bg-zinc-500"
+          isResizing ? "after:bg-[var(--nuza-accent)]" : "after:bg-transparent hover:after:bg-zinc-500"
         }`}
       />
 
@@ -270,7 +270,7 @@ function Sidebar({
               title="Search Files"
               className={cn(
                 "cursor-pointer rounded p-1 transition-colors hover:bg-zinc-800 hover:text-white",
-                isSearching ? "text-[#FF9696]" : "text-zinc-500"
+                isSearching ? "text-[var(--nuza-accent)]" : "text-zinc-500"
               )}
             >
               <Search className="h-3.5 w-3.5" />
