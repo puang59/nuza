@@ -165,6 +165,24 @@ textarea,
   }
 }
 
+/*
+ * The vault list, which is anchored to the bottom of the sidebar and so rises
+ * into place rather than dropping into it.
+ */
+@keyframes nuza-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+}
+
+@keyframes nuza-rise-out {
+  to {
+    opacity: 0;
+    transform: translateY(4px) scale(0.99);
+  }
+}
+
 @keyframes nuza-fade-out {
   to {
     opacity: 0;
@@ -193,6 +211,16 @@ textarea,
 
 .animate-palette-in {
   animation: nuza-palette-in 170ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.animate-rise-in {
+  animation: nuza-rise-in 150ms cubic-bezier(0.22, 1, 0.36, 1);
+  transform-origin: bottom center;
+}
+
+.animate-rise-out {
+  animation: nuza-rise-out 130ms cubic-bezier(0.4, 0, 1, 1) forwards;
+  transform-origin: bottom center;
 }
 
 .animate-palette-out {
@@ -265,9 +293,11 @@ textarea,
   .animate-panel-in,
   .animate-menu-in,
   .animate-palette-in,
+  .animate-rise-in,
   .animate-fade-out,
   .animate-panel-out,
-  .animate-palette-out {
+  .animate-palette-out,
+  .animate-rise-out {
     animation: none;
   }
 
