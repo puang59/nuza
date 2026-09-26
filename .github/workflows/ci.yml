@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   frontend:
-    name: typecheck and build
+    name: typecheck, build and test
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -37,6 +37,9 @@ jobs:
       # `bun run build` is `tsc && vite build`, so this is the typecheck too.
       - name: build
         run: bun run build
+
+      - name: test
+        run: bun test
 
   lint:
     name: eslint and prettier
