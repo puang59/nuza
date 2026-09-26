@@ -1,7 +1,9 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 
+use std::collections::HashSet;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use tauri::Manager;
 #[cfg(target_os = "macos")]
 use tauri::{Emitter, Wry};
@@ -70,6 +72,81 @@ fn read_dir_recursive(path: &Path) -> Result<Vec<FileEntry>, String> {
     Ok(entries)
 }
 
+/// What the app is allowed to touch: the folder that is open, and whatever the
+/// user has pointed at directly through a save dialog.
+///
+/// Every filesystem command here takes a path from the frontend, and a note is
+/// text from disk that a sync client, a collaborator or a generator could have
+/// written. Without something in the way, the distance between a malformed note
+/// rendering wrong and `delete_entry` being handed someone's home directory is
+/// one bug in the markdown sanitiser. The asset protocol has been scoped to the
+/// open folder since it was added, for exactly this reason; this is the rest of
+/// it.
+#[derive(Default)]
+struct Vault {
+    /// The open folder, resolved. Nothing is allowed before one is opened.
+    root: Mutex<Option<PathBuf>>,
+    /// Files outside it the user chose in a native dialog, which is consent -
+    /// a scratch note saved to the desktop still has to be saved again.
+    chosen: Mutex<HashSet<PathBuf>>,
+}
+
+/// A lock, with a poisoned one read anyway: the data behind it is a path and a
+/// set of paths, and a panic elsewhere leaves both perfectly readable.
+fn locked<T>(lock: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// `resolved` itself, if it is somewhere the app is allowed to be.
+fn allow(vault: &Vault, resolved: PathBuf) -> Result<PathBuf, String> {
+    let inside = match locked(&vault.root).as_ref() {
+        Some(root) => resolved.starts_with(root),
+        None => false,
+    };
+
+    if inside || locked(&vault.chosen).contains(&resolved) {
+        Ok(resolved)
+    } else {
+        Err("That is outside the open folder".to_string())
+    }
+}
+
+/// `path`, resolved, if it is inside the open folder.
+///
+/// Resolved rather than compared as text: `..` and a symlink pointing out of
+/// the vault both read as vault paths right up until the OS has had its say.
+fn within_vault(vault: &Vault, path: &Path) -> Result<PathBuf, String> {
+    let resolved = path.canonicalize().map_err(|e| e.to_string())?;
+    allow(vault, resolved)
+}
+
+/// A note on its way back to disk: resolved outright when it is there, and
+/// through its parent when it is not, so a note deleted from under the app is
+/// still one the app may write back. Anything that *is* there - a dangling
+/// symlink included - goes the strict way and has to resolve into the vault.
+fn within_vault_to_write(vault: &Vault, path: &Path) -> Result<PathBuf, String> {
+    if path.symlink_metadata().is_ok() {
+        within_vault(vault, path)
+    } else {
+        within_vault_to_create(vault, path)
+    }
+}
+
+/// The same for somewhere that is about to exist: there is nothing yet to
+/// resolve, so the parent is resolved and the name put back on afterwards.
+/// This is also what stops a "name" of `../../elsewhere` from being one.
+fn within_vault_to_create(vault: &Vault, path: &Path) -> Result<PathBuf, String> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| "Cannot write to this path".to_string())?;
+    let name = path
+        .file_name()
+        .ok_or_else(|| "Invalid file name".to_string())?;
+
+    let resolved = parent.canonicalize().map_err(|e| e.to_string())?;
+    allow(vault, resolved.join(name))
+}
+
 /// Tauri's dialog pickers deliver their result via a callback fired from a
 /// separate thread, but a `#[tauri::command]` needs to return a value - this
 /// blocks the async command on a channel until that callback runs.
@@ -107,6 +184,11 @@ fn adopt_folder(app_handle: &tauri::AppHandle, path: String) -> Result<OpenedFol
         .allow_directory(&path, true)
         .map_err(|e| e.to_string())?;
 
+    // The one place the boundary is set. Resolved here so that every later
+    // check is a comparison between two paths the OS has already agreed on.
+    let resolved = directory.canonicalize().map_err(|e| e.to_string())?;
+    *locked(&app_handle.state::<Vault>().root) = Some(resolved);
+
     let entries = read_dir_recursive(directory)?;
     Ok(OpenedFolder { path, entries })
 }
@@ -134,8 +216,12 @@ fn open_folder(app_handle: tauri::AppHandle, path: String) -> Result<OpenedFolde
 }
 
 #[tauri::command]
-fn create_file(parent_path: String, name: String) -> Result<(), String> {
-    let path = Path::new(&parent_path).join(&name);
+fn create_file(
+    vault: tauri::State<Vault>,
+    parent_path: String,
+    name: String,
+) -> Result<(), String> {
+    let path = within_vault_to_create(&vault, &Path::new(&parent_path).join(&name))?;
     if path.exists() {
         return Err(format!("\"{}\" already exists", name));
     }
@@ -145,8 +231,12 @@ fn create_file(parent_path: String, name: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn create_folder(parent_path: String, name: String) -> Result<(), String> {
-    let path = Path::new(&parent_path).join(&name);
+fn create_folder(
+    vault: tauri::State<Vault>,
+    parent_path: String,
+    name: String,
+) -> Result<(), String> {
+    let path = within_vault_to_create(&vault, &Path::new(&parent_path).join(&name))?;
     if path.exists() {
         return Err(format!("\"{}\" already exists", name));
     }
@@ -156,31 +246,39 @@ fn create_folder(parent_path: String, name: String) -> Result<(), String> {
 /// Renames a file or folder in place, keeping it in the same parent
 /// directory. Returns the new full path.
 #[tauri::command]
-fn rename_entry(path: String, new_name: String) -> Result<String, String> {
-    let old = Path::new(&path);
+fn rename_entry(
+    vault: tauri::State<Vault>,
+    path: String,
+    new_name: String,
+) -> Result<String, String> {
+    let old = within_vault(&vault, Path::new(&path))?;
     let parent = old
         .parent()
         .ok_or_else(|| "Cannot rename this item".to_string())?;
-    let new_path = parent.join(&new_name);
+    let new_path = within_vault_to_create(&vault, &parent.join(&new_name))?;
     if new_path.exists() {
         return Err(format!("\"{}\" already exists", new_name));
     }
-    fs::rename(old, &new_path).map_err(|e| e.to_string())?;
+    fs::rename(&old, &new_path).map_err(|e| e.to_string())?;
     Ok(new_path.to_string_lossy().into_owned())
 }
 
 /// Moves a file or folder into `target_dir` (e.g. from a drag-and-drop),
 /// keeping its name. Returns the new full path.
 #[tauri::command]
-fn move_entry(path: String, target_dir: String) -> Result<String, String> {
-    let old = Path::new(&path);
+fn move_entry(
+    vault: tauri::State<Vault>,
+    path: String,
+    target_dir: String,
+) -> Result<String, String> {
+    let old = within_vault(&vault, Path::new(&path))?;
     let name = old
         .file_name()
         .ok_or_else(|| "Invalid path".to_string())?
         .to_owned();
-    let target = Path::new(&target_dir);
+    let target = within_vault(&vault, Path::new(&target_dir))?;
 
-    if old.is_dir() && (target == old || target.starts_with(old)) {
+    if old.is_dir() && (target == old || target.starts_with(&old)) {
         return Err("Cannot move a folder into itself".to_string());
     }
 
@@ -191,17 +289,17 @@ fn move_entry(path: String, target_dir: String) -> Result<String, String> {
             name.to_string_lossy()
         ));
     }
-    fs::rename(old, &new_path).map_err(|e| e.to_string())?;
+    fs::rename(&old, &new_path).map_err(|e| e.to_string())?;
     Ok(new_path.to_string_lossy().into_owned())
 }
 
 #[tauri::command]
-fn delete_entry(path: String) -> Result<(), String> {
-    let p = Path::new(&path);
+fn delete_entry(vault: tauri::State<Vault>, path: String) -> Result<(), String> {
+    let p = within_vault(&vault, Path::new(&path))?;
     if p.is_dir() {
-        fs::remove_dir_all(p).map_err(|e| e.to_string())
+        fs::remove_dir_all(&p).map_err(|e| e.to_string())
     } else {
-        fs::remove_file(p).map_err(|e| e.to_string())
+        fs::remove_file(&p).map_err(|e| e.to_string())
     }
 }
 
@@ -212,6 +310,7 @@ async fn save_file_picker(
     app_handle: tauri::AppHandle,
     content: String,
 ) -> Result<Option<String>, String> {
+    let chosen = app_handle.clone();
     block_on_picker(|send| {
         app_handle
             .dialog()
@@ -222,8 +321,17 @@ async fn save_file_picker(
                 let result = match file_path {
                     Some(path) => {
                         let path_str = path.to_string();
-                        match fs::write(&path_str, &content) {
-                            Ok(_) => Ok(Some(path_str)),
+                        match write_atomically(Path::new(&path_str), content.as_bytes()) {
+                            Ok(_) => {
+                                // Somewhere the user pointed at themselves, which
+                                // may well be outside the open folder. Recorded so
+                                // that the autosave that follows is allowed to
+                                // keep writing the note they just saved.
+                                if let Ok(resolved) = Path::new(&path_str).canonicalize() {
+                                    locked(&chosen.state::<Vault>().chosen).insert(resolved);
+                                }
+                                Ok(Some(path_str))
+                            }
                             Err(e) => Err(format!("Failed to write file: {}", e)),
                         }
                     }
@@ -319,7 +427,12 @@ fn preferred_directory(directory: &Path) -> std::path::PathBuf {
 /// Returns the full path actually written, which may have been renamed to
 /// avoid overwriting something.
 #[tauri::command]
-fn write_media(directory: String, name: String, data: String) -> Result<String, String> {
+fn write_media(
+    vault: tauri::State<Vault>,
+    directory: String,
+    name: String,
+    data: String,
+) -> Result<String, String> {
     use base64::Engine;
 
     let bytes = base64::engine::general_purpose::STANDARD
@@ -327,8 +440,12 @@ fn write_media(directory: String, name: String, data: String) -> Result<String, 
         .map_err(|e| format!("Could not read the dropped file: {}", e))?;
 
     let directory = preferred_directory(Path::new(&directory));
+    let directory = within_vault_to_write(&vault, &directory)?;
     fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
 
+    // Checked again now that it exists: create_dir_all resolves nothing, and a
+    // media folder that is a symlink out of the vault would have passed above.
+    let directory = within_vault(&vault, &directory)?;
     let path = unused_path(&directory, &safe_file_name(&name)?);
     fs::write(&path, bytes).map_err(|e| e.to_string())?;
 
@@ -336,8 +453,9 @@ fn write_media(directory: String, name: String, data: String) -> Result<String, 
 }
 
 #[tauri::command]
-fn read_file(path: String) -> Result<String, String> {
-    std::fs::read_to_string(path).map_err(|e| e.to_string())
+fn read_file(vault: tauri::State<Vault>, path: String) -> Result<String, String> {
+    let path = within_vault(&vault, Path::new(&path))?;
+    fs::read_to_string(path).map_err(|e| e.to_string())
 }
 
 /// Writes `bytes` to `path` without ever leaving what is already there half
@@ -376,8 +494,9 @@ fn write_atomically(path: &Path, bytes: &[u8]) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn write_file(path: String, content: String) -> Result<(), String> {
-    write_atomically(Path::new(&path), content.as_bytes())
+fn write_file(vault: tauri::State<Vault>, path: String, content: String) -> Result<(), String> {
+    let path = within_vault_to_write(&vault, Path::new(&path))?;
+    write_atomically(&path, content.as_bytes())
 }
 
 /// True for legacy symbol-encoded fonts (Wingdings, Webdings, ...), which map
@@ -629,6 +748,10 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            // Empty until a folder is opened, which is also what makes every
+            // filesystem command refuse until then.
+            app.manage(Vault::default());
+
             // A window without a backdrop is a window that paints itself
             // opaque - the frontend already handles that, and it is not worth
             // refusing to start over.
@@ -742,5 +865,119 @@ mod tests {
         let note = vault.path().join("missing").join("note.md");
 
         assert!(write_atomically(&note, b"hello").is_err());
+    }
+
+    /// A vault with `root` open and nothing chosen by hand.
+    fn opened(root: &Path) -> Vault {
+        Vault {
+            root: Mutex::new(Some(root.canonicalize().unwrap())),
+            chosen: Mutex::new(HashSet::new()),
+        }
+    }
+
+    #[test]
+    fn allows_a_note_in_the_vault() {
+        let dir = tempfile::tempdir().unwrap();
+        let vault = opened(dir.path());
+        let note = dir.path().join("note.md");
+        fs::write(&note, "hello").unwrap();
+
+        assert!(within_vault(&vault, &note).is_ok());
+    }
+
+    #[test]
+    fn refuses_a_file_outside_the_vault() {
+        let dir = tempfile::tempdir().unwrap();
+        let elsewhere = tempfile::tempdir().unwrap();
+        let vault = opened(dir.path());
+        let secret = elsewhere.path().join("secret.md");
+        fs::write(&secret, "hello").unwrap();
+
+        assert!(within_vault(&vault, &secret).is_err());
+    }
+
+    /// Nothing at all is reachable until a folder has been opened.
+    #[test]
+    fn refuses_everything_with_no_vault_open() {
+        let dir = tempfile::tempdir().unwrap();
+        let note = dir.path().join("note.md");
+        fs::write(&note, "hello").unwrap();
+
+        assert!(within_vault(&Vault::default(), &note).is_err());
+    }
+
+    /// The reason paths are resolved rather than compared as text.
+    #[test]
+    fn refuses_a_way_out_through_dot_dot() {
+        let dir = tempfile::tempdir().unwrap();
+        let elsewhere = tempfile::tempdir().unwrap();
+        let vault = opened(dir.path());
+        let secret = elsewhere.path().join("secret.md");
+        fs::write(&secret, "hello").unwrap();
+
+        let climbing = dir.path().join("..").join(
+            elsewhere
+                .path()
+                .file_name()
+                .map(Path::new)
+                .unwrap()
+                .join("secret.md"),
+        );
+        assert!(within_vault(&vault, &climbing).is_err());
+    }
+
+    /// A symlink inside the vault pointing out of it is a way out too.
+    #[cfg(unix)]
+    #[test]
+    fn refuses_a_way_out_through_a_symlink() {
+        let dir = tempfile::tempdir().unwrap();
+        let elsewhere = tempfile::tempdir().unwrap();
+        let vault = opened(dir.path());
+        let secret = elsewhere.path().join("secret.md");
+        fs::write(&secret, "hello").unwrap();
+
+        let link = dir.path().join("looks-like-a-note.md");
+        std::os::unix::fs::symlink(&secret, &link).unwrap();
+
+        assert!(within_vault(&vault, &link).is_err());
+        assert!(within_vault_to_write(&vault, &link).is_err());
+    }
+
+    /// A new note has nothing to resolve, so its parent is what is checked -
+    /// which is also what stops a "name" that is really a path.
+    #[test]
+    fn checks_the_parent_of_something_being_created() {
+        let dir = tempfile::tempdir().unwrap();
+        let vault = opened(dir.path());
+
+        assert!(within_vault_to_create(&vault, &dir.path().join("new.md")).is_ok());
+        assert!(within_vault_to_create(&vault, &dir.path().join("../escaped.md")).is_err());
+    }
+
+    /// A note deleted from under the app is still one the app may write back.
+    #[test]
+    fn allows_writing_back_a_note_that_has_gone_missing() {
+        let dir = tempfile::tempdir().unwrap();
+        let vault = opened(dir.path());
+
+        assert!(within_vault_to_write(&vault, &dir.path().join("vanished.md")).is_ok());
+    }
+
+    /// Saving the scratch note somewhere by hand is consent for that file, and
+    /// for nothing else in the folder it landed in.
+    #[test]
+    fn allows_only_the_file_a_dialog_chose() {
+        let dir = tempfile::tempdir().unwrap();
+        let elsewhere = tempfile::tempdir().unwrap();
+        let chosen = elsewhere.path().join("saved.md");
+        let neighbour = elsewhere.path().join("neighbour.md");
+        fs::write(&chosen, "hello").unwrap();
+        fs::write(&neighbour, "hello").unwrap();
+
+        let vault = opened(dir.path());
+        locked(&vault.chosen).insert(chosen.canonicalize().unwrap());
+
+        assert!(within_vault(&vault, &chosen).is_ok());
+        assert!(within_vault(&vault, &neighbour).is_err());
     }
 }
