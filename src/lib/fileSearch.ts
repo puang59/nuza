@@ -91,9 +91,11 @@ export function searchFiles(entries: FileEntry[], query: string): FileMatch[] {
  */
 export function matchesForPaths(entries: FileEntry[], paths: string[]): FileMatch[] {
   const found = new Map<string, FileMatch>();
+  // A set rather than the array: this is asked once per file in the vault.
+  const wanted = new Set(paths);
 
   walkFiles(entries, [], (entry, trail) => {
-    if (paths.includes(entry.path)) {
+    if (wanted.has(entry.path)) {
       found.set(entry.path, { entry, directory: trail.join("/"), highlight: [], score: 0 });
     }
   });
