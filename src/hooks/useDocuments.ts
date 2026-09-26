@@ -39,6 +39,8 @@ interface UseDocumentsOptions {
   preferences: Extension;
   /** The document the editor opens on. */
   initialPath: string;
+  /** What that document starts with, for a scratch note carried over. */
+  initialContent?: string;
   /** The open folder, where dropped and pasted files are filed. */
   vault: string;
 }
@@ -62,7 +64,12 @@ function placeOf(path: string, vault: string): Extension {
  * it, which is to say on save. Each file keeps its own undo history and cursor
  * as a side effect of owning its state.
  */
-export function useDocuments({ preferences: settings, initialPath, vault }: UseDocumentsOptions) {
+export function useDocuments({
+  preferences: settings,
+  initialPath,
+  initialContent = "",
+  vault,
+}: UseDocumentsOptions) {
   const container = useRef<HTMLDivElement>(null);
   const states = useRef(new Map<string, EditorState>());
   /** The editor, as a ref for callbacks and as state for effects that follow it. */
@@ -75,6 +82,14 @@ export function useDocuments({ preferences: settings, initialPath, vault }: UseD
    */
   const [viewGeneration, setViewGeneration] = useState(0);
   const currentPath = useRef(initialPath);
+  /**
+   * Only ever the text the editor was first mounted with. The first document
+   * has to be created with its content rather than opened with it: `open`
+   * parks the live state under its own path on the way past, which for the
+   * document already on screen means `stateFor` finds that one and the content
+   * argument is never looked at.
+   */
+  const firstContent = useRef(initialContent);
   const latestSettings = useRef(settings);
   const latestVault = useRef(vault);
   /** Set while a document is being swapped in, so the swap is not read as an edit. */
@@ -164,7 +179,7 @@ export function useDocuments({ preferences: settings, initialPath, vault }: UseD
     if (!container.current) return;
 
     const view = new EditorView({
-      state: stateFor(currentPath.current, ""),
+      state: stateFor(currentPath.current, firstContent.current),
       parent: container.current,
     });
     editor.current = view;
