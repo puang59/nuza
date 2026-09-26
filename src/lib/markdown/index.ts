@@ -11,6 +11,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { isMacPlatform } from "../platform";
 import { attachments } from "./attachments";
 import { listIndent } from "./listIndent";
+import { continueListItem, insertNewLine } from "./lists";
 import { liveMarkdownPreview } from "./livePreview";
 import { nuzaEditorTheme } from "./theme";
 
@@ -39,10 +40,18 @@ const openLinkOnModClick = EditorView.domEventHandlers({
  * empty ends the list. `nonTightLists` is off because the stock behaviour does
  * the opposite - it keeps the marker and inserts a blank line above it, which
  * turns a list into a gappy one the moment you try to get out of it.
+ *
+ * Shift+enter is the other half of that: a second line of the same point
+ * rather than a point of its own, carried on underneath the text it belongs
+ * to. Outside a list it is left to do what it does everywhere else.
  */
 const markdownEditingKeymap = Prec.high(
   keymap.of([
-    { key: "Enter", run: insertNewlineContinueMarkupCommand({ nonTightLists: false }) },
+    {
+      key: "Enter",
+      run: insertNewLine(insertNewlineContinueMarkupCommand({ nonTightLists: false })),
+      shift: continueListItem,
+    },
     { key: "Backspace", run: deleteMarkupBackward },
   ])
 );

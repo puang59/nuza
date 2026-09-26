@@ -2,6 +2,7 @@ import { syntaxTree } from "@codemirror/language";
 import { EditorState, Line, Range, StateEffect, StateField, Text } from "@codemirror/state";
 import { Decoration, DecorationSet, EditorView, ViewPlugin, ViewUpdate } from "@codemirror/view";
 import type { SyntaxNode } from "@lezer/common";
+import { contentStart } from "./lists";
 
 /**
  * List items that hang, rather than falling back to the margin.
@@ -77,13 +78,6 @@ const prefixWidths = StateField.define<Widths>({
   },
 });
 
-function firstChild(node: SyntaxNode, name: string) {
-  for (let child = node.firstChild; child; child = child.nextSibling) {
-    if (child.name === name) return child;
-  }
-  return null;
-}
-
 /** How deeply the item is nested, which is what widens a nested bullet. */
 function depthOf(item: SyntaxNode) {
   let depth = -1;
@@ -99,16 +93,6 @@ function isQuoted(item: SyntaxNode) {
     if (node.name === "Blockquote") return true;
   }
   return false;
-}
-
-/** Where the item's text starts: past the marker, the checkbox and the space. */
-function contentStart(doc: Text, item: SyntaxNode, mark: SyntaxNode, line: Line) {
-  const task = firstChild(item, "Task");
-  const marker = task && firstChild(task, "TaskMarker");
-
-  let at = marker ? marker.to : mark.to;
-  while (at < line.to && doc.sliceString(at, at + 1) === " ") at++;
-  return at;
 }
 
 /** The indentation a continuation line already carries in the source. */
@@ -136,13 +120,13 @@ function listLines(state: EditorState, from: number, to: number): ListLine[] {
       if (node.name !== "ListItem") return;
 
       const item = node.node;
-      const mark = firstChild(item, "ListMark");
-      if (!mark) return;
-
       const opening = doc.lineAt(item.from);
+      const text = contentStart(doc, item, opening);
+      if (text === null) return;
+
       // A nested bullet is drawn further out than the one above it, so the
       // same characters do not always come to the same width.
-      const anchor = prefixOf(doc, opening.from, contentStart(doc, item, mark, opening), `${depthOf(item)}`);
+      const anchor = prefixOf(doc, opening.from, text, `${depthOf(item)}`);
       const quoted = isQuoted(item);
 
       // Lines that belong to a list nested inside this one are that item's to
