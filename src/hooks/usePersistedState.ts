@@ -15,8 +15,14 @@ export function usePersistedState<T>(key: string, defaultValue: T) {
     }
   });
 
+  // Guarded the same way the read is: storage can be full, or blocked
+  // outright, and a throw from in here takes the whole app down with it.
   useEffect(() => {
-    localStorage.setItem(key, JSON.stringify(value));
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch (error) {
+      console.error(`Failed to store ${key}:`, error);
+    }
   }, [key, value]);
 
   return [value, setValue] as const;
