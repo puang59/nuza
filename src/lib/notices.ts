@@ -18,6 +18,8 @@ export interface Notice {
   message: string;
   /** What the thing that failed said about it, when it said anything. */
   reason?: string;
+  /** Set while its exit animation runs, just before it is dropped. */
+  leaving?: boolean;
 }
 
 /**

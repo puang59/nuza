@@ -207,6 +207,26 @@ textarea,
   }
 }
 
+/*
+ * A notice arrives from off the right edge, where the stack sits, and leaves
+ * back the way it came rather than simply going out - a toast that fades in
+ * place reads as something that was always there and is now being forgotten,
+ * which is the opposite of what it is.
+ */
+@keyframes nuza-notice-in {
+  from {
+    opacity: 0;
+    transform: translateX(16px) scale(0.98);
+  }
+}
+
+@keyframes nuza-notice-out {
+  to {
+    opacity: 0;
+    transform: translateX(16px) scale(0.98);
+  }
+}
+
 @keyframes nuza-fade-out {
   to {
     opacity: 0;
@@ -249,6 +269,14 @@ textarea,
 
 .animate-palette-out {
   animation: nuza-palette-out 130ms cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+.animate-notice-in {
+  animation: nuza-notice-in 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.animate-notice-out {
+  animation: nuza-notice-out 140ms cubic-bezier(0.4, 0, 1, 1) forwards;
 }
 
 .animate-fade-out {
@@ -439,6 +467,8 @@ textarea,
   .animate-menu-in,
   .animate-palette-in,
   .animate-rise-in,
+  .animate-notice-in,
+  .animate-notice-out,
   .animate-fade-out,
   .animate-panel-out,
   .animate-palette-out,
