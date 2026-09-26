@@ -5,6 +5,7 @@ import { FileEntry } from "@/lib/types";
 import { addEntry, addFile, findEntry, joinPath, moveEntry as moveTreeEntry, removeEntry } from "@/lib/fileTree";
 import { readSession, writeSession } from "@/lib/session";
 import { ATTACHMENT_EVENT, announceAttachment, writeMedia } from "@/lib/media";
+import { isWithin, rewritePath } from "@/lib/path";
 import { useDocuments } from "./useDocuments";
 
 const UNTITLED_FILE = "untitled.md";
@@ -28,11 +29,6 @@ interface UseFileOperationsOptions {
 interface OpenedFolder {
   path: string;
   entries: FileEntry[];
-}
-
-/** True if `path` is `ancestor` itself, or lives somewhere underneath it. */
-function isWithin(path: string, ancestor: string) {
-  return path === ancestor || path.startsWith(ancestor + "/") || path.startsWith(ancestor + "\\");
 }
 
 /** Owns the editor's open documents and every Tauri file-system round trip. */
@@ -357,7 +353,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
   /** Rewrites cached documents and open tabs after a path changes on disk. */
   const rewritePaths = useCallback(
     (from: string, to: string) => {
-      const rename = (path: string) => (isWithin(path, from) ? path.replace(from, to) : path);
+      const rename = (path: string) => rewritePath(path, from, to);
 
       rewriteDocuments(rename);
       setOpenPaths((paths) => paths.map(rename));
