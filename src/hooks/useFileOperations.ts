@@ -416,12 +416,15 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
       }
 
       setOpenPaths(remaining);
-      if (isWithin(currentFileRef.current, path)) {
-        setCurrentFile(remaining[0]);
-        openDocument(remaining[0], null);
-      }
+      // Through selectFile rather than straight at the editor: the tab being
+      // fallen back on is very often one restored from a session and never
+      // looked at, which means it has no document in memory yet and has to be
+      // read from disk. Handing the editor a path with nothing behind it used
+      // to put an empty note on screen, and the first keystroke after that
+      // autosaved the blank over the real file.
+      if (isWithin(currentFileRef.current, path)) void selectFile(remaining[0]);
     },
-    [forgetDocuments, openDocument, resetToScratch]
+    [forgetDocuments, resetToScratch, selectFile]
   );
 
   return {
