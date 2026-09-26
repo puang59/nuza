@@ -197,11 +197,23 @@ export function useDocuments({ preferences: settings, initialPath, vault }: UseD
     editor.current?.dispatch({ effects: location.reconfigure(placeOf(currentPath.current, vault)) });
   }, [vault]);
 
-  /** Shows `path`, creating its document from `content` if it has none yet. */
+  /**
+   * Shows `path`, creating its document from `content` if it has none yet.
+   * `null` content means "the document is already in memory" - it is not an
+   * invitation to invent an empty one.
+   */
   const open = useCallback(
     (path: string, content: string | null) => {
       const view = editor.current;
       if (!view) return;
+
+      // A note with nothing behind it renders as empty, and an empty note that
+      // is then typed into is autosaved over the file on disk a second later.
+      // Refusing here leaves the editor on the document it already had, which
+      // is wrong on screen but recoverable; the blank is neither.
+      if (content === null && !states.current.has(path)) {
+        throw new Error(`open(${path}) with no content and no document in memory`);
+      }
 
       swapping.current = true;
       // The live state lives in the view, not the map, so park it before it is
