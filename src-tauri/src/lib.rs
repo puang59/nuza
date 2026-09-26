@@ -1,19 +1,19 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 
+use std::fs;
+use std::path::Path;
 use tauri::Manager;
 #[cfg(target_os = "macos")]
 use tauri::{Emitter, Wry};
-#[cfg(target_os = "macos")]
-use window_vibrancy::{apply_vibrancy, clear_vibrancy, NSVisualEffectMaterial};
+use tauri_plugin_dialog::DialogExt;
 #[cfg(target_os = "windows")]
 use window_vibrancy::{apply_acrylic, apply_mica, clear_acrylic, clear_mica};
-use std::fs;
-use tauri_plugin_dialog::DialogExt;
-use std::path::Path;
+#[cfg(target_os = "macos")]
+use window_vibrancy::{apply_vibrancy, clear_vibrancy, NSVisualEffectMaterial};
 
 #[derive(serde::Serialize)]
 struct FileEntry {
-    name: String, 
+    name: String,
     path: String,
     #[serde(rename = "isDirectory")] // this ensures the JSON key is camel case
     is_directory: bool,
@@ -50,7 +50,7 @@ fn read_dir_recursive(path: &Path) -> Result<Vec<FileEntry>, String> {
             } else {
                 None
             };
-            
+
             entries.push(FileEntry {
                 name,
                 path: entry_path.to_string_lossy().into_owned(),
@@ -59,13 +59,14 @@ fn read_dir_recursive(path: &Path) -> Result<Vec<FileEntry>, String> {
             });
         }
     }
-    
+
     // Sort so directories appear first, then alphabetically
     entries.sort_by(|a, b| {
-        b.is_directory.cmp(&a.is_directory)
+        b.is_directory
+            .cmp(&a.is_directory)
             .then(a.name.to_lowercase().cmp(&b.name.to_lowercase()))
     });
-    
+
     Ok(entries)
 }
 
@@ -138,7 +139,9 @@ fn create_file(parent_path: String, name: String) -> Result<(), String> {
     if path.exists() {
         return Err(format!("\"{}\" already exists", name));
     }
-    fs::File::create(&path).map(|_| ()).map_err(|e| e.to_string())
+    fs::File::create(&path)
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -155,7 +158,9 @@ fn create_folder(parent_path: String, name: String) -> Result<(), String> {
 #[tauri::command]
 fn rename_entry(path: String, new_name: String) -> Result<String, String> {
     let old = Path::new(&path);
-    let parent = old.parent().ok_or_else(|| "Cannot rename this item".to_string())?;
+    let parent = old
+        .parent()
+        .ok_or_else(|| "Cannot rename this item".to_string())?;
     let new_path = parent.join(&new_name);
     if new_path.exists() {
         return Err(format!("\"{}\" already exists", new_name));
@@ -181,7 +186,10 @@ fn move_entry(path: String, target_dir: String) -> Result<String, String> {
 
     let new_path = target.join(&name);
     if new_path.exists() {
-        return Err(format!("\"{}\" already exists in destination", name.to_string_lossy()));
+        return Err(format!(
+            "\"{}\" already exists in destination",
+            name.to_string_lossy()
+        ));
     }
     fs::rename(old, &new_path).map_err(|e| e.to_string())?;
     Ok(new_path.to_string_lossy().into_owned())
@@ -200,9 +208,14 @@ fn delete_entry(path: String) -> Result<(), String> {
 /// Opens a native "save file" dialog and writes `content` to the chosen path.
 /// Returns the chosen path, or `None` if the user cancels the dialog.
 #[tauri::command]
-async fn save_file_picker(app_handle: tauri::AppHandle, content: String) -> Result<Option<String>, String> {
+async fn save_file_picker(
+    app_handle: tauri::AppHandle,
+    content: String,
+) -> Result<Option<String>, String> {
     block_on_picker(|send| {
-        app_handle.dialog().file()
+        app_handle
+            .dialog()
+            .file()
             .add_filter("Markdown Files", &["md", "markdown"])
             .set_file_name("untitled.md")
             .save_file(move |file_path| {
@@ -248,8 +261,14 @@ fn unused_path(directory: &Path, name: &str) -> std::path::PathBuf {
         return candidate;
     }
 
-    let stem = Path::new(name).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-    let extension = Path::new(name).extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+    let stem = Path::new(name)
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let extension = Path::new(name)
+        .extension()
+        .map(|e| format!(".{}", e.to_string_lossy()))
+        .unwrap_or_default();
 
     for n in 1..10_000 {
         let candidate = directory.join(format!("{} {}{}", stem, n, extension));
@@ -285,7 +304,8 @@ fn preferred_directory(directory: &Path) -> std::path::PathBuf {
     };
 
     for sibling in siblings.flatten() {
-        if sibling.file_name().to_string_lossy().to_lowercase() == wanted && sibling.path().is_dir() {
+        if sibling.file_name().to_string_lossy().to_lowercase() == wanted && sibling.path().is_dir()
+        {
             return sibling.path();
         }
     }
@@ -329,7 +349,10 @@ fn write_file(path: String, content: String) -> Result<(), String> {
 /// plain letters to pictographs. Picking one would turn every note - and the
 /// line numbers - into symbols, since the monospace fallback never kicks in.
 fn is_symbol_font(data: &[u8], index: u32) -> bool {
-    let Some(cmap) = ttf_parser::Face::parse(data, index).ok().and_then(|face| face.tables().cmap) else {
+    let Some(cmap) = ttf_parser::Face::parse(data, index)
+        .ok()
+        .and_then(|face| face.tables().cmap)
+    else {
         return false;
     };
     let subtables: Vec<_> = cmap.subtables.into_iter().collect();
@@ -502,7 +525,12 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<Wry>> {
                     &PredefinedMenuItem::select_all(app, None)?,
                 ],
             )?,
-            &Submenu::with_items(app, "View", true, &[&PredefinedMenuItem::fullscreen(app, None)?])?,
+            &Submenu::with_items(
+                app,
+                "View",
+                true,
+                &[&PredefinedMenuItem::fullscreen(app, None)?],
+            )?,
             &Submenu::with_items(
                 app,
                 "Window",
@@ -532,7 +560,9 @@ fn set_close_tab_shortcut(
     {
         let item = app.state::<CloseTabItem>();
         if item.0.set_accelerator(accelerator).is_err() {
-            item.0.set_accelerator(None::<&str>).map_err(|e| e.to_string())?;
+            item.0
+                .set_accelerator(None::<&str>)
+                .map_err(|e| e.to_string())?;
         }
     }
     Ok(())
