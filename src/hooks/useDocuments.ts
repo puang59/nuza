@@ -158,12 +158,13 @@ export function useDocuments({
     });
   }
 
-  const stateFor = useCallback((path: string, content: string) => {
+  const stateFor = useCallback((path: string, content: string, anchor?: number) => {
     const existing = states.current.get(path);
     if (existing) return existing;
 
     const created = EditorState.create({
       doc: content,
+      selection: anchor === undefined ? undefined : { anchor },
       extensions: [
         writingSurface,
         trackEdits.current!,
@@ -253,6 +254,44 @@ export function useDocuments({
     [stateFor, reportStats]
   );
 
+  /**
+   * Puts `content` in place of whatever is held for `path`, keeping the caret
+   * where it still fits.
+   *
+   * For a note that has moved on disk with nothing unsaved to lose: what is
+   * held is no longer what the tab claims to be showing, and of the two copies
+   * the one on disk is the newer. A note with edits in it is never replaced
+   * this way - that one has to be asked about.
+   */
+  const replace = useCallback(
+    (path: string, content: string) => {
+      const showing = path === currentPath.current;
+      const previous = showing ? editor.current?.state : states.current.get(path);
+      const anchor = Math.min(previous?.selection.main.anchor ?? 0, content.length);
+
+      states.current.delete(path);
+      const next = stateFor(path, content, anchor);
+
+      const view = editor.current;
+      if (!showing || !view) return;
+
+      // The swap is not an edit, and must not mark the note dirty - it is the
+      // opposite: the note has just caught up with the file.
+      swapping.current = true;
+      view.setState(next);
+      view.dispatch({
+        effects: [
+          preferences.reconfigure(latestSettings.current),
+          location.reconfigure(placeOf(path, latestVault.current)),
+        ],
+      });
+      swapping.current = false;
+      setViewGeneration((generation) => generation + 1);
+      reportStats(view.state);
+    },
+    [stateFor, reportStats]
+  );
+
   /** Whether `path` has already been read off disk. */
   const isOpen = useCallback((path: string) => states.current.has(path), []);
 
@@ -325,6 +364,7 @@ export function useDocuments({
     dirtyPaths,
     subscribeToStats,
     open,
+    replace,
     isOpen,
     read,
     revision,

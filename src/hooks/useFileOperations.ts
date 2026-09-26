@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { Extension } from "@codemirror/state";
 import { FileEntry } from "@/lib/types";
 import {
@@ -17,6 +18,16 @@ import { isWithin, rewritePath } from "@/lib/path";
 import { useDocuments } from "./useDocuments";
 
 const UNTITLED_FILE = "untitled.md";
+
+/** Announced by the backend when a note changes underneath the app. */
+const FILE_CHANGED_EVENT = "file-changed";
+
+/**
+ * What the backend says when it refuses to write a note that has moved on
+ * since it was read. Matched on rather than treated as any other failure: a
+ * full disk is something to report, a conflict is something to ask about.
+ */
+const CHANGED_ON_DISK = "The note changed on disk";
 
 /**
  * How long after an edit a note is written back to disk. Long enough that a
@@ -47,6 +58,12 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
   const [openPaths, setOpenPaths] = useState<string[]>([UNTITLED_FILE]);
   const [folderData, setFolderData] = useState<FileEntry[]>([]);
   const [rootPath, setRootPath] = useState<string | null>(null);
+  /**
+   * Notes that have changed on disk while there were unsaved edits in them
+   * here. Nothing is written back to one of these until someone has said which
+   * copy to keep.
+   */
+  const [conflicts, setConflicts] = useState<ReadonlySet<string>>(() => new Set());
 
   // Destructured rather than held as one object: every member is stable, so
   // the callbacks below keep their identity from one render to the next.
@@ -57,6 +74,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
     dirtyPaths,
     subscribeToStats,
     open: openDocument,
+    replace: replaceDocument,
     isOpen: isDocumentOpen,
     read: readDocument,
     revision: documentRevision,
@@ -94,6 +112,19 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
 
     window.addEventListener(ATTACHMENT_EVENT, onAttachment);
     return () => window.removeEventListener(ATTACHMENT_EVENT, onAttachment);
+  }, []);
+
+  const flagConflict = useCallback((path: string) => {
+    setConflicts((paths) => (paths.has(path) ? paths : new Set(paths).add(path)));
+  }, []);
+
+  const clearConflict = useCallback((path: string) => {
+    setConflicts((paths) => {
+      if (!paths.has(path)) return paths;
+      const next = new Set(paths);
+      next.delete(path);
+      return next;
+    });
   }, []);
 
   /** Copies dropped files into `directory`, e.g. from a drag onto the sidebar. */
@@ -234,12 +265,24 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
    * made while the write was in flight stays flagged for the next one.
    */
   const writeDocument = useCallback(
-    async (path: string) => {
+    async (path: string, force = false) => {
       const before = documentRevision(path);
-      await invoke("write_file", { path, content: readDocument(path) });
+
+      try {
+        await invoke("write_file", { path, content: readDocument(path), force });
+      } catch (error) {
+        // The note moved on disk while this one was being edited. Flagged
+        // rather than retried: the next autosave would only be refused again,
+        // and someone has to say which of the two copies to keep.
+        if (String(error).includes(CHANGED_ON_DISK)) flagConflict(path);
+        throw error;
+      }
+
       if (documentRevision(path) === before) markSaved(path);
+      // What is on disk is this note now, whatever it was a moment ago.
+      clearConflict(path);
     },
-    [documentRevision, readDocument, markSaved]
+    [documentRevision, readDocument, markSaved, flagConflict, clearConflict]
   );
 
   const save = useCallback(async () => {
@@ -280,8 +323,15 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
    * left out: it has no path yet, and saving it would mean putting a dialog
    * in front of someone who only meant to type.
    */
+  const conflictsRef = useRef(conflicts);
+  conflictsRef.current = conflicts;
+
   const saveDirty = useCallback(async () => {
-    const paths = Array.from(dirtyPathsRef.current).filter((path) => path !== UNTITLED_FILE);
+    const paths = Array.from(dirtyPathsRef.current).filter(
+      // A note waiting on an answer is left exactly as it is, on both sides:
+      // the edits stay in the tab and the newer file stays on disk.
+      (path) => path !== UNTITLED_FILE && !conflictsRef.current.has(path)
+    );
 
     await Promise.all(
       paths.map(async (path) => {
@@ -314,6 +364,70 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
     const timer = setTimeout(() => void flush(), AUTOSAVE_DELAY);
     return () => clearTimeout(timer);
   }, [dirtyPaths, flush]);
+
+  /**
+   * A note has changed underneath the app - a sync client, a git checkout, a
+   * second editor.
+   *
+   * One with nothing unsaved simply catches up: the tab is there to show the
+   * file, and the file is the newer of the two. One with edits in it cannot be
+   * resolved without being asked, so it is flagged and left alone - which is
+   * also what stops the autosave from putting the stale buffer over the top of
+   * what just arrived.
+   */
+  useEffect(() => {
+    const listening = listen<string>(FILE_CHANGED_EVENT, async ({ payload: path }) => {
+      // Only notes the app is actually holding. Everything else is the
+      // sidebar's business, and it is not showing stale text of anything.
+      if (!isDocumentOpen(path)) return;
+
+      let content: string;
+      try {
+        content = await invoke<string>("read_file", { path });
+      } catch {
+        // Gone, or no longer readable. What is held here is the last copy of
+        // it there is, so it stays.
+        return;
+      }
+
+      // The app's own save, arriving back as news. Cheap to rule out, and
+      // worth ruling out: replacing a document resets its undo history.
+      if (content === readDocument(path)) return;
+
+      if (dirtyPathsRef.current.has(path)) flagConflict(path);
+      else replaceDocument(path, content);
+    });
+
+    return () => {
+      void listening.then((stop) => stop());
+    };
+  }, [isDocumentOpen, readDocument, replaceDocument, flagConflict]);
+
+  /** Takes the copy on disk, dropping the edits made here. */
+  const reloadFromDisk = useCallback(
+    async (path: string) => {
+      try {
+        replaceDocument(path, await invoke<string>("read_file", { path }));
+        markSaved(path);
+        clearConflict(path);
+      } catch (error) {
+        console.error(`Failed to reload ${path}:`, error);
+      }
+    },
+    [replaceDocument, markSaved, clearConflict]
+  );
+
+  /** Keeps what is in the editor, over the top of the copy on disk. */
+  const keepMine = useCallback(
+    async (path: string) => {
+      try {
+        await writeDocument(path, true);
+      } catch (error) {
+        console.error(`Failed to save ${path}:`, error);
+      }
+    },
+    [writeDocument]
+  );
 
   const selectFile = useCallback(
     async (path: string) => {
@@ -473,6 +587,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
     currentFile,
     openPaths,
     dirtyPaths,
+    conflicts,
     folderData,
     rootPath,
     openFolder,
@@ -485,6 +600,8 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
     cycleFile,
     switchToRecent,
     jumpToFile,
+    reloadFromDisk,
+    keepMine,
     createFile,
     createFolder,
     renameEntry,

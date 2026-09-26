@@ -1,12 +1,14 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 
-use std::collections::HashSet;
+use notify::{RecursiveMode, Watcher};
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use tauri::Manager;
+use std::time::SystemTime;
 #[cfg(target_os = "macos")]
-use tauri::{Emitter, Wry};
+use tauri::Wry;
+use tauri::{Emitter, Manager};
 use tauri_plugin_dialog::DialogExt;
 #[cfg(target_os = "windows")]
 use window_vibrancy::{apply_acrylic, apply_mica, clear_acrylic, clear_mica};
@@ -89,6 +91,83 @@ struct Vault {
     /// Files outside it the user chose in a native dialog, which is consent -
     /// a scratch note saved to the desktop still has to be saved again.
     chosen: Mutex<HashSet<PathBuf>>,
+    /// When each note the app has read was last written, as the filesystem
+    /// sees it. This is what tells an edit made somewhere else apart from the
+    /// app's own saves, in both directions: a write whose file has moved on is
+    /// refused, and a change that is only the app's own is not announced.
+    known: Mutex<HashMap<PathBuf, SystemTime>>,
+    /// Kept alive for as long as its folder is open - dropping a watcher is
+    /// how notify stops watching, so replacing this is how switching vaults
+    /// stops listening to the old one.
+    watcher: Mutex<Option<notify::RecommendedWatcher>>,
+}
+
+/// Announced when a note has changed underneath the app, carrying its path.
+const FILE_CHANGED_EVENT: &str = "file-changed";
+
+/// What `write_file` says when the note it was asked to write has moved on
+/// since it was read. The frontend matches on this to tell a conflict apart
+/// from a disk that is full or a file that has gone read-only.
+const CHANGED_ON_DISK: &str = "The note changed on disk";
+
+fn modified_at(path: &Path) -> Option<SystemTime> {
+    fs::metadata(path).and_then(|data| data.modified()).ok()
+}
+
+/// Records where a note stands now, after reading or writing it.
+fn remember(vault: &Vault, path: &Path) {
+    if let Some(at) = modified_at(path) {
+        locked(&vault.known).insert(path.to_path_buf(), at);
+    }
+}
+
+/// Whether `path` has moved on since the app last read or wrote it.
+///
+/// A note the app has never read is not "changed" - there is nothing to be
+/// out of date with, and nothing on screen that could be overwritten.
+fn changed_since_read(vault: &Vault, path: &Path) -> bool {
+    let Some(recorded) = locked(&vault.known).get(path).copied() else {
+        return false;
+    };
+    // Gone, or no longer readable, counts: either way what the app holds is
+    // no longer what is there.
+    modified_at(path) != Some(recorded)
+}
+
+/// Watches the open folder and says so when a note in it changes.
+///
+/// Without this the app is the last to know. A `git pull`, a sync client or a
+/// second editor moves a note on disk, the tab still shows what was read
+/// minutes ago, and the first keystroke after that autosaves the stale buffer
+/// over the newer file.
+fn watch_vault(app_handle: &tauri::AppHandle, root: &Path) -> Result<(), String> {
+    let handle = app_handle.clone();
+
+    let mut watcher = notify::recommended_watcher(move |event: notify::Result<notify::Event>| {
+        let Ok(event) = event else { return };
+        if !event.kind.is_modify() && !event.kind.is_create() && !event.kind.is_remove() {
+            return;
+        }
+
+        let vault = handle.state::<Vault>();
+        for path in event.paths {
+            // Only notes the app is actually holding, and only when what is on
+            // disk is no longer what it read - which is what keeps the app's
+            // own saves from coming back as news.
+            if changed_since_read(&vault, &path) {
+                let _ = handle.emit(FILE_CHANGED_EVENT, path.to_string_lossy().into_owned());
+            }
+        }
+    })
+    .map_err(|e| e.to_string())?;
+
+    watcher
+        .watch(root, RecursiveMode::Recursive)
+        .map_err(|e| e.to_string())?;
+
+    // Replacing the old watcher drops it, which is how it stops watching.
+    *locked(&app_handle.state::<Vault>().watcher) = Some(watcher);
+    Ok(())
 }
 
 /// A lock, with a poisoned one read anyway: the data behind it is a path and a
@@ -187,7 +266,19 @@ fn adopt_folder(app_handle: &tauri::AppHandle, path: String) -> Result<OpenedFol
     // The one place the boundary is set. Resolved here so that every later
     // check is a comparison between two paths the OS has already agreed on.
     let resolved = directory.canonicalize().map_err(|e| e.to_string())?;
-    *locked(&app_handle.state::<Vault>().root) = Some(resolved);
+    {
+        let vault = app_handle.state::<Vault>();
+        *locked(&vault.root) = Some(resolved.clone());
+        // The notes of the folder being left are no longer anything to be out
+        // of date with.
+        locked(&vault.known).clear();
+    }
+
+    // A folder that cannot be watched is still a folder worth opening; what is
+    // lost is the notice, not the vault.
+    if let Err(error) = watch_vault(app_handle, &resolved) {
+        eprintln!("nuza: not watching \"{}\" for changes: {}", path, error);
+    }
 
     let entries = read_dir_recursive(directory)?;
     Ok(OpenedFolder { path, entries })
@@ -455,7 +546,11 @@ fn write_media(
 #[tauri::command]
 fn read_file(vault: tauri::State<Vault>, path: String) -> Result<String, String> {
     let path = within_vault(&vault, Path::new(&path))?;
-    fs::read_to_string(path).map_err(|e| e.to_string())
+    let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    // Where the note stood when it was read, so a later write can tell whether
+    // anything else has been at it in the meantime.
+    remember(&vault, &path);
+    Ok(content)
 }
 
 /// Writes `bytes` to `path` without ever leaving what is already there half
@@ -493,10 +588,26 @@ fn write_atomically(path: &Path, bytes: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
+/// Writes a note back, refusing if it has moved on since the app read it.
+///
+/// `force` is the answer to that refusal, and only ever comes from someone
+/// being asked which copy they want to keep.
 #[tauri::command]
-fn write_file(vault: tauri::State<Vault>, path: String, content: String) -> Result<(), String> {
+fn write_file(
+    vault: tauri::State<Vault>,
+    path: String,
+    content: String,
+    force: Option<bool>,
+) -> Result<(), String> {
     let path = within_vault_to_write(&vault, Path::new(&path))?;
-    write_atomically(&path, content.as_bytes())
+
+    if !force.unwrap_or(false) && changed_since_read(&vault, &path) {
+        return Err(CHANGED_ON_DISK.to_string());
+    }
+
+    write_atomically(&path, content.as_bytes())?;
+    remember(&vault, &path);
+    Ok(())
 }
 
 /// True for legacy symbol-encoded fonts (Wingdings, Webdings, ...), which map
@@ -871,7 +982,7 @@ mod tests {
     fn opened(root: &Path) -> Vault {
         Vault {
             root: Mutex::new(Some(root.canonicalize().unwrap())),
-            chosen: Mutex::new(HashSet::new()),
+            ..Default::default()
         }
     }
 
@@ -961,6 +1072,87 @@ mod tests {
         let vault = opened(dir.path());
 
         assert!(within_vault_to_write(&vault, &dir.path().join("vanished.md")).is_ok());
+    }
+
+    /// Moves `path`'s modification time on, the way another editor writing to
+    /// it would - explicitly rather than by writing twice and hoping the clock
+    /// noticed.
+    fn touch(path: &Path) {
+        let file = fs::OpenOptions::new().write(true).open(path).unwrap();
+        let later = SystemTime::now() + std::time::Duration::from_secs(5);
+        file.set_times(fs::FileTimes::new().set_modified(later))
+            .unwrap();
+    }
+
+    /// A note the app has never read is not out of date with anything.
+    #[test]
+    fn a_note_never_read_has_not_changed() {
+        let dir = tempfile::tempdir().unwrap();
+        let vault = opened(dir.path());
+        let note = dir.path().join("note.md");
+        fs::write(&note, "hello").unwrap();
+
+        assert!(!changed_since_read(&vault, &note));
+    }
+
+    #[test]
+    fn a_note_nobody_touched_has_not_changed() {
+        let dir = tempfile::tempdir().unwrap();
+        let vault = opened(dir.path());
+        let note = dir.path().join("note.md");
+        fs::write(&note, "hello").unwrap();
+        remember(&vault, &note);
+
+        assert!(!changed_since_read(&vault, &note));
+    }
+
+    /// The case the whole thing exists for: something else wrote to the note
+    /// after the app read it.
+    #[test]
+    fn a_note_written_elsewhere_has_changed() {
+        let dir = tempfile::tempdir().unwrap();
+        let vault = opened(dir.path());
+        let note = dir.path().join("note.md");
+        fs::write(&note, "hello").unwrap();
+        remember(&vault, &note);
+
+        touch(&note);
+
+        assert!(changed_since_read(&vault, &note));
+    }
+
+    /// A note deleted from under the app is not what the app holds either.
+    #[test]
+    fn a_note_deleted_elsewhere_has_changed() {
+        let dir = tempfile::tempdir().unwrap();
+        let vault = opened(dir.path());
+        let note = dir.path().join("note.md");
+        fs::write(&note, "hello").unwrap();
+        remember(&vault, &note);
+
+        fs::remove_file(&note).unwrap();
+
+        assert!(changed_since_read(&vault, &note));
+    }
+
+    /// The app's own save is not an external change: writing records where the
+    /// note now stands, so the next write is not refused over it.
+    #[test]
+    fn the_apps_own_write_is_not_a_change() {
+        let dir = tempfile::tempdir().unwrap();
+        let vault = opened(dir.path());
+        let note = dir.path().join("note.md");
+        fs::write(&note, "hello").unwrap();
+        remember(&vault, &note);
+
+        touch(&note);
+        assert!(changed_since_read(&vault, &note));
+
+        // What write_file does once it has written.
+        write_atomically(&note, b"ours").unwrap();
+        remember(&vault, &note);
+
+        assert!(!changed_since_read(&vault, &note));
     }
 
     /// Saving the scratch note somewhere by hand is consent for that file, and
