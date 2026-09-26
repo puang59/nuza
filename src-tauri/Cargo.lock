@@ -2309,6 +2309,7 @@ dependencies = [
  "tauri-plugin-opener",
  "tauri-plugin-process",
  "tauri-plugin-updater",
+ "tempfile",
  "ttf-parser",
  "window-vibrancy 0.8.0",
  "windows-version",

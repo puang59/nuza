@@ -29,6 +29,9 @@ tauri-plugin-process = "2"
 fontdb = "0.24.0"
 ttf-parser = "0.25"
 base64 = "0.22"
+# Notes are written to a temporary file and renamed over the target, so a
+# crash mid-save cannot truncate one.
+tempfile = "3"
 
 # Which Windows this is, so the window gets the backdrop that does not make
 # dragging it crawl. window-vibrancy reads the same crate for the same reason.
