@@ -1,0 +1,9 @@
+# Revisions that only moved whitespace around. Teach git to look past them:
+#
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# GitHub reads this file automatically.
+
+# chore(rust): run the formatter over lib.rs
+# chore: run prettier over the codebase
+# (filled in below once the commits exist)
