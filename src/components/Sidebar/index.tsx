@@ -2,6 +2,8 @@ import { memo, Ref, useEffect, useImperativeHandle, useMemo, useRef, useState } 
 import { ChevronsDownUp, FilePlus, FolderPlus, Search, X } from "lucide-react";
 import { cn } from "cn";
 import { searchFiles } from "@/lib/fileSearch";
+import { fileNameOf } from "@/lib/media";
+import { report } from "@/lib/notices";
 import { FileEntry } from "@/lib/types";
 import { TreeContext, TreeActions, ContextMenuState, PendingCreate } from "./TreeContext";
 import FileTreeNode, { NewEntryRow } from "./FileTreeNode";
@@ -151,7 +153,7 @@ function Sidebar({
       if (type === "file") await onCreateFile(parentPath, name);
       else await onCreateFolder(parentPath, name);
     } catch (error) {
-      console.error(`Failed to create ${type}:`, error);
+      report(`Couldn't create "${name}"`, error);
     }
   }
 
@@ -160,7 +162,7 @@ function Sidebar({
     try {
       await onRename(path, newName);
     } catch (error) {
-      console.error("Failed to rename:", error);
+      report(`Couldn't rename "${fileNameOf(path)}"`, error);
     }
   }
 
@@ -173,7 +175,7 @@ function Sidebar({
     try {
       await onMove(path, targetDir);
     } catch (error) {
-      console.error("Failed to move:", error);
+      report(`Couldn't move "${fileNameOf(path)}"`, error);
     }
   }
 
@@ -184,7 +186,7 @@ function Sidebar({
     try {
       await onDelete(target.path);
     } catch (error) {
-      console.error("Failed to delete:", error);
+      report(`Couldn't delete "${target.name}"`, error);
     }
   }
 

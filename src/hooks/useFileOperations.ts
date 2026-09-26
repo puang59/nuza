@@ -11,9 +11,10 @@ import {
   moveEntry as moveTreeEntry,
   removeEntry,
 } from "@/lib/fileTree";
+import { report } from "@/lib/notices";
 import { readScratch, writeScratch } from "@/lib/scratch";
 import { readSession, writeSession } from "@/lib/session";
-import { ATTACHMENT_EVENT, announceAttachment, writeMedia } from "@/lib/media";
+import { ATTACHMENT_EVENT, announceAttachment, fileNameOf, writeMedia } from "@/lib/media";
 import { isWithin, rewritePath } from "@/lib/path";
 import { useDocuments } from "./useDocuments";
 
@@ -28,6 +29,15 @@ const FILE_CHANGED_EVENT = "file-changed";
  * full disk is something to report, a conflict is something to ask about.
  */
 const CHANGED_ON_DISK = "The note changed on disk";
+
+/**
+ * Whether a rejected write is the backend refusing to overwrite a note that
+ * moved on disk. That one has a bar of its own and an answer to give, so it
+ * is not reported as a failure on top of it.
+ */
+function isConflict(error: unknown) {
+  return String(error).includes(CHANGED_ON_DISK);
+}
 
 /**
  * How long after an edit a note is written back to disk. Long enough that a
@@ -134,7 +144,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
         const saved = await writeMedia(directory, file.name, file);
         announceAttachment(saved);
       } catch (error) {
-        console.error("Failed to save dropped file:", error);
+        report(`Couldn't add "${file.name}" to the vault`, error);
       }
     }
   }, []);
@@ -237,7 +247,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
       const result = await invoke<OpenedFolder | null>("load_folder_picker");
       if (result) adoptFolder(result);
     } catch (error) {
-      console.error("Failed to load folder:", error);
+      report("Couldn't open that folder", error);
     }
   }, [adoptFolder]);
 
@@ -252,6 +262,8 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
         adoptFolder(await invoke<OpenedFolder>("open_folder", { path }));
         return true;
       } catch (error) {
+        // The switcher says its own piece about a vault that has moved, and
+        // offers to forget it - a notice on top of that is one too many.
         console.error("Failed to open vault:", error);
         return false;
       }
@@ -274,7 +286,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
         // The note moved on disk while this one was being edited. Flagged
         // rather than retried: the next autosave would only be refused again,
         // and someone has to say which of the two copies to keep.
-        if (String(error).includes(CHANGED_ON_DISK)) flagConflict(path);
+        if (isConflict(error)) flagConflict(path);
         throw error;
       }
 
@@ -309,7 +321,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
         }
       }
     } catch (error) {
-      console.error("Failed to save file:", error);
+      if (!isConflict(error)) report("Couldn't save this note", error);
     }
   }, [writeDocument, readDocument, markSaved, rewriteDocuments]);
 
@@ -338,7 +350,9 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
         try {
           await writeDocument(path);
         } catch (error) {
-          console.error(`Failed to save ${path}:`, error);
+          // A note waiting on an answer already has the bar above it saying
+          // so; the autosave being turned away is that bar working.
+          if (!isConflict(error)) report(`Couldn't save "${fileNameOf(path)}"`, error);
         }
       })
     );
@@ -411,7 +425,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
         markSaved(path);
         clearConflict(path);
       } catch (error) {
-        console.error(`Failed to reload ${path}:`, error);
+        report(`Couldn't read "${fileNameOf(path)}" back from disk`, error);
       }
     },
     [replaceDocument, markSaved, clearConflict]
@@ -423,7 +437,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
       try {
         await writeDocument(path, true);
       } catch (error) {
-        console.error(`Failed to save ${path}:`, error);
+        report(`Couldn't save "${fileNameOf(path)}"`, error);
       }
     },
     [writeDocument]
@@ -443,7 +457,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
         setOpenPaths((paths) => (paths.includes(path) ? paths : [...paths, path]));
         recentRef.current = [path, ...recentRef.current.filter((p) => p !== path)];
       } catch (error) {
-        console.error("Failed to read file:", error);
+        report(`Couldn't open "${fileNameOf(path)}"`, error);
       }
     },
     [isDocumentOpen, openDocument]

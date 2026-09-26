@@ -1,5 +1,6 @@
 import { CSSProperties, useEffect, useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import { report } from "@/lib/notices";
 import { isMacPlatform } from "@/lib/platform";
 import {
   MAX_EDITOR_FONT_SIZE,
@@ -42,7 +43,7 @@ export default function AppearanceSettings({
   useEffect(() => {
     listSystemFonts()
       .then(setFonts)
-      .catch((error) => console.error("Failed to list system fonts:", error));
+      .catch((error) => report("Couldn't read the fonts installed on this system", error));
   }, []);
 
   const vibrancyLabel = isMac ? "macOS vibrancy" : "window blur, where supported";

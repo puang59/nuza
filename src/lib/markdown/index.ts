@@ -8,6 +8,7 @@ import { Extension, Prec } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { GFM } from "@lezer/markdown";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { report } from "../notices";
 import { isMacPlatform } from "../platform";
 import { attachments } from "./attachments";
 import { listIndent } from "./listIndent";
@@ -30,7 +31,7 @@ const openLinkOnModClick = EditorView.domEventHandlers({
     if (!href) return false;
 
     event.preventDefault();
-    openUrl(href).catch((error) => console.error("Failed to open link:", error));
+    openUrl(href).catch((error) => report("Couldn't open that link", error));
     return true;
   },
 });

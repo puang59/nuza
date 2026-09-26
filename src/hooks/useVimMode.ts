@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Extension } from "@codemirror/state";
+import { report } from "@/lib/notices";
 
 type VimModule = typeof import("@replit/codemirror-vim");
 
@@ -26,7 +27,7 @@ export function useVimMode(enabled: boolean) {
         extension.current ??= loaded.vim();
         setModule(loaded);
       })
-      .catch((error) => console.error("Failed to load Vim mode:", error));
+      .catch((error) => report("Couldn't turn Vim mode on", error));
 
     return () => {
       active = false;
