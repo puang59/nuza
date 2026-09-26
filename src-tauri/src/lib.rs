@@ -545,8 +545,14 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            let window = app.get_webview_window("main").unwrap();
-            apply_transparency(&window, true).expect("Unsupported platform!");
+            // A window without a backdrop is a window that paints itself
+            // opaque - the frontend already handles that, and it is not worth
+            // refusing to start over.
+            if let Some(window) = app.get_webview_window("main") {
+                if let Err(error) = apply_transparency(&window, true) {
+                    eprintln!("nuza: no window backdrop on this platform: {}", error);
+                }
+            }
             Ok(())
         })
         .plugin(tauri_plugin_opener::init());
