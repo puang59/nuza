@@ -8,7 +8,12 @@ interface KeymapSettingsProps {
   resetAll: () => void;
 }
 
-export default function KeymapSettings({ bindings, setBinding, resetBinding, resetAll }: KeymapSettingsProps) {
+export default function KeymapSettings({
+  bindings,
+  setBinding,
+  resetBinding,
+  resetAll,
+}: KeymapSettingsProps) {
   const hasCustomBindings = KEYMAP_ACTIONS.some((action) => bindings[action.id] !== action.defaultBinding);
 
   return (

@@ -436,7 +436,8 @@ export class PropertiesWidget extends WidgetType {
     const property = this.current(view, index);
     if (!property) return;
 
-    const [from, to] = part === "key" ? [property.keyFrom, property.keyTo] : [property.valueFrom, property.valueTo];
+    const [from, to] =
+      part === "key" ? [property.keyFrom, property.keyTo] : [property.valueFrom, property.valueTo];
     // A newline would end the property, and a stray one arriving by paste
     // would quietly break the block in half.
     const insert = text.replace(/\r?\n/g, " ");

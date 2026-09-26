@@ -1,0 +1,10 @@
+# Revisions that only moved whitespace around, so `git blame` can look past
+# them. GitHub reads this file automatically; locally, opt in with:
+#
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# chore(rust): run the formatter over lib.rs and keep it that way
+31764f00bf9f4f87f2afd768afab00acbe1e7ca1
+
+# chore: run prettier over the codebase
+18dfdae3899b5ca3f328330a17c2fdae166b79ee

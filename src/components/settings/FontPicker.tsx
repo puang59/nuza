@@ -41,11 +41,7 @@ export default function FontPicker({ fonts, value, onChange }: FontPickerProps) 
   const options = useMemo(() => {
     // A font saved before it was uninstalled stays selectable, so opening the
     // picker never silently changes what the editor is already using.
-    const all = [
-      DEFAULT_EDITOR_FONT,
-      ...(value && !fonts.includes(value) ? [value] : []),
-      ...fonts,
-    ];
+    const all = [DEFAULT_EDITOR_FONT, ...(value && !fonts.includes(value) ? [value] : []), ...fonts];
     const needle = query.trim().toLowerCase();
     return needle ? all.filter((font) => labelFor(font).toLowerCase().includes(needle)) : all;
   }, [fonts, value, query]);
@@ -72,9 +68,7 @@ export default function FontPicker({ fonts, value, onChange }: FontPickerProps) 
         left: Math.max(EDGE_GAP, Math.min(rect.right - width, window.innerWidth - width - EDGE_GAP)),
         width,
         maxHeight: Math.min(MAX_LIST_HEIGHT, openUpwards ? roomAbove : roomBelow),
-        ...(openUpwards
-          ? { bottom: window.innerHeight - rect.top + 4 }
-          : { top: rect.bottom + 4 }),
+        ...(openUpwards ? { bottom: window.innerHeight - rect.top + 4 } : { top: rect.bottom + 4 }),
       });
     }
 

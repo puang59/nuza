@@ -104,12 +104,7 @@ function relocate(entry: FileEntry, from: string, to: string): FileEntry {
 }
 
 /** Moves the entry at `path` to `newPath`, covering renames as well as drags. */
-export function moveEntry(
-  tree: FileEntry[],
-  rootPath: string,
-  path: string,
-  newPath: string
-): FileEntry[] {
+export function moveEntry(tree: FileEntry[], rootPath: string, path: string, newPath: string): FileEntry[] {
   const entry = findEntry(tree, path);
   if (!entry) return tree;
   return addEntry(removeEntry(tree, rootPath, path), rootPath, relocate(entry, path, newPath));

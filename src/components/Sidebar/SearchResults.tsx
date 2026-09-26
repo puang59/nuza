@@ -27,9 +27,7 @@ export default function SearchResults({
   }, [activeIndex]);
 
   if (matches.length === 0) {
-    return (
-      <p className="animate-fade-in mt-6 text-center text-xs text-zinc-600">No files match.</p>
-    );
+    return <p className="animate-fade-in mt-6 text-center text-xs text-zinc-600">No files match.</p>;
   }
 
   return (

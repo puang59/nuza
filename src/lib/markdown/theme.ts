@@ -103,10 +103,9 @@ const editorTheme = EditorView.theme(
     "&:not(.cm-focused) > .cm-scroller > .cm-selectionLayer .cm-selectionBackground": {
       background: ink.selectionInactive,
     },
-    "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-content ::selection":
-      {
-        background: ink.selection,
-      },
+    "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-content ::selection": {
+      background: ink.selection,
+    },
     ".cm-activeLine": { backgroundColor: "transparent" },
 
     /* Other copies of what you have selected, in the second accent so they
@@ -493,13 +492,12 @@ const editorTheme = EditorView.theme(
       borderRadius: "0.4em",
     },
     ".cm-md-html p": { margin: "0.35em 0" },
-    ".cm-md-html h1, .cm-md-html h2, .cm-md-html h3, .cm-md-html h4, .cm-md-html h5, .cm-md-html h6":
-      {
-        color: ink.heading,
-        fontWeight: "650",
-        lineHeight: "1.3",
-        margin: "0.5em 0 0.25em",
-      },
+    ".cm-md-html h1, .cm-md-html h2, .cm-md-html h3, .cm-md-html h4, .cm-md-html h5, .cm-md-html h6": {
+      color: ink.heading,
+      fontWeight: "650",
+      lineHeight: "1.3",
+      margin: "0.5em 0 0.25em",
+    },
     ".cm-md-html ul, .cm-md-html ol": { margin: "0.35em 0", paddingLeft: "1.5em" },
     ".cm-md-html a": {
       color: ink.accent,

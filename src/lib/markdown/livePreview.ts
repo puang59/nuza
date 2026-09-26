@@ -179,8 +179,20 @@ function imageAltText(doc: Text, image: SyntaxNode) {
 
 /** Tags that never have a closing partner, so they render on their own. */
 const VOID_TAGS = new Set([
-  "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source",
-  "track", "wbr",
+  "area",
+  "base",
+  "br",
+  "col",
+  "embed",
+  "hr",
+  "img",
+  "input",
+  "link",
+  "meta",
+  "param",
+  "source",
+  "track",
+  "wbr",
 ]);
 
 type Build = {
@@ -325,7 +337,12 @@ function decorateNode(node: SyntaxNodeRef, build: Build): boolean | undefined {
     return;
   }
 
-  if (name === "EmphasisMark" || name === "StrikethroughMark" || name === "LinkMark" || name === "LinkTitle") {
+  if (
+    name === "EmphasisMark" ||
+    name === "StrikethroughMark" ||
+    name === "LinkMark" ||
+    name === "LinkTitle"
+  ) {
     out.push((isBeingEdited(state, from, to) ? DIMMED : HIDDEN).range(from, to));
     return;
   }
@@ -421,8 +438,7 @@ function decorateNode(node: SyntaxNodeRef, build: Build): boolean | undefined {
     // A closing tag is reached through its opener; on its own it is nothing.
     if (!tag) return;
 
-    const end =
-      source.endsWith("/>") || VOID_TAGS.has(tag) ? to : findClosingTag(doc, node.node, tag);
+    const end = source.endsWith("/>") || VOID_TAGS.has(tag) ? to : findClosingTag(doc, node.node, tag);
     if (end < 0 || isBeingEdited(state, from, end)) return;
 
     const html = doc.sliceString(from, end);
@@ -617,10 +633,7 @@ export const liveMarkdownPreview = StateField.define<DecorationSet>({
     // it takes all of it, in whichever of the two states it is longer.
     const before = frontmatterRange(startState.doc);
     const after = frontmatterRange(state.doc);
-    const frontEnd = Math.max(
-      after ? after.to : -1,
-      before ? changes.mapPos(before.to, 1) : -1
-    );
+    const frontEnd = Math.max(after ? after.to : -1, before ? changes.mapPos(before.to, 1) : -1);
     if (frontEnd >= 0 && spans.some((span) => span.from <= frontEnd)) {
       spans.push({ from: 0, to: Math.min(frontEnd, state.doc.length) });
     }

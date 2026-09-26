@@ -234,13 +234,10 @@ export function useDocuments({ preferences: settings, initialPath, vault }: UseD
    * proportion to the document's length, which is why it is only ever called
    * when the content has to leave the editor.
    */
-  const read = useCallback(
-    (path: string) => {
-      const state = path === currentPath.current ? editor.current?.state : states.current.get(path);
-      return state?.doc.toString() ?? "";
-    },
-    []
-  );
+  const read = useCallback((path: string) => {
+    const state = path === currentPath.current ? editor.current?.state : states.current.get(path);
+    return state?.doc.toString() ?? "";
+  }, []);
 
   /**
    * A handle on the document as it stands, for a save to hold on to. The text
@@ -275,27 +272,24 @@ export function useDocuments({ preferences: settings, initialPath, vault }: UseD
   }, []);
 
   /** Re-keys documents after a path changed on disk, keeping their contents. */
-  const rewrite = useCallback(
-    (rename: (path: string) => string) => {
-      for (const [path, state] of Array.from(states.current.entries())) {
-        const renamed = rename(path);
-        if (renamed === path) continue;
-        states.current.delete(path);
-        states.current.set(renamed, state);
-      }
+  const rewrite = useCallback((rename: (path: string) => string) => {
+    for (const [path, state] of Array.from(states.current.entries())) {
+      const renamed = rename(path);
+      if (renamed === path) continue;
+      states.current.delete(path);
+      states.current.set(renamed, state);
+    }
 
-      const current = rename(currentPath.current);
-      if (current !== currentPath.current) {
-        currentPath.current = current;
-        editor.current?.dispatch({
-          effects: location.reconfigure(placeOf(current, latestVault.current)),
-        });
-      }
+    const current = rename(currentPath.current);
+    if (current !== currentPath.current) {
+      currentPath.current = current;
+      editor.current?.dispatch({
+        effects: location.reconfigure(placeOf(current, latestVault.current)),
+      });
+    }
 
-      setDirtyPaths((paths) => new Set(Array.from(paths, rename)));
-    },
-    []
-  );
+    setDirtyPaths((paths) => new Set(Array.from(paths, rename)));
+  }, []);
 
   return {
     container,

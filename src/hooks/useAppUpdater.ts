@@ -48,7 +48,9 @@ export function useAppUpdater({ autoUpdate }: UseAppUpdaterOptions) {
   const resultTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
-    getVersion().then(setVersion).catch(() => setVersion(null));
+    getVersion()
+      .then(setVersion)
+      .catch(() => setVersion(null));
   }, []);
 
   /** Shows a manual check's result briefly, then falls back to idle. */

@@ -29,7 +29,7 @@ const KEY_DISPLAY_NAMES: Record<string, string> = {
 // On most keyboard layouts, typing "+" or "_" requires holding Shift even though the
 // shortcut (e.g. zoom in/out) is conceptually just mod+= / mod+-. Normalize to the
 // unshifted key so "mod+=" matches whether or not Shift was physically needed.
-const SHIFTED_KEY_EQUIVALENTS: Record<string, string> = { "+": "=", "_": "-" };
+const SHIFTED_KEY_EQUIVALENTS: Record<string, string> = { "+": "=", _: "-" };
 
 function normalizeEventKey(e: KeyboardEvent): string {
   const key = e.key.toLowerCase();

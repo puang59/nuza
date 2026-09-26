@@ -59,9 +59,7 @@ function UpdateButton({
 }) {
   if (isMacPlatform()) {
     if (status.state !== "available") {
-      return version ? (
-        <span className="text-xs text-gray-400 tabular-nums">{`v${version}`}</span>
-      ) : null;
+      return version ? <span className="text-xs text-gray-400 tabular-nums">{`v${version}`}</span> : null;
     }
 
     return (
@@ -83,15 +81,13 @@ function UpdateButton({
       <button
         data-tauri-drag-region="false"
         className={`flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium text-black cursor-pointer transition-colors disabled:cursor-default disabled:opacity-70 ${
-          failed ? "bg-red-400 hover:bg-red-300" : "bg-[var(--nuza-accent)] hover:bg-[var(--nuza-accent-strong)]"
+          failed
+            ? "bg-red-400 hover:bg-red-300"
+            : "bg-[var(--nuza-accent)] hover:bg-[var(--nuza-accent-strong)]"
         }`}
         onClick={onInstallUpdate}
         disabled={status.state === "installing"}
-        title={
-          failed
-            ? `Install failed: ${status.installError}`
-            : `Restart to update to v${status.version}`
-        }
+        title={failed ? `Install failed: ${status.installError}` : `Restart to update to v${status.version}`}
       >
         <ArrowDownCircle size={12} />
         {status.state === "installing"
@@ -144,10 +140,7 @@ function EditorHeader({
   const leadingPadding = isMacPlatform() ? "pl-24" : "pl-4";
 
   return (
-    <header
-      data-tauri-drag-region
-      className={`h-12 shrink-0 flex items-center gap-4 px-4 ${leadingPadding}`}
-    >
+    <header data-tauri-drag-region className={`h-12 shrink-0 flex items-center gap-4 px-4 ${leadingPadding}`}>
       <div className="flex shrink-0 items-center gap-3">
         <span className="text-sm font-bold text-gray-400">nuza</span>
       </div>
