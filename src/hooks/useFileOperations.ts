@@ -357,7 +357,11 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
   /** Rewrites cached documents and open tabs after a path changes on disk. */
   const rewritePaths = useCallback(
     (from: string, to: string) => {
-      const rename = (path: string) => (isWithin(path, from) ? path.replace(from, to) : path);
+      // Sliced rather than replaced: `String.replace` reads `$&`, `$'` and
+      // friends in its replacement, so a note renamed to something with a `$`
+      // in it would rewrite every open path into nonsense. `isWithin` has
+      // already established that `from` is the prefix.
+      const rename = (path: string) => (isWithin(path, from) ? to + path.slice(from.length) : path);
 
       rewriteDocuments(rename);
       setOpenPaths((paths) => paths.map(rename));
