@@ -38,6 +38,29 @@ jobs:
       - name: build
         run: bun run build
 
+  lint:
+    name: eslint and prettier
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: setup bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: install dependencies
+        run: bun install --frozen-lockfile
+
+      # Errors fail the job; warnings do not. react-hooks v7 added two rules
+      # that flag patterns this codebase uses deliberately, and those are set
+      # to warn until the call sites have been worked through.
+      - name: eslint
+        run: bun run lint
+
+      - name: prettier
+        run: bun run format:check
+
   rustfmt:
     name: rustfmt
     runs-on: ubuntu-22.04
