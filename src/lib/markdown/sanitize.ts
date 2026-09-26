@@ -9,6 +9,7 @@ import { resolveImageSource, safeExternalHref } from "./sources";
  * rather than escaped, so a tag that is not understood simply does not appear.
  */
 const ALLOWED_TAGS = new Set([
+  // Allowed, but never as an anchor - see sanitizeElement.
   "a",
   "abbr",
   "audio",
@@ -119,22 +120,49 @@ function sanitizeUrl(name: string, value: string, directory: string) {
   return resolveImageSource(value, directory);
 }
 
+/**
+ * The class a link wears, and the attribute the editor's link handler reads.
+ * Both are the markdown path's, deliberately: a link from raw HTML should be
+ * the same thing as a link written the ordinary way.
+ */
+const LINK_CLASS = "cm-md-link";
+const LINK_HREF = "data-href";
+
 function sanitizeElement(element: Element, directory: string) {
   const tag = element.tagName.toLowerCase();
   if (!ALLOWED_TAGS.has(tag)) return null;
 
-  const clean = document.createElement(tag);
+  /**
+   * An anchor is rebuilt as a span.
+   *
+   * The webview has nowhere to navigate back from: a plain click on a real
+   * anchor replaces the running app with the remote page, taking the editor,
+   * every unsaved buffer and the undo history with it. Markdown links never
+   * had this problem - they are rendered as `span[data-href]` and opened in
+   * the browser on mod-click - so a link arriving as HTML is given that same
+   * shape and picked up by the same handler.
+   */
+  const isLink = tag === "a";
+  const clean = document.createElement(isLink ? "span" : tag);
 
   for (const attribute of Array.from(element.attributes)) {
     const name = attribute.name.toLowerCase();
     if (!ALLOWED_ATTRIBUTES.has(name)) continue;
+    // The class is the app's to set on a link, not the note's.
+    if (isLink && name === "class") continue;
 
     let value: string | null = attribute.value;
     if (name === "style") value = sanitizeStyle(value);
     else if (URL_ATTRIBUTES.has(name)) value = sanitizeUrl(name, value, directory);
+    if (value === null) continue;
 
-    if (value !== null) clean.setAttribute(name, value);
+    clean.setAttribute(isLink && name === "href" ? LINK_HREF : name, value);
   }
+
+  // Only ever a link if it has somewhere to go: an href the scheme check threw
+  // out leaves the text behind as text, rather than as something that looks
+  // clickable and is not.
+  if (isLink && clean.hasAttribute(LINK_HREF)) clean.className = LINK_CLASS;
 
   return clean;
 }
