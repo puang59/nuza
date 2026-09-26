@@ -164,9 +164,17 @@ function readTable(state: EditorState, table: SyntaxNode, origin: number) {
   return { rows, alignment, key };
 }
 
-/** The alt text of an `![alt](src)`, read from the source rather than the tree. */
-function imageAltText(source: string) {
-  return /^!\[([^\]]*)\]/.exec(source)?.[1] ?? "";
+/**
+ * The alt text of an `![alt](src)`, taken from between the tree's own `![` and
+ * `]` marks. Reading it off the source with a regex meant stopping at the
+ * first `]`, which is a bracket the alt text is perfectly entitled to contain.
+ */
+function imageAltText(doc: Text, image: SyntaxNode) {
+  const marks: SyntaxNode[] = [];
+  for (let child = image.firstChild; child && marks.length < 2; child = child.nextSibling) {
+    if (child.name === "LinkMark") marks.push(child);
+  }
+  return marks.length === 2 ? doc.sliceString(marks[0].to, marks[1].from) : "";
 }
 
 /** Tags that never have a closing partner, so they render on their own. */
@@ -366,7 +374,7 @@ function decorateNode(node: SyntaxNodeRef, build: Build): boolean | undefined {
     if (!source) return;
     out.push(
       Decoration.replace({
-        widget: new ImageWidget(source, imageAltText(doc.sliceString(from, to))),
+        widget: new ImageWidget(source, imageAltText(doc, node.node)),
       }).range(from, to)
     );
     return false;
