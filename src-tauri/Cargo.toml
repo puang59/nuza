@@ -32,6 +32,9 @@ base64 = "0.22"
 # Notes are written to a temporary file and renamed over the target, so a
 # crash mid-save cannot truncate one.
 tempfile = "3"
+# Notices a note being changed underneath the app - by a sync client, a
+# git checkout, or another editor.
+notify = "8"
 
 # Which Windows this is, so the window gets the backdrop that does not make
 # dragging it crawl. window-vibrancy reads the same crate for the same reason.

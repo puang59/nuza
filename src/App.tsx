@@ -7,6 +7,7 @@ import WritingStats from "./components/WritingStats";
 import Sidebar, { SidebarHandle } from "./components/Sidebar";
 import SettingsModal from "./components/SettingsModal";
 import FileSearchPalette from "./components/FileSearchPalette";
+import ChangedOnDisk from "./components/ChangedOnDisk";
 import { useKeymaps, useKeymapListener } from "./hooks/useKeymaps";
 import { useCloseTabMenu } from "./hooks/useCloseTabMenu";
 import { useSaveOnExit } from "./hooks/useSaveOnExit";
@@ -80,6 +81,7 @@ function App() {
     currentFile,
     openPaths,
     dirtyPaths,
+    conflicts,
     folderData,
     rootPath,
     openFolder,
@@ -92,6 +94,8 @@ function App() {
     cycleFile,
     switchToRecent,
     jumpToFile,
+    reloadFromDisk,
+    keepMine,
     createFile,
     createFolder,
     renameEntry,
@@ -281,11 +285,18 @@ function App() {
             surface reads as the deepest layer, with the sidebar and the bars
             above it. Tinted rather than filled so window vibrancy still shows
             through when transparency is on. */}
-        <div className="flex-1 min-w-0 h-full relative overflow-hidden rounded-t-lg bg-black/20">
+        <div className="flex-1 min-w-0 h-full relative flex flex-col overflow-hidden rounded-t-lg bg-black/20">
+          {/* Above the text rather than over it: the note underneath is what
+              the choice is about, and covering it would be a poor way to ask. */}
+          <ChangedOnDisk
+            path={conflicts.has(currentFile) ? currentFile : null}
+            onReload={() => void reloadFromDisk(currentFile)}
+            onKeepMine={() => void keepMine(currentFile)}
+          />
           {/* CodeMirror mounts itself in here and owns the document from then
               on. Nothing about the text passes back through React, which is
               what keeps a keystroke from costing anything at the app level. */}
-          <div ref={editorContainer} className="h-full" />
+          <div ref={editorContainer} className="flex-1 min-h-0" />
         </div>
 
         {/*
