@@ -38,8 +38,10 @@ export default function ContextMenu({
 
   if (items.length === 0) return null;
 
-  const left = Math.min(x, window.innerWidth - 180);
-  const top = Math.min(y, window.innerHeight - items.length * 32 - 16);
+  // Clamped at both ends: a tall menu in a short window was placed at a
+  // negative offset and ran off the top of the screen.
+  const left = Math.max(8, Math.min(x, window.innerWidth - 180));
+  const top = Math.max(8, Math.min(y, window.innerHeight - items.length * 32 - 16));
 
   return (
     <div
