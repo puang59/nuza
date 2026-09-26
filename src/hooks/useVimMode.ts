@@ -22,7 +22,9 @@ export function useVimMode(enabled: boolean) {
     let active = true;
     import("@replit/codemirror-vim")
       .then((loaded) => {
-        if (active) setModule(loaded);
+        if (!active) return;
+        extension.current ??= loaded.vim();
+        setModule(loaded);
       })
       .catch((error) => console.error("Failed to load Vim mode:", error));
 
@@ -30,8 +32,6 @@ export function useVimMode(enabled: boolean) {
       active = false;
     };
   }, [enabled, module]);
-
-  if (module && !extension.current) extension.current = module.vim();
 
   return { module, extension: enabled ? extension.current : null };
 }
