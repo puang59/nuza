@@ -2,7 +2,6 @@ import { useEffect } from "react";
 import { cn } from "cn";
 import { X } from "lucide-react";
 import { Notice } from "@/lib/notices";
-import { useExitAnimation } from "@/hooks/useExitAnimation";
 
 interface NoticeRowProps {
   notice: Notice;
@@ -11,22 +10,20 @@ interface NoticeRowProps {
 }
 
 function NoticeRow({ notice, onDismiss, hold }: NoticeRowProps) {
-  // Held open long enough to animate away, the same as the panels do.
-  const { isMounted, isClosing } = useExitAnimation(true);
-
   useEffect(() => {
+    // Already leaving: let the exit run rather than asking for it again.
+    if (notice.leaving) return;
+
     const timer = setTimeout(onDismiss, hold);
     return () => clearTimeout(timer);
-  }, [onDismiss, hold]);
-
-  if (!isMounted) return null;
+  }, [notice.leaving, onDismiss, hold]);
 
   return (
     <div
       role="status"
       className={cn(
         "pointer-events-auto flex w-[320px] max-w-full items-start gap-3 rounded-lg border border-zinc-700 bg-[var(--nuza-bg)] px-3 py-2.5 shadow-xl",
-        isClosing ? "animate-rise-out" : "animate-rise-in"
+        notice.leaving ? "animate-notice-out" : "animate-notice-in"
       )}
     >
       <div className="min-w-0 flex-1">
