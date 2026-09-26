@@ -14,6 +14,7 @@ import {
 } from "../media";
 import { draggedEntry, setDraggedEntry } from "../dragSource";
 import { noteDirectory } from "./sources";
+import { report } from "../notices";
 
 /**
  * The open folder. Attachments are filed in a `media` directory here rather
@@ -134,7 +135,7 @@ async function attach(view: EditorView, files: File[], at: number) {
 
       position = insertLink(view, position, linkFor(saved, note || base, isImage(file.type)));
     } catch (error) {
-      console.error("Failed to attach file:", error);
+      report("Couldn't add that file to the vault", error);
     }
   }
 

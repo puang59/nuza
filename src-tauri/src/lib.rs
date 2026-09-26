@@ -566,12 +566,24 @@ fn read_file(vault: tauri::State<Vault>, path: String) -> Result<String, String>
 fn write_atomically(path: &Path, bytes: &[u8]) -> Result<(), String> {
     use std::io::Write;
 
+    /// A failure in its own words, without the name of the temporary file it
+    /// happened to be using. That name is this function's business; someone
+    /// being told their note could not be saved has no use for it, and every
+    /// save picks a different one.
+    fn plainly(error: impl ToString) -> String {
+        let said = error.to_string();
+        match said.split_once(" at path ") {
+            Some((reason, _)) => reason.to_string(),
+            None => said,
+        }
+    }
+
     let directory = path
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
         .ok_or_else(|| "Cannot write to this path".to_string())?;
 
-    let mut file = tempfile::NamedTempFile::new_in(directory).map_err(|e| e.to_string())?;
+    let mut file = tempfile::NamedTempFile::new_in(directory).map_err(plainly)?;
 
     // A temporary file is created private to its owner. Left as it is, the
     // first autosave would quietly take a note's own permissions away from it.
@@ -579,11 +591,11 @@ fn write_atomically(path: &Path, bytes: &[u8]) -> Result<(), String> {
         let _ = file.as_file().set_permissions(existing.permissions());
     }
 
-    file.write_all(bytes).map_err(|e| e.to_string())?;
+    file.write_all(bytes).map_err(plainly)?;
     // Ordering the write before the rename, rather than trusting that a rename
     // recorded after it means the contents reached the disk as well.
-    file.as_file().sync_all().map_err(|e| e.to_string())?;
-    file.persist(path).map_err(|e| e.to_string())?;
+    file.as_file().sync_all().map_err(plainly)?;
+    file.persist(path).map_err(plainly)?;
 
     Ok(())
 }

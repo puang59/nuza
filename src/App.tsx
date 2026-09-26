@@ -8,9 +8,11 @@ import Sidebar, { SidebarHandle } from "./components/Sidebar";
 import SettingsModal from "./components/SettingsModal";
 import FileSearchPalette from "./components/FileSearchPalette";
 import ChangedOnDisk from "./components/ChangedOnDisk";
+import Notices from "./components/Notices";
 import { useKeymaps, useKeymapListener } from "./hooks/useKeymaps";
 import { useCloseTabMenu } from "./hooks/useCloseTabMenu";
 import { useSaveOnExit } from "./hooks/useSaveOnExit";
+import { useNotices } from "./hooks/useNotices";
 import { useFileOperations } from "./hooks/useFileOperations";
 import { useVimMode } from "./hooks/useVimMode";
 import { useVaults } from "./hooks/useVaults";
@@ -18,6 +20,7 @@ import { useAppearance } from "./hooks/useAppearance";
 import { useAppUpdater } from "./hooks/useAppUpdater";
 import { usePersistedState } from "./hooks/usePersistedState";
 import { useResizableSidebar } from "./hooks/useResizableSidebar";
+import { report } from "./lib/notices";
 import { isMacPlatform } from "./lib/platform";
 import {
   DEFAULT_EDITOR_FONT,
@@ -123,6 +126,7 @@ function App() {
     resetAll: resetAllKeymaps,
   } = useKeymaps();
   const { width: sidebarWidth, isResizing, startResize, resetWidth } = useResizableSidebar();
+  const { notices, dismiss: dismissNotice, hold: noticeHold } = useNotices();
 
   // Picking up where you left off: the vault most recently opened is reopened
   // on launch, so the app starts in a folder rather than on an empty picker.
@@ -152,7 +156,7 @@ function App() {
     invoke<boolean>("set_transparency", { enabled: wantsTransparency })
       .then(setHasBackdrop)
       .catch((error) => {
-        console.error("Failed to update transparency:", error);
+        report("Couldn't change the window transparency", error);
         setHasBackdrop(false);
       });
   }, [wantsTransparency]);
@@ -353,6 +357,8 @@ function App() {
         currentFile={currentFile}
         onSelect={selectFile}
       />
+
+      <Notices notices={notices} onDismiss={dismissNotice} hold={noticeHold} />
 
       <SettingsModal
         isOpen={isSettingsOpen}
