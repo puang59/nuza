@@ -9,7 +9,7 @@ export function FileIcon({ name }: { name: string }) {
 
     case "md":
     case "txt":
-      return <FileText className="h-4 w-4 text-sky-400" />;
+      return <FileText className="h-4 w-4 text-zinc-500" />;
 
     default:
       return <File className="h-4 w-4 text-zinc-500" />;
