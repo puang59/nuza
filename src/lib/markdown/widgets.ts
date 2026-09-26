@@ -50,11 +50,19 @@ function wrap(tag: string, className: string, text: string) {
  * into the editor.
  */
 export function renderInline(parent: HTMLElement, text: string) {
-  const pattern = new RegExp(INLINE_PATTERN.source, "g");
-  let last = 0;
-  let match: RegExpExecArray | null;
+  // Scanned to the end before a single node is built, because building one
+  // recurses back in here for the text inside it - and the pattern is shared,
+  // so a nested scan would otherwise wind this one's position on with it.
+  // The alternative, a fresh regex per call, put one behind every cell of
+  // every table on every redraw.
+  INLINE_PATTERN.lastIndex = 0;
+  const matches: RegExpExecArray[] = [];
+  for (let match = INLINE_PATTERN.exec(text); match; match = INLINE_PATTERN.exec(text)) {
+    matches.push(match);
+  }
 
-  while ((match = pattern.exec(text))) {
+  let last = 0;
+  for (const match of matches) {
     if (match.index > last) {
       parent.appendChild(document.createTextNode(text.slice(last, match.index)));
     }

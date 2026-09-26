@@ -118,10 +118,16 @@ function App() {
   const reopened = useRef(false);
   useEffect(() => {
     if (reopened.current) return;
-    reopened.current = true;
 
+    // Marked as done only once there was something to do. Setting it on the
+    // first run regardless means an empty list - which is what a vault store
+    // that answers asynchronously would hand over first - spends the one
+    // chance this has to reopen anything.
     const [lastUsed] = vaults;
-    if (lastUsed) void openVault(lastUsed.path);
+    if (!lastUsed) return;
+
+    reopened.current = true;
+    void openVault(lastUsed.path);
   }, [vaults, openVault]);
 
   // The native effect only has to be on while something is meant to show
