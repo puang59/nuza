@@ -2297,7 +2297,7 @@ dependencies = [
 
 [[package]]
 name = "nuza"
-version = "0.1.0"
+version = "0.1.13"
 dependencies = [
  "base64 0.22.1",
  "fontdb",
