@@ -136,15 +136,11 @@ function EditorHeader({
   // macOS traffic lights overlay the top-left corner of the window, so the header
   // needs left padding to clear them. Windows/Linux draw their own native window
   // controls outside the webview instead, so that space isn't needed there -
-  // without this the "nuza" title sits shifted for no reason on those platforms.
+  // without this the first tab sits shifted for no reason on those platforms.
   const leadingPadding = isMacPlatform() ? "pl-24" : "pl-4";
 
   return (
     <header data-tauri-drag-region className={`h-12 shrink-0 flex items-center gap-4 px-4 ${leadingPadding}`}>
-      <div className="flex shrink-0 items-center gap-3">
-        <span className="text-sm font-bold text-gray-400">nuza</span>
-      </div>
-
       <TabBar
         paths={openPaths}
         activePath={currentFile}
