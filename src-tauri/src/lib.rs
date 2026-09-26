@@ -503,6 +503,18 @@ const CLOSE_TAB_ITEM: &str = "close-tab";
 #[cfg(target_os = "macos")]
 const CLOSE_TAB_EVENT: &str = "menu:close-tab";
 
+/// Quitting has the same problem as ⌘W, and it costs more: the predefined
+/// Quit item ends the process the moment the key is pressed, which may be in
+/// the second after a keystroke while the note it changed is still waiting on
+/// the autosave timer. This item announces the quit to the frontend instead,
+/// which writes what is outstanding and then exits.
+#[cfg(target_os = "macos")]
+const QUIT_ITEM: &str = "quit-app";
+
+/// The event that item fires.
+#[cfg(target_os = "macos")]
+const QUIT_EVENT: &str = "menu:quit";
+
 /// Kept around so the shortcut can follow a rebind in Settings.
 #[cfg(target_os = "macos")]
 struct CloseTabItem(tauri::menu::MenuItem<Wry>);
@@ -524,6 +536,13 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<Wry>> {
     // The accelerator is only the default one; the frontend points it at
     // whatever "Close Tab" is actually bound to as soon as it has started.
     let close_tab = MenuItem::with_id(app, CLOSE_TAB_ITEM, "Close Tab", true, Some("CmdOrCtrl+W"))?;
+    let quit = MenuItem::with_id(
+        app,
+        QUIT_ITEM,
+        format!("Quit {}", package.name),
+        true,
+        Some("CmdOrCtrl+Q"),
+    )?;
 
     let menu = Menu::with_items(
         app,
@@ -540,7 +559,7 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<Wry>> {
                     &PredefinedMenuItem::hide(app, None)?,
                     &PredefinedMenuItem::hide_others(app, None)?,
                     &PredefinedMenuItem::separator(app)?,
-                    &PredefinedMenuItem::quit(app, None)?,
+                    &quit,
                 ],
             )?,
             &Submenu::with_items(app, "File", true, &[&close_tab])?,
@@ -626,6 +645,8 @@ pub fn run() {
     let builder = builder.menu(build_menu).on_menu_event(|app, event| {
         if event.id() == CLOSE_TAB_ITEM {
             let _ = app.emit(CLOSE_TAB_EVENT, ());
+        } else if event.id() == QUIT_ITEM {
+            let _ = app.emit(QUIT_EVENT, ());
         }
     });
 

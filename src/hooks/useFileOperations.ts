@@ -10,6 +10,7 @@ import {
   moveEntry as moveTreeEntry,
   removeEntry,
 } from "@/lib/fileTree";
+import { readScratch, writeScratch } from "@/lib/scratch";
 import { readSession, writeSession } from "@/lib/session";
 import { ATTACHMENT_EVENT, announceAttachment, writeMedia } from "@/lib/media";
 import { isWithin, rewritePath } from "@/lib/path";
@@ -19,10 +20,9 @@ const UNTITLED_FILE = "untitled.md";
 
 /**
  * How long after an edit a note is written back to disk. Long enough that a
- * burst of typing is one write rather than thirty, short enough that quitting
- * the app is never the thing that decides whether the last minute of work
- * existed - there is no prompt on the way out, and an image dropped into a
- * note has already been written to the vault by the time its link appears.
+ * burst of typing is one write rather than thirty, short enough that little is
+ * ever outstanding - and what is outstanding is written on the way out rather
+ * than lost, since there is no prompt there to catch it.
  */
 const AUTOSAVE_DELAY = 800;
 
@@ -40,6 +40,9 @@ interface OpenedFolder {
 
 /** Owns the editor's open documents and every Tauri file-system round trip. */
 export function useFileOperations({ preferences, onFolderOpened }: UseFileOperationsOptions) {
+  // Read once, on the way up: the editor is built around this, and a later
+  // read would be of whatever the app has since written back.
+  const [keptScratch] = useState(readScratch);
   const [currentFile, setCurrentFile] = useState<string>(UNTITLED_FILE);
   const [openPaths, setOpenPaths] = useState<string[]>([UNTITLED_FILE]);
   const [folderData, setFolderData] = useState<FileEntry[]>([]);
@@ -60,7 +63,12 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
     markSaved,
     forget: forgetDocuments,
     rewrite: rewriteDocuments,
-  } = useDocuments({ preferences, initialPath: UNTITLED_FILE, vault: rootPath ?? "" });
+  } = useDocuments({
+    preferences,
+    initialPath: UNTITLED_FILE,
+    initialContent: keptScratch,
+    vault: rootPath ?? "",
+  });
 
   // Vim's `:w` command runs outside of React, from a closure captured once
   // when the editor mounts, so it can't see state updates directly - it
@@ -100,14 +108,27 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
     }
   }, []);
 
-  /** Puts the editor back on a single empty scratch document. */
+  /**
+   * Keeps the scratch note where it can be found again. It is the one document
+   * with nowhere on disk to go, so "saved" for it means stored - which is also
+   * why this lowers its dirty flag: the note is no longer ahead of the only
+   * copy of itself that outlives the window.
+   */
+  const keepScratch = useCallback(() => {
+    if (!isDocumentOpen(UNTITLED_FILE)) return;
+    writeScratch(readDocument(UNTITLED_FILE));
+    markSaved(UNTITLED_FILE);
+  }, [isDocumentOpen, readDocument, markSaved]);
+
+  /** Puts the editor back on the scratch document, text and all. */
   const resetToScratch = useCallback(() => {
+    keepScratch();
     forgetDocuments((path) => path === UNTITLED_FILE);
     recentRef.current = [UNTITLED_FILE];
     setOpenPaths([UNTITLED_FILE]);
     setCurrentFile(UNTITLED_FILE);
-    openDocument(UNTITLED_FILE, "");
-  }, [forgetDocuments, openDocument]);
+    openDocument(UNTITLED_FILE, readScratch());
+  }, [keepScratch, forgetDocuments, openDocument]);
 
   /**
    * The vault whose open tabs are being recorded, and whether the tabs on
@@ -155,6 +176,10 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
       setRootPath(folder.path);
       setFolderData(folder.entries);
 
+      // Before the documents go: the scratch note is not one of the tabs being
+      // left behind with the old vault, it is the same note either side of the
+      // switch. Forgetting it here is what used to throw it away.
+      keepScratch();
       forgetDocuments(() => true);
       resetToScratch();
 
@@ -164,7 +189,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
 
       onFolderOpened?.(folder.path);
     },
-    [forgetDocuments, resetToScratch, restoreSession, onFolderOpened]
+    [keepScratch, forgetDocuments, resetToScratch, restoreSession, onFolderOpened]
   );
 
   // What is open, kept for next time. The scratch note is left out: it is not
@@ -231,6 +256,9 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
         if (savedPath) {
           // The scratch tab becomes the saved file rather than spawning a second tab.
           rewriteDocuments((p) => (p === UNTITLED_FILE ? savedPath : p));
+          // It has a file of its own now, and a kept copy left behind would
+          // reappear as the scratch note the next time a vault is opened.
+          writeScratch("");
           markSaved(savedPath);
           setCurrentFile(savedPath);
           setOpenPaths((paths) => paths.map((p) => (p === UNTITLED_FILE ? savedPath : p)));
@@ -266,16 +294,26 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
     );
   }, [writeDocument]);
 
+  /**
+   * Everything that has drifted from where it is kept, put back: the notes to
+   * their files, the scratch note to storage. This is what the autosave timer
+   * runs, and what the app runs once more on the way out.
+   */
+  const flush = useCallback(async () => {
+    keepScratch();
+    await saveDirty();
+  }, [keepScratch, saveDirty]);
+
   // The dirty set only changes identity when a path joins or leaves it, so
   // this schedules a write shortly after a note *becomes* dirty rather than
   // restarting on every keystroke - a run of typing is saved every
   // AUTOSAVE_DELAY rather than only once the typing stops.
   useEffect(() => {
-    if (!Array.from(dirtyPaths).some((path) => path !== UNTITLED_FILE)) return;
+    if (dirtyPaths.size === 0) return;
 
-    const timer = setTimeout(() => void saveDirty(), AUTOSAVE_DELAY);
+    const timer = setTimeout(() => void flush(), AUTOSAVE_DELAY);
     return () => clearTimeout(timer);
-  }, [dirtyPaths, saveDirty]);
+  }, [dirtyPaths, flush]);
 
   const selectFile = useCallback(
     async (path: string) => {
@@ -441,6 +479,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
     openVault,
     save,
     saveDirty,
+    flush,
     selectFile,
     closeFile,
     cycleFile,

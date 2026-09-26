@@ -9,6 +9,7 @@ import SettingsModal from "./components/SettingsModal";
 import FileSearchPalette from "./components/FileSearchPalette";
 import { useKeymaps, useKeymapListener } from "./hooks/useKeymaps";
 import { useCloseTabMenu } from "./hooks/useCloseTabMenu";
+import { useSaveOnExit } from "./hooks/useSaveOnExit";
 import { useFileOperations } from "./hooks/useFileOperations";
 import { useVimMode } from "./hooks/useVimMode";
 import { useVaults } from "./hooks/useVaults";
@@ -85,6 +86,7 @@ function App() {
     openVault,
     save,
     saveDirty,
+    flush,
     selectFile,
     closeFile,
     cycleFile,
@@ -203,6 +205,7 @@ function App() {
 
   useKeymapListener(keymapBindings, keymapHandlers);
   useCloseTabMenu(keymapBindings["close-tab"], closeCurrentTab);
+  useSaveOnExit(flush);
 
   // mod+1..8 jump to that tab and mod+9 to the last, matching what browsers and
   // editors do. These stay fixed rather than joining the rebindable keymap list,
