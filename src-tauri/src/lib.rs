@@ -340,9 +340,44 @@ fn read_file(path: String) -> Result<String, String> {
     std::fs::read_to_string(path).map_err(|e| e.to_string())
 }
 
+/// Writes `bytes` to `path` without ever leaving what is already there half
+/// replaced.
+///
+/// `fs::write` truncates the file and then writes it, and autosave runs several
+/// times a minute per open note: a panic, a power cut or a full disk in the gap
+/// between those two steps is a note that is empty or cut in half, with no
+/// backup and nothing to roll back to. The bytes go to a temporary file beside
+/// the target instead, are flushed all the way to the disk, and are then
+/// renamed over it - a rename within one filesystem is atomic, so a reader sees
+/// either the note as it was or the note as it now is, never the gap.
+fn write_atomically(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    use std::io::Write;
+
+    let directory = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .ok_or_else(|| "Cannot write to this path".to_string())?;
+
+    let mut file = tempfile::NamedTempFile::new_in(directory).map_err(|e| e.to_string())?;
+
+    // A temporary file is created private to its owner. Left as it is, the
+    // first autosave would quietly take a note's own permissions away from it.
+    if let Ok(existing) = fs::metadata(path) {
+        let _ = file.as_file().set_permissions(existing.permissions());
+    }
+
+    file.write_all(bytes).map_err(|e| e.to_string())?;
+    // Ordering the write before the rename, rather than trusting that a rename
+    // recorded after it means the contents reached the disk as well.
+    file.as_file().sync_all().map_err(|e| e.to_string())?;
+    file.persist(path).map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
 #[tauri::command]
 fn write_file(path: String, content: String) -> Result<(), String> {
-    std::fs::write(path, content).map_err(|e| e.to_string())
+    write_atomically(Path::new(&path), content.as_bytes())
 }
 
 /// True for legacy symbol-encoded fonts (Wingdings, Webdings, ...), which map
@@ -613,4 +648,78 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The note as it stands on disk, for asserting a write actually landed.
+    fn contents(path: &Path) -> String {
+        fs::read_to_string(path).expect("the note should be readable")
+    }
+
+    #[test]
+    fn writes_a_new_note() {
+        let vault = tempfile::tempdir().unwrap();
+        let note = vault.path().join("note.md");
+
+        write_atomically(&note, b"hello").unwrap();
+
+        assert_eq!(contents(&note), "hello");
+    }
+
+    #[test]
+    fn replaces_an_existing_note() {
+        let vault = tempfile::tempdir().unwrap();
+        let note = vault.path().join("note.md");
+        fs::write(&note, "the long version of the note").unwrap();
+
+        write_atomically(&note, b"short").unwrap();
+
+        assert_eq!(contents(&note), "short");
+    }
+
+    /// The temporary file is an implementation detail; a vault that collects
+    /// one per autosave would be one the sidebar fills up with rubbish.
+    #[test]
+    fn leaves_nothing_behind_beside_the_note() {
+        let vault = tempfile::tempdir().unwrap();
+        let note = vault.path().join("note.md");
+
+        write_atomically(&note, b"one").unwrap();
+        write_atomically(&note, b"two").unwrap();
+
+        let entries: Vec<_> = fs::read_dir(vault.path()).unwrap().flatten().collect();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].path(), note);
+    }
+
+    /// A note that was readable by the group or the world stays that way after
+    /// the app has saved it once.
+    #[cfg(unix)]
+    #[test]
+    fn keeps_the_permissions_the_note_already_had() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let vault = tempfile::tempdir().unwrap();
+        let note = vault.path().join("note.md");
+        fs::write(&note, "before").unwrap();
+        fs::set_permissions(&note, fs::Permissions::from_mode(0o644)).unwrap();
+
+        write_atomically(&note, b"after").unwrap();
+
+        let mode = fs::metadata(&note).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o644);
+    }
+
+    /// A write into a folder that is not there fails outright rather than
+    /// reporting success over a note that was never saved.
+    #[test]
+    fn refuses_a_directory_that_is_not_there() {
+        let vault = tempfile::tempdir().unwrap();
+        let note = vault.path().join("missing").join("note.md");
+
+        assert!(write_atomically(&note, b"hello").is_err());
+    }
 }

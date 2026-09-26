@@ -110,3 +110,8 @@ jobs:
 
       - name: clippy
         run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+
+      # The unit tests run on all three platforms for the same reason clippy
+      # does: file permissions and renames are where the platforms differ most.
+      - name: test
+        run: cargo test --manifest-path src-tauri/Cargo.toml
