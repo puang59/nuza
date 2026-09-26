@@ -3,6 +3,7 @@ import { ChevronsDownUp, FilePlus, FolderPlus, Search, X } from "lucide-react";
 import { cn } from "cn";
 import { searchFiles } from "@/lib/fileSearch";
 import { fileNameOf } from "@/lib/media";
+import { folderOf, parentRow, rowAfter, visibleRows } from "@/lib/treeNavigation";
 import { report } from "@/lib/notices";
 import { FileEntry } from "@/lib/types";
 import { TreeContext, TreeActions, ContextMenuState, PendingCreate } from "./TreeContext";
@@ -16,6 +17,8 @@ import { Vault } from "@/lib/vaults";
 /** What the rest of the app can ask the sidebar to do. */
 export interface SidebarHandle {
   focusSearch: () => void;
+  /** Puts the keyboard in the tree, on the open note if it is showing. */
+  focusTree: () => void;
 }
 
 interface SidebarProps {
@@ -37,6 +40,10 @@ interface SidebarProps {
   onResizeStart: (event: React.PointerEvent) => void;
   onResizeReset: () => void;
   isResizing: boolean;
+  /** Whether hjkl should move around the tree as well as the arrow keys. */
+  vimEnabled?: boolean;
+  /** Hands the keyboard back to the editor, for Escape. */
+  onReturnFocus?: () => void;
   ref?: Ref<SidebarHandle>;
 }
 
@@ -59,6 +66,8 @@ function Sidebar({
   onResizeStart,
   onResizeReset,
   isResizing,
+  vimEnabled = false,
+  onReturnFocus,
   ref,
 }: SidebarProps) {
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
@@ -95,7 +104,28 @@ function Sidebar({
     setActiveIndex(0);
   }
 
-  useImperativeHandle(ref, () => ({ focusSearch: openSearch }));
+  /** Moves the keyboard to `row`, bringing it into view if it is off screen. */
+  function focusRow(row: HTMLElement | null | undefined) {
+    if (!row) return;
+    row.focus();
+    row.scrollIntoView({ block: "nearest" });
+  }
+
+  /** The open note's row, or the first one when it is not in the tree. */
+  function focusOpenRow() {
+    const tree = treeRef.current;
+    if (!tree) return;
+
+    const rows = visibleRows(tree);
+    focusRow(rows.find((row) => row.dataset.path === currentFile) ?? rows[0]);
+  }
+
+  useImperativeHandle(ref, () => ({
+    focusSearch: openSearch,
+    // The panel is `inert` until it is open, and inert elements refuse focus,
+    // so this waits for the frame the attribute comes off in.
+    focusTree: () => requestAnimationFrame(focusOpenRow),
+  }));
 
   function selectResult(path: string) {
     onFileSelect?.(path);
@@ -133,6 +163,75 @@ function Sidebar({
     const parts = rootPath.split(/[/\\]/).filter(Boolean);
     return parts[parts.length - 1] ?? "Explorer";
   }, [rootPath]);
+
+  /**
+   * Moving around the tree from the keyboard.
+   *
+   * Which row the keyboard is on is not state of ours: it is whichever row
+   * holds focus, read back off the document. That is what makes the panel
+   * active when it is focused and inactive when the editor takes focus back,
+   * with no flag anywhere to be kept in step with either - and why the row
+   * only lights up while the panel actually has the keyboard.
+   */
+  function onTreeKeyDown(event: React.KeyboardEvent) {
+    const tree = treeRef.current;
+    // A row being named or renamed owns every key while it is open.
+    if (!tree || event.target instanceof HTMLInputElement) return;
+
+    const { key } = event;
+    const focused = document.activeElement;
+    const row =
+      focused instanceof HTMLElement && tree.contains(focused)
+        ? focused.closest<HTMLElement>("[data-path]")
+        : null;
+
+    if (key === "Escape") {
+      event.preventDefault();
+      onReturnFocus?.();
+      return;
+    }
+
+    if (key === "ArrowDown" || key === "ArrowUp" || (vimEnabled && (key === "j" || key === "k"))) {
+      event.preventDefault();
+      const forwards = key === "ArrowDown" || key === "j";
+      focusRow(rowAfter(visibleRows(tree), row, forwards ? 1 : -1));
+      return;
+    }
+
+    if (key === "Home" || key === "End") {
+      event.preventDefault();
+      const rows = visibleRows(tree);
+      focusRow(key === "Home" ? rows[0] : rows[rows.length - 1]);
+      return;
+    }
+
+    if (!row) return;
+    const folder = folderOf(row);
+
+    // Rightwards goes inwards: a shut folder opens, an open one steps into.
+    if (key === "ArrowRight" || (vimEnabled && key === "l")) {
+      if (!folder) return;
+      event.preventDefault();
+      if (folder.open) focusRow(rowAfter(visibleRows(tree), row, 1));
+      else folder.open = true;
+      return;
+    }
+
+    // Leftwards goes outwards: an open folder shuts, anything else goes up to
+    // the folder it is in.
+    if (key === "ArrowLeft" || (vimEnabled && key === "h")) {
+      event.preventDefault();
+      if (folder?.open) folder.open = false;
+      else focusRow(parentRow(row, tree));
+      return;
+    }
+
+    if (key === "Enter" || (vimEnabled && key === "o")) {
+      event.preventDefault();
+      if (folder) folder.open = !folder.open;
+      else if (row.dataset.path) onFileSelect?.(row.dataset.path);
+    }
+  }
 
   function openContextMenu(e: React.MouseEvent, entry: FileEntry | null) {
     setContextMenu({ x: e.clientX, y: e.clientY, entry });
@@ -375,6 +474,16 @@ function Sidebar({
 
       <div
         ref={treeRef}
+        // The panel takes one tab stop and hands the keyboard to a row, which
+        // is what keeps Tab from walking through every file in the vault.
+        tabIndex={hasFolder ? 0 : -1}
+        role="tree"
+        onKeyDown={onTreeKeyDown}
+        onFocus={(e) => {
+          // Only when the panel itself was focused. A row taking focus - by
+          // click, or from the keys above - is already where it should be.
+          if (e.target === e.currentTarget) focusOpenRow();
+        }}
         onContextMenu={(e) => {
           if (!hasFolder) return;
           e.preventDefault();
@@ -396,7 +505,7 @@ function Sidebar({
           setDraggingPath(null);
           setDragOverPath(null);
         }}
-        className="flex flex-1 flex-col overflow-y-auto px-2 py-3"
+        className="group/tree flex flex-1 flex-col overflow-y-auto px-2 py-3 outline-none"
       >
         {showResults ? (
           <SearchResults
