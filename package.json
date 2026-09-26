@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "bump-version": "bun run scripts/bump-version.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
