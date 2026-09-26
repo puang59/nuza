@@ -26,8 +26,15 @@ const VAULT_LIMIT = 12;
 
 type Sessions = Record<string, Session>;
 
+/**
+ * The parsed store, held so that recording a tab change is not a fresh parse
+ * of every vault's session. This module is the only writer, so what is here is
+ * what is in storage - it is filled on the first read and replaced on write.
+ */
+let cache: Sessions | null = null;
+
 /** Storage is a file anyone can edit, so what comes back is checked. */
-function readSessions(): Sessions {
+function parseSessions(): Sessions {
   try {
     const stored: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}");
     if (!stored || typeof stored !== "object" || Array.isArray(stored)) return {};
@@ -51,6 +58,11 @@ function readSessions(): Sessions {
   }
 }
 
+function readSessions(): Sessions {
+  cache ??= parseSessions();
+  return cache;
+}
+
 /** What was open in `vault` last time, or nothing if it has no record. */
 export function readSession(vault: string): Session {
   return readSessions()[vault] ?? EMPTY_SESSION;
@@ -64,16 +76,20 @@ export function readSession(vault: string): Session {
 export function writeSession(vault: string, session: Session) {
   if (!vault) return;
 
-  try {
-    const sessions = readSessions();
-    // Deleted and re-added rather than assigned, so the vault written to most
-    // recently is always the last key - which is what makes trimming below
-    // drop the vaults nobody has opened in the longest.
-    delete sessions[vault];
-    if (session.open.length > 0) sessions[vault] = session;
+  // Copied rather than edited in place, so a write that storage refuses does
+  // not leave the cache claiming something that was never recorded.
+  const sessions = { ...readSessions() };
+  // Deleted and re-added rather than assigned, so the vault written to most
+  // recently is always the last key - which is what makes trimming below
+  // drop the vaults nobody has opened in the longest.
+  delete sessions[vault];
+  if (session.open.length > 0) sessions[vault] = session;
 
-    const entries = Object.entries(sessions).slice(-VAULT_LIMIT);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(Object.fromEntries(entries)));
+  const trimmed = Object.fromEntries(Object.entries(sessions).slice(-VAULT_LIMIT));
+
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+    cache = trimmed;
   } catch (error) {
     console.error("Failed to record the open tabs:", error);
   }
