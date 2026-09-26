@@ -52,6 +52,8 @@ function App() {
   const [hasBackdrop, setHasBackdrop] = useState(true);
   const { appearance, update: setAppearance, reset: resetAppearance } = useAppearance(hasBackdrop);
 
+  const sidebarRef = useRef<SidebarHandle>(null);
+
   const onFolderOpened = useCallback(
     (path: string) => {
       rememberVault(path);
@@ -161,11 +163,23 @@ function App() {
       });
   }, [wantsTransparency]);
 
-  const sidebarRef = useRef<SidebarHandle>(null);
-
   // Stable identities, so the memoised chrome around the editor is not
   // re-rendered by a handler that was rebuilt for no reason.
-  const toggleSidebar = useCallback(() => setIsSidebarOpen((open) => !open), []);
+  const returnFocusToEditor = useCallback(() => editorView?.focus(), [editorView]);
+
+  /**
+   * Opening the panel puts the keyboard in it, and closing it gives the
+   * keyboard back - a collapsed sidebar is `inert`, so focus left inside one
+   * would be focus nowhere at all, and the next keystroke would go to the
+   * window rather than to the note.
+   */
+  const toggleSidebar = useCallback(() => {
+    setIsSidebarOpen((open) => {
+      if (open) returnFocusToEditor();
+      else sidebarRef.current?.focusTree();
+      return !open;
+    });
+  }, [returnFocusToEditor]);
   const openSettings = useCallback(() => setIsSettingsOpen(true), []);
   const closeQuickOpen = useCallback(() => setIsQuickOpenOpen(false), []);
 
@@ -335,6 +349,8 @@ function App() {
               onResizeStart={startResize}
               onResizeReset={resetWidth}
               isResizing={isResizing}
+              vimEnabled={vimEnabled}
+              onReturnFocus={returnFocusToEditor}
             />
           </div>
         </div>

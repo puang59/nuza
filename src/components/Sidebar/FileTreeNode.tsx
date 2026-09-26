@@ -128,6 +128,10 @@ export default function FileTreeNode({ entry }: { entry: FileEntry }) {
           className="[&[open]>summary>.cm-tree-chevron]:rotate-90 [&[open]>summary>.cm-tree-folder]:hidden [&[open]>summary>.cm-tree-folder-open]:block"
         >
           <summary
+            data-path={entry.path}
+            // Reachable from the keyboard but not from Tab: the panel takes
+            // the tab stop and hands focus on to a row itself.
+            tabIndex={-1}
             draggable={!isRenaming}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
@@ -142,7 +146,7 @@ export default function FileTreeNode({ entry }: { entry: FileEntry }) {
               e.stopPropagation();
               openContextMenu(e, entry);
             }}
-            className={`flex cursor-pointer list-none items-center gap-1.5 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-zinc-800/25 hover:text-white [-webkit-user-drag:element] [&::-webkit-details-marker]:hidden ${
+            className={`flex cursor-pointer list-none items-center gap-1.5 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-zinc-800/25 hover:text-white focus:outline-none focus:ring-1 focus:ring-inset focus:ring-zinc-500 [-webkit-user-drag:element] [&::-webkit-details-marker]:hidden ${
               isDraggedOver ? "bg-zinc-700/50 outline outline-1 outline-zinc-500" : ""
             } ${isBeingDragged ? "opacity-40" : ""}`}
           >
@@ -181,6 +185,7 @@ export default function FileTreeNode({ entry }: { entry: FileEntry }) {
         // How the panel finds this row again when something outside the tree
         // opens the file - a search hit, the quick-open palette, a tab.
         data-path={entry.path}
+        tabIndex={-1}
         draggable={!isRenaming}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
@@ -196,12 +201,14 @@ export default function FileTreeNode({ entry }: { entry: FileEntry }) {
           e.stopPropagation();
           openContextMenu(e, entry);
         }}
-        className={`flex w-full cursor-pointer items-center gap-1.5 rounded-md py-1.5 pl-7 pr-2 text-left text-sm transition-colors [-webkit-user-drag:element] ${
+        className={`flex w-full cursor-pointer items-center gap-1.5 rounded-md py-1.5 pl-7 pr-2 text-left text-sm transition-colors focus:outline-none focus:ring-1 focus:ring-inset focus:ring-zinc-500 [-webkit-user-drag:element] ${
           currentFile === entry.path
-            ? // The note the editor is actually showing: a plain grey wash, a
-              // step up from the hover behind it so it still reads as the open
-              // file once the pointer has moved on.
-              "bg-white/10 text-white"
+            ? // The note the editor is actually showing. It lifts when the
+              // panel has the keyboard and settles back when the editor takes
+              // it, which is the only thing either pane does to say which one
+              // is listening - no badge, no border, just the row you are on
+              // being easier to find while you are the one moving around it.
+              "bg-white/5 text-zinc-300 group-focus-within/tree:bg-white/15 group-focus-within/tree:text-white"
             : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-100"
         } ${isDraggedOver ? "bg-zinc-700/50 outline outline-1 outline-zinc-500" : ""} ${isBeingDragged ? "opacity-40" : ""}`}
       >

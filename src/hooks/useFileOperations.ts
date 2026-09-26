@@ -536,11 +536,20 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
     [rewriteDocuments]
   );
 
-  const createFile = useCallback(async (parentPath: string, name: string) => {
-    await invoke("create_file", { parentPath, name });
-    const entry = { name, path: joinPath(parentPath, name), isDirectory: false };
-    setFolderData((tree) => addEntry(tree, rootPathRef.current ?? "", entry));
-  }, []);
+  /**
+   * Makes a note and opens it. Creating a file is a decision to write in it,
+   * so the editor goes there rather than leaving a new empty row in the tree
+   * for someone to go and click on.
+   */
+  const createFile = useCallback(
+    async (parentPath: string, name: string) => {
+      await invoke("create_file", { parentPath, name });
+      const entry = { name, path: joinPath(parentPath, name), isDirectory: false };
+      setFolderData((tree) => addEntry(tree, rootPathRef.current ?? "", entry));
+      await selectFile(entry.path);
+    },
+    [selectFile]
+  );
 
   const createFolder = useCallback(async (parentPath: string, name: string) => {
     await invoke("create_folder", { parentPath, name });
