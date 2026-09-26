@@ -38,6 +38,22 @@ jobs:
       - name: build
         run: bun run build
 
+  rustfmt:
+    name: rustfmt
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      # Formatting compiles nothing, so this needs no system dependencies and
+      # no cache - it is the cheapest check here and fails in seconds.
+      - name: cargo fmt
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
+
   rust:
     name: clippy (${{ matrix.platform }})
     runs-on: ${{ matrix.platform }}
