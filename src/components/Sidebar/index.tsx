@@ -419,7 +419,11 @@ function Sidebar({
           <TreeContext.Provider value={treeActions}>
             <ul className="space-y-0.5">
               {pendingCreate?.parentPath === rootPath && (
-                <NewEntryRow type={pendingCreate.type} onSubmit={submitCreate} onCancel={() => setPendingCreate(null)} />
+                <NewEntryRow
+                  type={pendingCreate.type}
+                  onSubmit={submitCreate}
+                  onCancel={() => setPendingCreate(null)}
+                />
               )}
               {data.map((entry) => (
                 <FileTreeNode key={entry.path} entry={entry} />
@@ -439,7 +443,12 @@ function Sidebar({
       />
 
       {contextMenu && (
-        <ContextMenu x={contextMenu.x} y={contextMenu.y} items={contextItems} onClose={() => setContextMenu(null)} />
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={contextItems}
+          onClose={() => setContextMenu(null)}
+        />
       )}
 
       {/* Always mounted: it has to outlive `deleteTarget` long enough to

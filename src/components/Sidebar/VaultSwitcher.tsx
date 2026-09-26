@@ -23,7 +23,14 @@ export interface VaultSwitcherProps {
  * otherwise never. A row is the vault's name and nothing else - the folder it
  * stands for is there on hover, for the rare moment two of them share a name.
  */
-function VaultSwitcher({ vaults, currentPath, onSelect, onOpenFolder, onRename, onForget }: VaultSwitcherProps) {
+function VaultSwitcher({
+  vaults,
+  currentPath,
+  onSelect,
+  onOpenFolder,
+  onRename,
+  onForget,
+}: VaultSwitcherProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);
   /** A vault that would not open, e.g. a folder that has since been moved. */
@@ -68,7 +75,8 @@ function VaultSwitcher({ vaults, currentPath, onSelect, onOpenFolder, onRename, 
     else setMissing(path);
   }
 
-  const action = "shrink-0 cursor-pointer rounded p-1 text-zinc-600 opacity-0 transition-colors focus:opacity-100 group-hover:opacity-100";
+  const action =
+    "shrink-0 cursor-pointer rounded p-1 text-zinc-600 opacity-0 transition-colors focus:opacity-100 group-hover:opacity-100";
 
   return (
     <div ref={panel} className="relative shrink-0 border-t border-zinc-800">
@@ -84,9 +92,7 @@ function VaultSwitcher({ vaults, currentPath, onSelect, onOpenFolder, onRename, 
           {/* Capped at about seven rows: past that the list scrolls rather
               than growing up the side of the window. */}
           <div className="max-h-52 overflow-y-auto py-1">
-            {vaults.length === 0 && (
-              <p className="px-2.5 py-1.5 text-xs text-zinc-500">No vaults yet.</p>
-            )}
+            {vaults.length === 0 && <p className="px-2.5 py-1.5 text-xs text-zinc-500">No vaults yet.</p>}
 
             {vaults.map((vault) => (
               <div key={vault.path} className="group px-1">
@@ -134,7 +140,9 @@ function VaultSwitcher({ vaults, currentPath, onSelect, onOpenFolder, onRename, 
                 )}
 
                 {missing === vault.path && (
-                  <p className="px-1.5 pb-1 text-[10px] text-red-400">Could not open - the folder may have moved.</p>
+                  <p className="px-1.5 pb-1 text-[10px] text-red-400">
+                    Could not open - the folder may have moved.
+                  </p>
                 )}
               </div>
             ))}
@@ -159,7 +167,9 @@ function VaultSwitcher({ vaults, currentPath, onSelect, onOpenFolder, onRename, 
         className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-zinc-800/40"
       >
         <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
-        <span className="truncate text-xs font-semibold text-zinc-300">{current?.name ?? "Choose a vault"}</span>
+        <span className="truncate text-xs font-semibold text-zinc-300">
+          {current?.name ?? "Choose a vault"}
+        </span>
       </button>
     </div>
   );

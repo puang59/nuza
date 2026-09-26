@@ -143,8 +143,7 @@ function listLines(state: EditorState, from: number, to: number): ListLine[] {
 
         lines.push({
           from: line.from,
-          prefix:
-            number === opening.number ? anchor : prefixOf(doc, line.from, indentEnd(doc, line), "ws"),
+          prefix: number === opening.number ? anchor : prefixOf(doc, line.from, indentEnd(doc, line), "ws"),
           anchor,
           quoted,
         });

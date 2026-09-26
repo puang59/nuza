@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { Appearance, DEFAULT_APPEARANCE, appearanceVariables, clampTransparency, isHexColor } from "@/lib/appearance";
+import {
+  Appearance,
+  DEFAULT_APPEARANCE,
+  appearanceVariables,
+  clampTransparency,
+  isHexColor,
+} from "@/lib/appearance";
 import { usePersistedState } from "./usePersistedState";
 
 /** The chosen colours, kept on the document root rather than in React state. */
@@ -40,7 +46,8 @@ export function useAppearance(hasBackdrop = true) {
   }, [appearance, hasBackdrop]);
 
   const update = useCallback(
-    (change: Partial<Appearance>) => setStored((current) => ({ ...(current ?? DEFAULT_APPEARANCE), ...change })),
+    (change: Partial<Appearance>) =>
+      setStored((current) => ({ ...(current ?? DEFAULT_APPEARANCE), ...change })),
     [setStored]
   );
 

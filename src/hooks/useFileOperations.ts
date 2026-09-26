@@ -2,7 +2,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Extension } from "@codemirror/state";
 import { FileEntry } from "@/lib/types";
-import { addEntry, addFile, findEntry, joinPath, moveEntry as moveTreeEntry, removeEntry } from "@/lib/fileTree";
+import {
+  addEntry,
+  addFile,
+  findEntry,
+  joinPath,
+  moveEntry as moveTreeEntry,
+  removeEntry,
+} from "@/lib/fileTree";
 import { readSession, writeSession } from "@/lib/session";
 import { ATTACHMENT_EVENT, announceAttachment, writeMedia } from "@/lib/media";
 import { isWithin, rewritePath } from "@/lib/path";
@@ -166,7 +173,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
     if (!sessionReady.current || sessionVault.current !== rootPath || !rootPath) return;
 
     const open = openPaths.filter((path) => path !== UNTITLED_FILE);
-    writeSession(rootPath, { open, current: open.includes(currentFile) ? currentFile : open[0] ?? "" });
+    writeSession(rootPath, { open, current: open.includes(currentFile) ? currentFile : (open[0] ?? "") });
   }, [rootPath, openPaths, currentFile]);
 
   const openFolder = useCallback(async () => {

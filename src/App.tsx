@@ -110,7 +110,12 @@ function App() {
   } = useAppUpdater({
     autoUpdate: autoUpdateEnabled,
   });
-  const { bindings: keymapBindings, setBinding: setKeymapBinding, resetBinding: resetKeymapBinding, resetAll: resetAllKeymaps } = useKeymaps();
+  const {
+    bindings: keymapBindings,
+    setBinding: setKeymapBinding,
+    resetBinding: resetKeymapBinding,
+    resetAll: resetAllKeymaps,
+  } = useKeymaps();
   const { width: sidebarWidth, isResizing, startResize, resetWidth } = useResizableSidebar();
 
   // Picking up where you left off: the vault most recently opened is reopened
@@ -174,14 +179,26 @@ function App() {
       "open-settings": () => setIsSettingsOpen((open) => !open),
       "toggle-vim-mode": () => setVimEnabled((enabled) => !enabled),
       "check-updates": checkForUpdates,
-      "increase-font-size": () => setEditorFontSize((size) => clampEditorFontSize(size + EDITOR_FONT_SIZE_STEP)),
-      "decrease-font-size": () => setEditorFontSize((size) => clampEditorFontSize(size - EDITOR_FONT_SIZE_STEP)),
+      "increase-font-size": () =>
+        setEditorFontSize((size) => clampEditorFontSize(size + EDITOR_FONT_SIZE_STEP)),
+      "decrease-font-size": () =>
+        setEditorFontSize((size) => clampEditorFontSize(size - EDITOR_FONT_SIZE_STEP)),
       "next-tab": () => cycleFile(1),
       "previous-tab": () => cycleFile(-1),
       "recent-tab": switchToRecent,
       "close-tab": closeCurrentTab,
     }),
-    [save, openFolder, checkForUpdates, setVimEnabled, setEditorFontSize, cycleFile, switchToRecent, closeCurrentTab, toggleSidebar]
+    [
+      save,
+      openFolder,
+      checkForUpdates,
+      setVimEnabled,
+      setEditorFontSize,
+      cycleFile,
+      switchToRecent,
+      closeCurrentTab,
+      toggleSidebar,
+    ]
   );
 
   useKeymapListener(keymapBindings, keymapHandlers);

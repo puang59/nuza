@@ -64,7 +64,9 @@ export default function AppearanceSettings({
             // as well follow the pointer.
             step={1}
             value={appearance.transparency}
-            onChange={(event) => setAppearance({ transparency: clampTransparency(Number(event.target.value)) })}
+            onChange={(event) =>
+              setAppearance({ transparency: clampTransparency(Number(event.target.value)) })
+            }
             // The track paints itself up to the thumb from this, so the filled
             // part follows the value without a second element behind it.
             style={{ "--nuza-slider-ratio": appearance.transparency / 100 } as CSSProperties}
@@ -77,10 +79,17 @@ export default function AppearanceSettings({
       </SettingRow>
 
       <SettingRow title="Accent" description="Links, bullets, the caret and anything you can act on">
-        <ColorField label="Accent colour" value={appearance.accent} onChange={(accent) => setAppearance({ accent })} />
+        <ColorField
+          label="Accent colour"
+          value={appearance.accent}
+          onChange={(accent) => setAppearance({ accent })}
+        />
       </SettingRow>
 
-      <SettingRow title="Reset Colours" description="Put the accent and transparency back to how they started">
+      <SettingRow
+        title="Reset Colours"
+        description="Put the accent and transparency back to how they started"
+      >
         <button
           onClick={resetAppearance}
           className="cursor-pointer rounded-md border border-zinc-700 bg-zinc-800 px-3 py-1 text-xs text-white transition-colors hover:border-[var(--nuza-accent)]"

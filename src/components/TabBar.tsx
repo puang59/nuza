@@ -113,9 +113,7 @@ function TabBar({ paths, activePath, dirtyPaths, onSelect, onClose }: TabBarProp
               }
             }}
             className={`animate-fade-in group relative flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-md pl-2.5 pr-1 text-xs transition-colors outline-none focus-visible:ring-1 focus-visible:ring-[var(--nuza-accent)] ${
-              isActive
-                ? "bg-zinc-800 text-white"
-                : "text-zinc-500 hover:bg-zinc-800/40 hover:text-zinc-300"
+              isActive ? "bg-zinc-800 text-white" : "text-zinc-500 hover:bg-zinc-800/40 hover:text-zinc-300"
             }`}
           >
             {/* Inset from the corners and positioned rather than set as a border,
