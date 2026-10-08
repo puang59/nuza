@@ -30,6 +30,8 @@ interface SettingsModalProps {
   setTypewriterScrolling: (enabled: boolean) => void;
   sectionGuides: boolean;
   setSectionGuides: (enabled: boolean) => void;
+  zenDimming: boolean;
+  setZenDimming: (enabled: boolean) => void;
   appearance: Appearance;
   setAppearance: (change: Partial<Appearance>) => void;
   resetAppearance: () => void;
@@ -67,6 +69,8 @@ export default function SettingsModal({
   setTypewriterScrolling,
   sectionGuides,
   setSectionGuides,
+  zenDimming,
+  setZenDimming,
   appearance,
   setAppearance,
   resetAppearance,
@@ -163,6 +167,8 @@ export default function SettingsModal({
                 setTypewriterScrolling={setTypewriterScrolling}
                 sectionGuides={sectionGuides}
                 setSectionGuides={setSectionGuides}
+                zenDimming={zenDimming}
+                setZenDimming={setZenDimming}
               />
             )}
 
