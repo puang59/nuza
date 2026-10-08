@@ -25,6 +25,7 @@ import Tags from "./Tags";
 import { useBacklinks } from "@/hooks/useBacklinks";
 import { EMPTY_OUTLINE, Outline as OutlineData } from "@/lib/markdown/headings";
 import Outline from "./Outline";
+import ViewSwitcher, { SidebarView, readView } from "./ViewSwitcher";
 import { useTags } from "@/hooks/useTags";
 import { Vault } from "@/lib/vaults";
 
@@ -113,16 +114,17 @@ function Sidebar({
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const [sortOrder, setSortOrder] = usePersistedState<SortOrder>("sidebarSort", "name");
   const [sortMenu, setSortMenu] = useState<{ x: number; y: number } | null>(null);
-  const [backlinksOpen, setBacklinksOpen] = usePersistedState("backlinksOpen", true);
   // Folded to begin with, which is also when it costs nothing: the tags are
   // only read from the vault while the panel is open.
-  const [tagsOpen, setTagsOpen] = usePersistedState("tagsOpen", false);
-  const [outlineOpen, setOutlineOpen] = usePersistedState("outlineOpen", false);
+  // Which of its views the sidebar is on. Checked on the way out of storage,
+  // which may hold a view from a build that had others.
+  const [storedView, setView] = usePersistedState<SidebarView>("sidebarView", "files");
+  const view = readView(storedView);
   // Only for a note in the vault: the scratch note has no name to link to.
   const inVault = !!rootPath && currentFile.startsWith(rootPath);
   // Fetched folded too: the count on the heading is worth having on its own.
   const backlinks = useBacklinks(currentFile, rootPath ?? null, notes, inVault);
-  const tags = useTags(currentFile, rootPath ?? null, notes, !!rootPath && tagsOpen);
+  const tags = useTags(currentFile, rootPath ?? null, notes, !!rootPath && view === "tags");
   // Storage can hold anything; an order that is not one falls back to name.
   const order = SORT_ORDERS.some((option) => option.id === sortOrder) ? sortOrder : "name";
   /** The tree in the order it is shown in. For name order it is the tree itself. */
@@ -159,6 +161,8 @@ function Sidebar({
     // Nothing to search until a folder is open, and the keymap can reach this
     // even when the header's toggle is not on screen.
     if (!hasFolder) return;
+    // The search is of the files, wherever the sidebar happened to be.
+    setView("files");
     setIsSearching(true);
     // The row animates open from zero height, so it is not focusable until the
     // browser has laid it out.
@@ -536,7 +540,9 @@ function Sidebar({
         }`}
       />
 
-      <div className="flex items-center justify-between gap-1 px-3 pt-1">
+      {/* As tall with the tree's buttons as without them, so the views below
+          do not shift when the buttons go. */}
+      <div className="flex min-h-[26px] items-center justify-between gap-1 px-3 pt-1">
         <h2
           className="truncate text-xs font-semibold uppercase tracking-wider text-zinc-500"
           title={rootPath ?? undefined}
@@ -544,7 +550,8 @@ function Sidebar({
           {folderLabel}
         </h2>
 
-        {hasFolder && (
+        {/* These act on the tree, so they are only there with it. */}
+        {hasFolder && view === "files" && (
           <div className="flex shrink-0 items-center gap-0.5 ml-auto">
             <button
               onClick={() => (isSearching ? closeSearch() : openSearch())}
@@ -595,9 +602,11 @@ function Sidebar({
         )}
       </div>
 
+      {hasFolder && <ViewSwitcher view={view} onChange={setView} />}
+
       {/* Kept mounted and collapsed to zero height so it slides rather than
           appears, and so the tree below it moves with it. */}
-      <div className="sidebar-search" data-open={isSearching}>
+      <div className={cn("sidebar-search", view !== "files" && "hidden")} data-open={isSearching}>
         <div className="px-2 pt-1.5">
           <div
             className={cn(
@@ -684,7 +693,12 @@ function Sidebar({
           if (files.length) attachFiles(rootPath, files);
           else if (dragging) moveEntry(dragging, rootPath);
         }}
-        className="group/tree flex flex-1 flex-col overflow-y-auto px-2 py-3 outline-none compact:py-1.5"
+        // Hidden rather than unmounted while another view is up: which
+        // folders are open lives in the rows, and would be lost with them.
+        className={cn(
+          "group/tree flex-1 flex-col overflow-y-auto px-2 py-3 outline-none compact:py-1.5",
+          view === "files" || !hasFolder ? "flex" : "hidden"
+        )}
       >
         {showResults ? (
           <SearchResults
@@ -723,29 +737,32 @@ function Sidebar({
         )}
       </div>
 
-      {rootPath && (
-        <div className="shrink-0 border-t border-zinc-800/70 px-1.5 py-1">
-          <Outline
-            headings={outline.headings}
-            active={outline.active}
-            isOpen={outlineOpen}
-            onToggle={() => setOutlineOpen((open) => !open)}
-            onJump={(from) => onJumpToHeading?.(from)}
-          />
-          <Tags
-            index={tags}
-            isOpen={tagsOpen}
-            onToggle={() => setTagsOpen((open) => !open)}
-            onOpen={(path, line) => (onOpenAt ? onOpenAt(path, line, 0) : onFileSelect?.(path))}
-          />
-          {inVault && (
-            <Backlinks
-              links={backlinks}
-              isOpen={backlinksOpen}
-              onToggle={() => setBacklinksOpen((open) => !open)}
+      {hasFolder && view !== "files" && (
+        <div className="animate-fade-in min-h-0 flex-1 overflow-y-auto px-2 py-3 compact:py-1.5">
+          {view === "outline" && (
+            <Outline
+              headings={outline.headings}
+              active={outline.active}
+              onJump={(from) => onJumpToHeading?.(from)}
+            />
+          )}
+          {view === "tags" && (
+            <Tags
+              index={tags}
               onOpen={(path, line) => (onOpenAt ? onOpenAt(path, line, 0) : onFileSelect?.(path))}
             />
           )}
+          {view === "links" &&
+            (inVault ? (
+              <Backlinks
+                links={backlinks}
+                onOpen={(path, line) => (onOpenAt ? onOpenAt(path, line, 0) : onFileSelect?.(path))}
+              />
+            ) : (
+              <p className="px-2 py-1 text-xs text-zinc-600">
+                Open a note in this vault to see what links to it.
+              </p>
+            ))}
         </div>
       )}
 

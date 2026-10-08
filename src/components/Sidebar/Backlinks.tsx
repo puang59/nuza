@@ -1,23 +1,20 @@
 import { WikiLinkRef } from "@/lib/markdown/wikiLinks";
 import { fileNameOf } from "@/lib/media";
 import { FileIcon } from "@/lib/utils";
-import FooterSection from "./FooterSection";
 
 interface BacklinksProps {
   links: WikiLinkRef[];
-  isOpen: boolean;
-  onToggle: () => void;
   onOpen: (path: string, line: number) => void;
 }
 
 /**
- * The notes that link to the open one, under the tree. Folded to its heading
- * when it is not wanted; open, each link is a row naming the note it is in and
- * showing the line it is on, and choosing it opens that note at that line.
+ * The notes that link to the open one: each link a row naming the note it is
+ * in and showing the line it is on, and choosing it opens that note at that
+ * line.
  */
-export default function Backlinks({ links, isOpen, onToggle, onOpen }: BacklinksProps) {
+export default function Backlinks({ links, onOpen }: BacklinksProps) {
   return (
-    <FooterSection title="Linked mentions" count={links.length} isOpen={isOpen} onToggle={onToggle}>
+    <>
       {links.length === 0 ? (
         <p className="px-2 py-1 text-xs text-zinc-600">No notes link here.</p>
       ) : (
@@ -45,6 +42,6 @@ export default function Backlinks({ links, isOpen, onToggle, onOpen }: Backlinks
           ))}
         </ul>
       )}
-    </FooterSection>
+    </>
   );
 }
