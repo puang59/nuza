@@ -8,11 +8,20 @@ import { isWithin } from "@/lib/path";
 export interface OpenTarget {
   kind: "folder" | "file";
   path: string;
+  /**
+   * For a note moved into a window of its own: the vault it is in. The window
+   * opens that folder with the note alone in it, rather than the note's own
+   * folder with whatever tabs the vault had.
+   */
+  vault?: string;
 }
 
 export type OpenPlan =
-  /** Switch to this folder, with this note in front where there is one. */
-  | { folder: string; focus?: string }
+  /**
+   * Switch to this folder, with this note in front where there is one - and
+   * as the only tab, with the vault's own tabs left alone, where `alone` says.
+   */
+  | { folder: string; focus?: string; alone?: boolean }
   /** The note is in the vault that is open: just bring it up. */
   | { select: string };
 
@@ -29,5 +38,6 @@ export function planOpen(target: OpenTarget, rootPath: string | null): OpenPlan 
   if (target.kind === "folder") return target.path === rootPath ? null : { folder: target.path };
 
   if (rootPath && isWithin(target.path, rootPath)) return { select: target.path };
+  if (target.vault) return { folder: target.vault, focus: target.path, alone: true };
   return { folder: directoryOf(target.path), focus: target.path };
 }

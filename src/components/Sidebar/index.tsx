@@ -52,6 +52,8 @@ interface SidebarProps {
   onOpenAt?: (path: string, line: number, column: number) => void;
   /** Opens a note in the split beside the main pane. */
   onOpenToSide?: (path: string) => void;
+  /** Opens a note in a window of its own. */
+  onOpenInWindow?: (path: string) => void;
   currentFile?: string;
   onCreateFile: (parentPath: string, name: string) => Promise<void> | void;
   onCreateFolder: (parentPath: string, name: string) => Promise<void> | void;
@@ -88,6 +90,7 @@ function Sidebar({
   onFileSelect,
   onOpenAt,
   onOpenToSide,
+  onOpenInWindow,
   currentFile = "",
   onCreateFile,
   onCreateFolder,
@@ -479,6 +482,10 @@ function Sidebar({
     // The note in front cannot also be beside itself.
     if (onOpenToSide && !entry.isDirectory && entry.path !== currentFile) {
       items.push({ label: "Open to the Side", onClick: () => onOpenToSide(entry.path) });
+    }
+    // A note only: a picture or a PDF has nothing to show in an editor's window.
+    if (!entry.isDirectory && onOpenInWindow && /\.md$/i.test(entry.name)) {
+      items.push({ label: "Open in New Window", onClick: () => onOpenInWindow(entry.path) });
     }
     items.push({ label: "Rename", onClick: () => setRenamingPath(entry.path) });
     if (!entry.isDirectory) items.push({ label: "Duplicate", onClick: () => duplicateEntry(entry.path) });

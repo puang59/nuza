@@ -1,6 +1,6 @@
 # Multi-window design
 
-Tracks [#148](https://github.com/puang59/nuza/issues/148). Status: steps 1 to 5 of the rollout are built. Step 6, popping a note out into its own window, is not.
+Tracks [#148](https://github.com/puang59/nuza/issues/148). Status: all six steps of the rollout are built.
 
 ## What it is for
 
@@ -118,7 +118,7 @@ Each step is its own commit, and each leaves the app working with one window.
 3. **Close and quit. Done.** Closing a window saves it and destroys only it. Quit asks every window to save, counts the answers (`Quit`), and exits when all are in or after five seconds.
 4. **Frontend sharing. Done.** A `storage` listener for settings and the keymap, the session store re-read before each write, the scratch note kept by `main` only.
 5. **Restore windows. Done.** The open vaults and window frames are written to `windows.json` in the app data folder and brought back at launch. The macOS `Window` menu lists the open windows.
-6. _(Later)_ pop a note out into its own window.
+6. **A note in its own window. Done.** `Move to New Window` on a tab, and `Open in New Window` on a note in the sidebar. `open_note_in_new_window` opens a window on the same vault and starts it on a file target that carries the vault (`OpenTarget.vault`), so the window opens the vault with that note alone in it.
 
 ### What was decided building it
 
@@ -128,6 +128,8 @@ Each step is its own commit, and each leaves the app working with one window.
 - **A path goes to the window that has it, then to a window with nothing open, then to a new window.** A window that has been opened for a path and has not yet collected it counts as already holding that folder, so two quick `nuza` commands do not race.
 - **New Window opens the welcome screen.** Only `main` reopens the last-used vault at launch; reopening it in a second window would put two windows on one vault.
 - **Opening the same vault in two windows from the vault switcher is allowed.** Only paths arriving from outside (the command line, Finder) are routed to the window that already has them. Two windows on one vault is safe: each has its own `known` mtimes, so the other's save shows as "changed on disk".
+- **A window opened for one note does not keep the vault's tabs.** Tabs are remembered per vault, and the window the note came from already keeps them; written from the new window they would be replaced by its one tab. So that window starts with the note alone and records nothing. After a quit it comes back as an ordinary window on the vault.
+- **Moving a note saves it first.** The new window reads from disk, so anything typed and not yet written is written before the window is asked for. A note waiting on a changed-on-disk answer is moved as it stands on disk.
 - **Restore:** the set of windows at the moment of quitting comes back, not the set from the last time a window was closed. Frames are checked against the screens that are attached now, and one that would be off every screen is dropped.
 
 ## Testing

@@ -177,6 +177,7 @@ function App() {
     retrace,
     closeFile,
     closeFiles,
+    openInNewWindow,
     reopenClosedTab,
     reorderTabs,
     cycleFile,
@@ -428,6 +429,7 @@ function App() {
               ...(path !== currentFile
                 ? [{ label: "Open to the Side", onClick: () => void openToSide(path) }]
                 : []),
+              { label: "Move to New Window", onClick: () => void openInNewWindow(path, true) },
               {
                 label: revealLabel(),
                 onClick: () =>
@@ -439,7 +441,7 @@ function App() {
           : []),
       ];
     },
-    [rootPath, openPaths, currentFile, closeFile, closeFiles, openToSide]
+    [rootPath, openPaths, currentFile, closeFile, closeFiles, openToSide, openInNewWindow]
   );
 
   const editorMenuItems = useCallback(
@@ -798,6 +800,7 @@ function App() {
               onOpenFolder={openFolder}
               onFileSelect={selectFile}
               onOpenToSide={(path) => void openToSide(path)}
+              onOpenInWindow={(path) => void openInNewWindow(path)}
               onOpenAt={(path, line, column) => void openAt(path, line, column)}
               currentFile={currentFile}
               onCreateFile={createFile}
