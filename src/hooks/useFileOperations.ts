@@ -18,7 +18,7 @@ import {
 import { report } from "@/lib/notices";
 import { listenHere } from "@/lib/windowEvents";
 import { readScratch, writeScratch } from "@/lib/scratch";
-import { readSession, tabsToRestore, writeSession } from "@/lib/session";
+import { EMPTY_SESSION, readSession, tabsToRestore, writeSession } from "@/lib/session";
 import { ATTACHMENT_EVENT, announceAttachment, fileNameOf, writeMedia } from "@/lib/media";
 import { isWithin, rewritePath } from "@/lib/path";
 import { ClosedTab, placeAt, rememberClosed } from "@/lib/closedTabs";
@@ -317,6 +317,12 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
   /** Counts the restores started, so one overtaken by the next can tell. */
   const restoring = useRef(0);
   /**
+   * Set in a window that was opened for one note of a vault. The vault's
+   * record of its tabs is the other window's to keep: written from here, it
+   * would be replaced by this window's one tab.
+   */
+  const sessionMuted = useRef(false);
+  /**
    * Where the caret was in each of the session's notes, as last recorded: what
    * a tab not looked at yet this run opens at, and what is written back for it
    * until it has been.
@@ -330,11 +336,13 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
    * what keeps a vault with twenty tabs open as quick to launch as an empty one.
    */
   const restoreSession = useCallback(
-    async (folder: OpenedFolder, focus?: string) => {
+    async (folder: OpenedFolder, focus?: string, alone = false) => {
       const mine = ++restoring.current;
       const overtaken = () => mine !== restoring.current;
 
-      const session = readSession(folder.path);
+      // A window opened for one note has that note and nothing else: the
+      // vault's tabs belong to the window they were left in.
+      const session = alone ? EMPTY_SESSION : readSession(folder.path);
       // A note asked for by name - from a terminal - goes in front of whatever
       // was open, and joins the tabs if it was not one of them.
       const wanted = focus && !session.open.includes(focus) ? [...session.open, focus] : session.open;
@@ -388,7 +396,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
 
   /** Switches the app over to a folder that has already been read. */
   const adoptFolder = useCallback(
-    (folder: OpenedFolder, focus?: string) => {
+    (folder: OpenedFolder, focus?: string, alone = false) => {
       setRootPath(folder.path);
       setFolderData(folder.entries);
 
@@ -408,7 +416,8 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
 
       sessionVault.current = folder.path;
       sessionReady.current = false;
-      void restoreSession(folder, focus);
+      sessionMuted.current = alone;
+      void restoreSession(folder, focus, alone);
 
       onFolderOpened?.(folder.path);
     },
@@ -420,6 +429,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
   const recordSession = useCallback(() => {
     const root = rootPathRef.current;
     if (!sessionReady.current || sessionVault.current !== root || !root) return;
+    if (sessionMuted.current) return;
 
     const open = openPathsRef.current.filter((path) => path !== UNTITLED_FILE);
     const current = currentFileRef.current;
@@ -455,9 +465,9 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
    * moved or deleted since it was last opened.
    */
   const openVault = useCallback(
-    async (path: string, focus?: string) => {
+    async (path: string, focus?: string, alone = false) => {
       try {
-        adoptFolder(await invoke<OpenedFolder>("open_folder", { path }), focus);
+        adoptFolder(await invoke<OpenedFolder>("open_folder", { path }), focus, alone);
         return true;
       } catch (error) {
         // The switcher says its own piece about a vault that has moved, and
@@ -1069,6 +1079,32 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
   );
 
   /**
+   * Opens `path` in a window of its own, on the same vault. With `move`, the
+   * note leaves this window for that one - its tab closes here - which is
+   * what dragging a tab out of a browser does; without, it is opened there
+   * as well, and stays where it is here.
+   *
+   * What has been typed is written first: the new window reads the note from
+   * disk, and would otherwise open on the copy from before the last pause.
+   */
+  const openInNewWindow = useCallback(
+    async (path: string, move = false) => {
+      const root = rootPathRef.current;
+      if (!root || path === UNTITLED_FILE) return;
+
+      try {
+        if (dirtyPathsRef.current.has(path) && !conflictsRef.current.has(path)) await writeDocument(path);
+        await invoke("open_note_in_new_window", { path, vault: root });
+      } catch (error) {
+        report(`Couldn't open "${fileNameOf(path)}" in a new window`, error);
+        return;
+      }
+      if (move) closeFile(path);
+    },
+    [writeDocument, closeFile]
+  );
+
+  /**
    * Lets go of a note whose file has gone, and of whatever was typed in it:
    * the tab closes, or the split does, and nothing is written. The other
    * answer to a missing file is `keepMine`, which puts it back on disk.
@@ -1343,7 +1379,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
 
       if ("select" in plan) {
         await selectFile(plan.select);
-      } else if (!(await openVault(plan.folder, plan.focus))) {
+      } else if (!(await openVault(plan.folder, plan.focus, plan.alone))) {
         report(`Couldn't open "${plan.folder}"`);
       }
     },
@@ -1462,6 +1498,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
     reorderTabs,
     closeFile,
     closeFiles,
+    openInNewWindow,
     cycleFile,
     switchToRecent,
     jumpToFile,
