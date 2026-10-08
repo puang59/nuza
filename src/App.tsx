@@ -17,7 +17,9 @@ import { useKeymaps, useKeymapListener } from "./hooks/useKeymaps";
 import { useCloseTabMenu } from "./hooks/useCloseTabMenu";
 import { useSaveOnExit } from "./hooks/useSaveOnExit";
 import { useNotices } from "./hooks/useNotices";
-import { useFileOperations } from "./hooks/useFileOperations";
+import { UNTITLED_FILE, useFileOperations } from "./hooks/useFileOperations";
+import GettingStarted from "./components/GettingStarted";
+import type { KeymapAction } from "./lib/keymaps";
 import { useVimMode } from "./hooks/useVimMode";
 import { useVaults } from "./hooks/useVaults";
 import { useAppearance } from "./hooks/useAppearance";
@@ -582,6 +584,12 @@ function App() {
 
   useKeymapListener(keymapBindings, keymapHandlers);
 
+  /** Does what an action's keys would, for something on screen that offers it. */
+  const runAction = useCallback(
+    (action: KeymapAction) => (keymapHandlers as Partial<Record<KeymapAction, () => void>>)[action]?.(),
+    [keymapHandlers]
+  );
+
   // The two extra buttons on the side of a mouse, which go back and forward
   // everywhere else they are found.
   useEffect(() => {
@@ -715,6 +723,13 @@ function App() {
               ref={editorContainer}
               onContextMenu={(event) => openEditorMenu(event, editorView)}
               className="flex-1 min-h-0 print:h-auto"
+            />
+            <GettingStarted
+              onScratch={currentFile === UNTITLED_FILE}
+              hasVault={!!rootPath}
+              subscribeToStats={subscribeToStats}
+              bindings={keymapBindings}
+              onRun={runAction}
             />
           </div>
 
