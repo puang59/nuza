@@ -1,15 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePersistedState } from "./usePersistedState";
 
-export const MIN_SIDEBAR_WIDTH = 160;
+/**
+ * As narrow as the sidebar goes: the width at which its four view names -
+ * Files, Outline, Tags, Links - still read in full. Any narrower and they
+ * were cut down to a letter and an ellipsis each.
+ */
+export const MIN_SIDEBAR_WIDTH = 224;
 export const MAX_SIDEBAR_WIDTH = 480;
-/** Matches the sidebar's old fixed `w-48`, so existing users see no jump. */
-const DEFAULT_SIDEBAR_WIDTH = 192;
+const DEFAULT_SIDEBAR_WIDTH = 240;
 
 /** How long a width has to hold still before it is written to storage. */
 const PERSIST_DELAY_MS = 250;
 
-function clampWidth(width: number) {
+export function clampWidth(width: number) {
   if (!Number.isFinite(width)) return DEFAULT_SIDEBAR_WIDTH;
   return Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, Math.round(width)));
 }
@@ -20,10 +24,14 @@ function clampWidth(width: number) {
  * so the handle stays glued to the cursor regardless of surrounding padding.
  */
 export function useResizableSidebar() {
-  const [width, setWidth] = usePersistedState("sidebarWidth", DEFAULT_SIDEBAR_WIDTH, {
+  const [storedWidth, setWidth] = usePersistedState("sidebarWidth", DEFAULT_SIDEBAR_WIDTH, {
     // Every pointermove is a new width; storage only needs the one it stops on.
     debounceMs: PERSIST_DELAY_MS,
   });
+  // Held to the limits on the way out of storage as well as while dragging: a
+  // width kept by a build whose minimum was narrower would otherwise bring the
+  // sidebar back too narrow for what is in it now.
+  const width = clampWidth(storedWidth);
   const [isResizing, setIsResizing] = useState(false);
   const dragStart = useRef({ x: 0, width: DEFAULT_SIDEBAR_WIDTH });
 
