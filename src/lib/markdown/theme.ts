@@ -32,7 +32,9 @@ const ink = {
  * so the column stops here and the rest of the window becomes margin - which is
  * what makes a maximised window feel calm rather than empty.
  */
-const MEASURE = "44rem";
+const MEASURE = "var(--nuza-measure, 44rem)";
+/** The space between lines of prose; set, like the measure, from Settings. */
+const LINE_HEIGHT = "var(--nuza-line-height, 1.75)";
 
 /** The checkbox tick: a centred background image, so it never drifts off. */
 const CHECK_MARK =
@@ -68,7 +70,7 @@ const editorTheme = EditorView.theme(
       flexGrow: "1",
       margin: "0 auto",
       padding: "4rem 0 45vh",
-      lineHeight: "1.75",
+      lineHeight: LINE_HEIGHT,
       caretColor: ink.caret,
     },
     ".cm-line": {
@@ -141,6 +143,9 @@ const editorTheme = EditorView.theme(
       color: ink.heading,
       fontWeight: "650",
       lineHeight: "1.3",
+      /* A heading that runs to a second line is split evenly, rather than
+         leaving a word or two on a line of their own. */
+      textWrapStyle: "balance",
     },
     ".cm-md-h1": { fontSize: "1.9em", padding: "0.55em 0 0.2em" },
     ".cm-md-h2": { fontSize: "1.52em", padding: "0.6em 0 0.2em" },
@@ -239,6 +244,10 @@ const editorTheme = EditorView.theme(
       backgroundColor: ink.surface,
       borderRadius: "0.3em",
       padding: "0.12em 0.35em",
+      /* Wrapped onto a second line, each part keeps its own padding and
+         corners instead of being cut off square where the line ended. */
+      boxDecorationBreak: "clone",
+      WebkitBoxDecorationBreak: "clone",
     },
     /* A tag: the accent, set in a quiet pill so it reads as a label and not as a
        link - it is not something you follow from here, it is listed in the sidebar. */
@@ -248,6 +257,8 @@ const editorTheme = EditorView.theme(
       boxShadow: "inset 0 0 0 1px var(--nuza-accent-underline)",
       borderRadius: "0.6em",
       padding: "0.05em 0.45em",
+      boxDecorationBreak: "clone",
+      WebkitBoxDecorationBreak: "clone",
     },
     ".cm-md-link": {
       color: ink.accent,

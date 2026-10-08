@@ -37,6 +37,10 @@ interface SettingsModalProps {
   setEditorFont: (font: string) => void;
   editorFontSize: number;
   setEditorFontSize: (size: number) => void;
+  contentWidth: number;
+  setContentWidth: (width: number) => void;
+  lineHeight: number;
+  setLineHeight: (height: number) => void;
   keymapBindings: Record<KeymapAction, string>;
   setKeymapBinding: (action: KeymapAction, binding: string) => void;
   resetKeymapBinding: (action: KeymapAction) => void;
@@ -66,6 +70,10 @@ export default function SettingsModal({
   setEditorFont,
   editorFontSize,
   setEditorFontSize,
+  contentWidth,
+  setContentWidth,
+  lineHeight,
+  setLineHeight,
   keymapBindings,
   setKeymapBinding,
   resetKeymapBinding,
@@ -157,6 +165,10 @@ export default function SettingsModal({
                 setEditorFont={setEditorFont}
                 editorFontSize={editorFontSize}
                 setEditorFontSize={setEditorFontSize}
+                contentWidth={contentWidth}
+                setContentWidth={setContentWidth}
+                lineHeight={lineHeight}
+                setLineHeight={setLineHeight}
               />
             )}
 
