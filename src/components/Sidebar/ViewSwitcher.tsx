@@ -41,11 +41,13 @@ export default function ViewSwitcher({ view, onChange }: ViewSwitcherProps) {
       <div
         role="tablist"
         aria-label="Sidebar view"
-        className="relative grid grid-cols-4 rounded-lg bg-zinc-800/40 p-0.5"
+        className="relative grid grid-cols-4 rounded-md bg-zinc-800/30 p-[3px]"
       >
         <span
           aria-hidden
-          className="pointer-events-none absolute inset-y-0.5 left-0.5 w-[calc((100%-0.25rem)/4)] rounded-md bg-zinc-700/70 shadow-sm transition-transform duration-200 ease-out motion-reduce:transition-none"
+          // Set in from the box on every side, and only a shade lighter than
+          // it: enough to say which view is up, not enough to look at.
+          className="pointer-events-none absolute inset-y-[3px] left-[3px] w-[calc((100%-6px)/4)] rounded bg-zinc-700/30 transition-transform duration-200 ease-out motion-reduce:transition-none"
           style={{ transform: `translateX(${index * 100}%)` }}
         />
         {VIEWS.map(({ id, label, title }) => {
@@ -58,8 +60,8 @@ export default function ViewSwitcher({ view, onChange }: ViewSwitcherProps) {
               aria-selected={selected}
               title={title}
               onClick={() => onChange(id)}
-              className={`relative cursor-pointer whitespace-nowrap rounded-md py-1 text-center text-[11px] font-medium transition-colors duration-200 compact:py-0.5 ${
-                selected ? "text-zinc-100" : "text-zinc-500 hover:text-zinc-300"
+              className={`relative cursor-pointer whitespace-nowrap rounded py-0.5 text-center text-[11px] leading-4 font-medium transition-colors duration-200 compact:py-px ${
+                selected ? "text-zinc-200" : "text-zinc-500 hover:text-zinc-300"
               }`}
             >
               {label}
