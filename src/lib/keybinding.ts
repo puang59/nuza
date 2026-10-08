@@ -31,7 +31,31 @@ const KEY_DISPLAY_NAMES: Record<string, string> = {
 // unshifted key so "mod+=" matches whether or not Shift was physically needed.
 const SHIFTED_KEY_EQUIVALENTS: Record<string, string> = { "+": "=", _: "-" };
 
+/** Keys whose character changes under Shift or Option, by where they are on the board. */
+const PUNCTUATION_CODES: Record<string, string> = { Period: ".", Comma: "," };
+
+/**
+ * The key a binding names for this event.
+ *
+ * Usually the character it types - but a modifier can change that character
+ * without changing which key was meant: Shift turns `8` into `*`, and Option
+ * on a Mac turns `1` into `¡` and `j` into `∆`. A binding written as
+ * "mod+shift+8" or "mod+alt+1" names the key, so for digits, and for letters
+ * and the two punctuation keys under those modifiers, the key's position is
+ * read instead of what it typed.
+ */
 function normalizeEventKey(e: KeyboardEvent): string {
+  const code = e.code ?? "";
+  if (e.shiftKey || e.altKey) {
+    const digit = /^Digit(\d)$/.exec(code);
+    if (digit) return digit[1];
+    if (code in PUNCTUATION_CODES) return PUNCTUATION_CODES[code];
+  }
+  if (e.altKey) {
+    const letter = /^Key([A-Z])$/.exec(code);
+    if (letter) return letter[1].toLowerCase();
+  }
+
   const key = e.key.toLowerCase();
   return key === " " ? "space" : key;
 }
@@ -69,6 +93,9 @@ export function isCompleteBinding(binding: string): boolean {
 
 export function matchesBinding(e: KeyboardEvent, binding: string, isMac: boolean = isMacPlatform()): boolean {
   if (!binding) return false;
+  // AltGr is how a good many keyboards type `{`, `[` or `@`, and it reports
+  // itself as Control and Alt together. That is someone typing, not a chord.
+  if (e.getModifierState?.("AltGraph")) return false;
 
   const parts = binding.split("+");
   const key = parts[parts.length - 1];

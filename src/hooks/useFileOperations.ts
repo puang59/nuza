@@ -28,6 +28,8 @@ import { jumpToHeading } from "@/lib/markdown/headings";
 import { showLightbox } from "@/lib/markdown/lightbox";
 import { mediaSource } from "@/lib/markdown/sources";
 import { isNotText, openerFor } from "@/lib/openers";
+import { untitledName } from "@/lib/noteName";
+import { directoryOf } from "@/lib/markdown/sources";
 import { WIKI_LINK_EVENT, WikiLinkRequest, resolveWikiLink } from "@/lib/markdown/wikiLinks";
 import { useDocuments } from "./useDocuments";
 import { useFileIndex } from "./useFileIndex";
@@ -1102,6 +1104,44 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
   );
 
   /**
+   * Makes a new note beside the one that is open - or at the top of the vault
+   * when nothing from it is - under the first "Untitled" name that is free,
+   * and opens it. With no folder open there is nowhere to make one, and the
+   * scratch note is what there is to write in.
+   */
+  const createNote = useCallback(async () => {
+    const root = rootPathRef.current;
+    if (!root) return;
+
+    const here = currentFileRef.current;
+    const parent = here !== UNTITLED_FILE && isWithin(here, root) ? directoryOf(here) || root : root;
+
+    // The names the index and the tree know of in that folder. Neither is
+    // sure to be complete, so a name that turns out to be taken is stepped
+    // past rather than reported.
+    const taken = new Set<string>();
+    for (const path of fileIndexRef.current.paths) {
+      if (directoryOf(path) === parent) taken.add(fileNameOf(path));
+    }
+    const listed =
+      parent === root ? folderDataRef.current : findEntry(folderDataRef.current, parent)?.children;
+    for (const entry of listed ?? []) taken.add(entry.name);
+
+    for (let attempt = 0; attempt < 20; attempt++) {
+      try {
+        await createFile(parent, untitledName(taken, attempt));
+        return;
+      } catch (error) {
+        if (!String(error).includes("already exists")) {
+          report("Couldn't make a new note", error);
+          return;
+        }
+      }
+    }
+    report("Couldn't find a free name for a new note");
+  }, [createFile]);
+
+  /**
    * Copies a note beside itself as "name 1.md" and opens the copy. Edits not
    * yet written are written first, so the copy is of the note as it stands
    * rather than as it was at the last autosave - unless the note is waiting
@@ -1320,6 +1360,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
     restoreRecovered,
     discardRecovered,
     createFile,
+    createNote,
     createFolder,
     renameEntry,
     duplicateEntry,

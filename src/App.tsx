@@ -34,7 +34,18 @@ import { wikiLinkText, wikiTargetFor } from "./lib/markdown/wikiLinks";
 import { copyText } from "./lib/clipboard";
 import { directoryOf } from "./lib/markdown";
 import { noteLineNumbers } from "./lib/markdown/lineGutter";
-import { insertLink, toggleBold, toggleItalic } from "./lib/markdown/formatting";
+import {
+  insertLink,
+  setHeading,
+  toggleBlockquote,
+  toggleBold,
+  toggleBulletList,
+  toggleInlineCode,
+  toggleItalic,
+  toggleNumberedList,
+  toggleStrikethrough,
+  toggleTaskList,
+} from "./lib/markdown/formatting";
 import { jumpToHeadingAt, nextHeading, previousHeading } from "./lib/markdown/headings";
 import { isMacPlatform } from "./lib/platform";
 import {
@@ -146,6 +157,7 @@ function App() {
     reloadFromDisk,
     keepMine,
     createFile,
+    createNote,
     createFolder,
     renameEntry,
     duplicateEntry,
@@ -445,6 +457,21 @@ function App() {
       "recent-tab": switchToRecent,
       "close-tab": closeCurrentTab,
       "reopen-closed-tab": () => void reopenClosedTab(),
+      "new-note": () => void createNote(),
+      "reset-font-size": () => setEditorFontSize(DEFAULT_EDITOR_FONT_SIZE),
+      "toggle-inline-code": () => format(toggleInlineCode),
+      "toggle-strikethrough": () => format(toggleStrikethrough),
+      "toggle-bullet-list": () => format(toggleBulletList),
+      "toggle-numbered-list": () => format(toggleNumberedList),
+      "toggle-task-list": () => format(toggleTaskList),
+      "toggle-blockquote": () => format(toggleBlockquote),
+      "heading-1": () => format(setHeading(1)),
+      "heading-2": () => format(setHeading(2)),
+      "heading-3": () => format(setHeading(3)),
+      "heading-4": () => format(setHeading(4)),
+      "heading-5": () => format(setHeading(5)),
+      "heading-6": () => format(setHeading(6)),
+      "heading-none": () => format(setHeading(0)),
       "toggle-bold": () => format(toggleBold),
       "toggle-italic": () => format(toggleItalic),
       "insert-link": () => format(insertLink),
@@ -466,6 +493,7 @@ function App() {
       format,
       printNote,
       moveByHeading,
+      createNote,
     ]
   );
 

@@ -20,7 +20,22 @@ export type KeymapAction =
   | "insert-link"
   | "print-note"
   | "next-heading"
-  | "previous-heading";
+  | "previous-heading"
+  | "new-note"
+  | "reset-font-size"
+  | "toggle-inline-code"
+  | "toggle-strikethrough"
+  | "toggle-bullet-list"
+  | "toggle-numbered-list"
+  | "toggle-task-list"
+  | "toggle-blockquote"
+  | "heading-1"
+  | "heading-2"
+  | "heading-3"
+  | "heading-4"
+  | "heading-5"
+  | "heading-6"
+  | "heading-none";
 
 export interface KeymapDefinition {
   id: KeymapAction;
@@ -169,6 +184,96 @@ export const KEYMAP_ACTIONS: KeymapDefinition[] = [
     label: "Previous Heading",
     description: "Move to the nearest heading above",
     defaultBinding: "mod+alt+arrowup",
+  },
+  {
+    id: "new-note",
+    label: "New Note",
+    description: "Make a note beside the open one, and open it",
+    defaultBinding: "mod+n",
+  },
+  {
+    id: "reset-font-size",
+    label: "Reset Font Size",
+    description: "Put the editor text back to its usual size",
+    defaultBinding: "mod+0",
+  },
+  {
+    id: "toggle-inline-code",
+    label: "Inline Code",
+    description: "Mark the selection as code, or plain again",
+    defaultBinding: "mod+e",
+  },
+  {
+    id: "toggle-strikethrough",
+    label: "Strikethrough",
+    description: "Strike the selection through, or plain again",
+    defaultBinding: "mod+shift+x",
+  },
+  {
+    id: "toggle-bullet-list",
+    label: "Bullet List",
+    description: "Turn the selected lines into bullets, or back",
+    defaultBinding: "mod+shift+8",
+  },
+  {
+    id: "toggle-numbered-list",
+    label: "Numbered List",
+    description: "Turn the selected lines into numbered points, or back",
+    defaultBinding: "mod+shift+7",
+  },
+  {
+    id: "toggle-task-list",
+    label: "Task List",
+    description: "Turn the selected lines into tasks, or back",
+    defaultBinding: "mod+shift+9",
+  },
+  {
+    id: "toggle-blockquote",
+    label: "Quote",
+    description: "Quote the selected lines, or unquote them",
+    defaultBinding: "mod+shift+.",
+  },
+  {
+    id: "heading-1",
+    label: "Heading 1",
+    description: "Make the line a level 1 heading, or plain again",
+    defaultBinding: "mod+alt+1",
+  },
+  {
+    id: "heading-2",
+    label: "Heading 2",
+    description: "Make the line a level 2 heading, or plain again",
+    defaultBinding: "mod+alt+2",
+  },
+  {
+    id: "heading-3",
+    label: "Heading 3",
+    description: "Make the line a level 3 heading, or plain again",
+    defaultBinding: "mod+alt+3",
+  },
+  {
+    id: "heading-4",
+    label: "Heading 4",
+    description: "Make the line a level 4 heading, or plain again",
+    defaultBinding: "mod+alt+4",
+  },
+  {
+    id: "heading-5",
+    label: "Heading 5",
+    description: "Make the line a level 5 heading, or plain again",
+    defaultBinding: "mod+alt+5",
+  },
+  {
+    id: "heading-6",
+    label: "Heading 6",
+    description: "Make the line a level 6 heading, or plain again",
+    defaultBinding: "mod+alt+6",
+  },
+  {
+    id: "heading-none",
+    label: "Plain Text",
+    description: "Take the heading off the line",
+    defaultBinding: "mod+alt+0",
   },
 ];
 
