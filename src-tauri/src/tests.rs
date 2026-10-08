@@ -1,8 +1,11 @@
 use crate::cli::OpenTarget;
 use crate::files::{
     already_exists, create_unused, duplicate_file, exact_file_name, move_destination,
-    rename_no_replace, safe_file_name, write_atomically, write_privately,
+    rename_no_replace, safe_file_name, write_atomically,
 };
+// Only asked about where a file has a mode to ask about.
+#[cfg(unix)]
+use crate::files::write_privately;
 use crate::fonts::system_font_families;
 use crate::index::VaultIndex;
 use crate::media::{body_bytes, header_text, media_body, media_body_in_chunks, requested_path};
