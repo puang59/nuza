@@ -598,6 +598,47 @@ pub(crate) async fn existing_files(
     off_thread(move || Ok(files_present(&vault_of(&window), paths))).await
 }
 
+/// The kinds of file handed to the system to open: documents and media the
+/// editor cannot show. A list of what is allowed rather than of what is not -
+/// a vault can come from anywhere, and "open" on a script or an app is "run".
+/// Matches `SYSTEM_KINDS` in `src/lib/openers.ts`.
+pub(crate) const OPENED_BY_THE_SYSTEM: &[&str] = &[
+    "pdf", "epub", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "pages", "numbers", "key", "odt",
+    "ods", "odp", "rtf", "zip", "mp3", "wav", "m4a", "ogg", "flac", "aac", "mp4", "mov", "m4v",
+    "webm", "mkv", "avi", "heic", "tif", "tiff", "psd",
+];
+
+/// Whether `path` is of a kind the system may be asked to open.
+pub(crate) fn opened_by_the_system(path: &Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| {
+            OPENED_BY_THE_SYSTEM
+                .iter()
+                .any(|kind| extension.eq_ignore_ascii_case(kind))
+        })
+}
+
+/// Opens a document or a recording from the vault in whatever the system uses
+/// for it: a PDF in a PDF reader, a video in a player.
+#[tauri::command]
+pub(crate) async fn open_with_system(
+    window: tauri::WebviewWindow,
+    path: String,
+) -> Result<(), String> {
+    off_thread(move || {
+        let vault = vault_of(&window);
+        let path = within_vault(&vault, Path::new(&path))?;
+        // Checked on what the path resolves to, not on what it was called: a
+        // link named `notes.pdf` that points at a script is a script.
+        if !path.is_file() || !opened_by_the_system(&path) {
+            return Err("That is not a kind of file nuza opens".to_string());
+        }
+        tauri_plugin_opener::open_path(&path, None::<&str>).map_err(|e| e.to_string())
+    })
+    .await
+}
+
 #[tauri::command]
 pub(crate) async fn read_file(
     window: tauri::WebviewWindow,

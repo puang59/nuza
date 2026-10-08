@@ -1,7 +1,7 @@
 use crate::cli::OpenTarget;
 use crate::files::{
     already_exists, create_unused, duplicate_file, exact_file_name, move_destination,
-    rename_no_replace, safe_file_name, write_atomically,
+    opened_by_the_system, rename_no_replace, safe_file_name, write_atomically,
 };
 // Only asked about where a file has a mode to ask about.
 #[cfg(unix)]
@@ -2257,4 +2257,26 @@ fn the_folder_a_window_has_open_is_told_without_making_a_vault() {
     *locked(&windows.vault("main").root) = Some(dir.path().to_path_buf());
     assert_eq!(windows.root("main"), Some(dir.path().to_path_buf()));
     assert_eq!(windows.root("w-1"), None);
+}
+
+/// Only documents and media go to the system. A script, an app or anything
+/// unknown does not: for those, "open" means "run".
+#[test]
+fn only_documents_and_media_are_handed_to_the_system() {
+    for name in ["paper.pdf", "Talk.MP4", "notes.final.docx", "song.flac"] {
+        assert!(opened_by_the_system(Path::new(name)), "{name}");
+    }
+    for name in [
+        "run.command",
+        "setup.sh",
+        "tool.exe",
+        "Thing.app",
+        "note.md",
+        "pdf",
+        ".pdf",
+        "archive.pdf.sh",
+        "noextension",
+    ] {
+        assert!(!opened_by_the_system(Path::new(name)), "{name}");
+    }
 }
