@@ -1,3 +1,4 @@
+import type { EditorView } from "@codemirror/view";
 import type { MarkdownConfig } from "@lezer/markdown";
 import { tags } from "@lezer/highlight";
 
@@ -111,6 +112,11 @@ export interface WikiLinkRequest {
   heading: string | null;
   /** The folder of the note the link is in, which a name is resolved against first. */
   fromDirectory: string;
+  /**
+   * The editor the link was followed in. With the split open there are two,
+   * and a link to a heading "in this note" means the note in that one.
+   */
+  view?: EditorView;
 }
 
 export function followWikiLink(request: WikiLinkRequest) {

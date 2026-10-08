@@ -117,6 +117,9 @@ export function jumpToHeading(view: EditorView, wanted: string) {
   if (!heading) return false;
 
   view.dispatch({
+    // The caret goes too, to the end of the heading: left where the link was,
+    // the first arrow key or letter typed scrolled straight back to it.
+    selection: { anchor: view.state.doc.lineAt(heading.from).to },
     effects: [
       EditorView.scrollIntoView(heading.from, { y: "start", yMargin: 48 }),
       setFlash.of(heading.from),

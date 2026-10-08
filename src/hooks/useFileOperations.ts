@@ -909,7 +909,19 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
    */
   useEffect(() => {
     async function follow(event: Event) {
-      const { target, heading, fromDirectory } = (event as CustomEvent<WikiLinkRequest>).detail;
+      const { target, heading, fromDirectory, view: origin } = (event as CustomEvent<WikiLinkRequest>).detail;
+
+      // `[[#heading]]`: a heading in the note the link is written in - which,
+      // with the split open, is the note in the pane it was followed in, and
+      // not always the one in the main pane. It needs no vault to work.
+      if (!target) {
+        const view = origin ?? editorView;
+        if (heading && view && !jumpToHeading(view, heading)) {
+          report(`There's no heading "${heading}" in this note`);
+        }
+        return;
+      }
+
       const root = rootPathRef.current;
       if (!root) return;
 
@@ -919,13 +931,6 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
         if (!heading || !view || showingDocument() !== path) return;
         if (!jumpToHeading(view, heading)) report(`There's no heading "${heading}" in that note`);
       };
-
-      // `[[#heading]]`: a heading in the note the link is written in.
-      if (!target) {
-        const here = currentFileRef.current;
-        if (heading && here) goToHeading(here);
-        return;
-      }
 
       // The index knows the whole vault; the tree knows a note made a moment
       // ago, before the index has heard of it.

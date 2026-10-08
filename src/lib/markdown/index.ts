@@ -40,7 +40,7 @@ const openLinkOnModClick = EditorView.domEventHandlers({
       event.preventDefault();
       const heading =
         target?.closest<HTMLElement>("[data-wikilink-heading]")?.dataset.wikilinkHeading ?? null;
-      followWikiLink({ target: wiki, heading, fromDirectory: view.state.facet(noteDirectory) });
+      followWikiLink({ target: wiki, heading, fromDirectory: view.state.facet(noteDirectory), view });
       return true;
     }
 
