@@ -137,6 +137,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
     isOpen: isDocumentOpen,
     read: readDocument,
     revision: documentRevision,
+    caretOf,
     markSaved,
     forget: forgetDocuments,
     rewrite: rewriteDocuments,
@@ -290,6 +291,12 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
   const sessionReady = useRef(false);
   /** Counts the restores started, so one overtaken by the next can tell. */
   const restoring = useRef(0);
+  /**
+   * Where the caret was in each of the session's notes, as last recorded: what
+   * a tab not looked at yet this run opens at, and what is written back for it
+   * until it has been.
+   */
+  const savedCarets = useRef<Record<string, number>>({});
 
   /**
    * Reopens the notes that were last open in `folder`, or leaves the editor on
@@ -329,10 +336,12 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
         const content = await invoke<string>("read_file", { path: current });
         if (overtaken()) return;
 
+        savedCarets.current = { ...session.carets };
+
         recentRef.current = [current, ...open.filter((path) => path !== current)];
         setOpenPaths(open);
         setCurrentFile(current);
-        openDocument(current, content);
+        openDocument(current, content, savedCarets.current[current]);
         restored = true;
 
         // The likeliest note to have edits waiting is the one that was open
@@ -366,8 +375,10 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
       setSideFile(null);
       setMissing(new Set());
       resetToScratch();
-      // The tabs closed in the vault being left are no tabs of this one.
+      // The tabs closed in the vault being left are no tabs of this one, and
+      // nor are the places its notes were left at.
       closedRef.current = [];
+      savedCarets.current = {};
 
       sessionVault.current = folder.path;
       sessionReady.current = false;
@@ -380,12 +391,28 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
 
   // What is open, kept for next time. The scratch note is left out: it is not
   // a file, so there is nothing to reopen it from.
-  useEffect(() => {
-    if (!sessionReady.current || sessionVault.current !== rootPath || !rootPath) return;
+  const recordSession = useCallback(() => {
+    const root = rootPathRef.current;
+    if (!sessionReady.current || sessionVault.current !== root || !root) return;
 
-    const open = openPaths.filter((path) => path !== UNTITLED_FILE);
-    writeSession(rootPath, { open, current: open.includes(currentFile) ? currentFile : (open[0] ?? "") });
-  }, [rootPath, openPaths, currentFile]);
+    const open = openPathsRef.current.filter((path) => path !== UNTITLED_FILE);
+    const current = currentFileRef.current;
+
+    // A tab that has not been looked at this run has no caret of its own
+    // yet, so the one it was recorded with stands.
+    const carets: Record<string, number> = {};
+    for (const path of open) {
+      const caret = caretOf(path) ?? savedCarets.current[path];
+      if (caret) carets[path] = caret;
+    }
+    savedCarets.current = carets;
+
+    writeSession(root, { open, current: open.includes(current) ? current : (open[0] ?? ""), carets });
+  }, [caretOf]);
+
+  useEffect(() => {
+    recordSession();
+  }, [rootPath, openPaths, currentFile, recordSession]);
 
   const openFolder = useCallback(async () => {
     try {
@@ -559,8 +586,12 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
    */
   const flush = useCallback(async () => {
     keepScratch();
+    // Where the caret is in each note, along with the tabs: it moves without
+    // the tabs changing, so this is where it is caught up with - as notes are
+    // saved, and once more on the way out.
+    recordSession();
     await Promise.all([saveDirty(), keepConflicted()]);
-  }, [keepScratch, saveDirty, keepConflicted]);
+  }, [keepScratch, recordSession, saveDirty, keepConflicted]);
 
   // The dirty set only changes identity when a path joins or leaves it, so
   // this schedules a write shortly after a note *becomes* dirty rather than
@@ -734,7 +765,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
         // asking for any more.
         if (mine !== selectionRef.current) return;
 
-        openDocument(path, content);
+        openDocument(path, content, firstRead ? savedCarets.current[path] : undefined);
         // A note the split was showing has moved across to this pane.
         setSideFile((side) => (side === path ? null : side));
 
@@ -773,7 +804,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
 
         // Overtaken, or made the main pane's note while it was being read.
         if (mine !== sideSelectionRef.current || path === currentFileRef.current) return;
-        if (!openSideDocument(path, content)) return;
+        if (!openSideDocument(path, content, firstRead ? savedCarets.current[path] : undefined)) return;
 
         if (firstRead) void offerRecovered(path, content ?? "");
         setSideFile(path);
@@ -1017,6 +1048,9 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
       setOpenPaths((paths) => paths.map(rename));
       recentRef.current = recentRef.current.map(rename);
       closedRef.current = closedRef.current.map((tab) => ({ ...tab, path: rename(tab.path) }));
+      savedCarets.current = Object.fromEntries(
+        Object.entries(savedCarets.current).map(([kept, caret]) => [rename(kept), caret])
+      );
       if (isWithin(currentFileRef.current, from)) setCurrentFile(rename(currentFileRef.current));
       setSideFile((side) => (side && isWithin(side, from) ? rename(side) : side));
       setMissing((paths) => (paths.size === 0 ? paths : new Set(Array.from(paths, rename))));

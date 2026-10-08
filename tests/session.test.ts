@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { readSession, tabsToRestore, writeSession } from "../src/lib/session";
+import { caretsFor, readSession, tabsToRestore, writeSession } from "../src/lib/session";
 
 /** A `localStorage` that two "windows" can share, as two real ones do. */
 function fakeStorage() {
@@ -126,5 +126,33 @@ describe("tabsToRestore", () => {
     const before = JSON.stringify(session);
     tabsToRestore(session, session.open, "/v/new.md");
     expect(JSON.stringify(session)).toBe(before);
+  });
+});
+
+describe("where the caret was", () => {
+  test("is kept with the tabs and read back", () => {
+    writeSession("/v", { open: ["/v/a.md", "/v/b.md"], current: "/v/a.md", carets: { "/v/a.md": 120 } });
+    expect(readSession("/v").carets).toEqual({ "/v/a.md": 120 });
+  });
+
+  test("a session from before carets were kept reads as one with none", () => {
+    storage.setItem(KEY, JSON.stringify({ "/v": { open: ["/v/a.md"], current: "/v/a.md" } }));
+    expect(readSession("/v").carets).toBeUndefined();
+  });
+
+  test("only a place in the text of an open note is taken from storage", () => {
+    const stored = {
+      "/v/a.md": 12,
+      "/v/closed.md": 5,
+      "/v/b.md": -3,
+      "/v/c.md": "7",
+      "/v/d.md": 1.5,
+      "/v/e.md": 0,
+    };
+    expect(caretsFor(["/v/a.md", "/v/b.md", "/v/c.md", "/v/d.md", "/v/e.md"], stored)).toEqual({
+      "/v/a.md": 12,
+    });
+    expect(caretsFor(["/v/a.md"], null)).toEqual({});
+    expect(caretsFor(["/v/a.md"], [1, 2])).toEqual({});
   });
 });
