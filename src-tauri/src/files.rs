@@ -6,6 +6,7 @@ use crate::state::{
 use crate::tasks::{off_thread, wait_for_picker};
 use std::fs;
 use std::path::{Path, PathBuf};
+use tauri::Manager;
 use tauri_plugin_dialog::DialogExt;
 
 #[tauri::command]
@@ -83,7 +84,10 @@ pub(crate) async fn rename_entry(
         })?;
         follow_move(&vault, &old, &new_path);
         note_changes(&window, &[&old, &new_path]);
-        Ok(new_path.to_string_lossy().into_owned())
+        let moved_to = new_path.to_string_lossy().into_owned();
+        // Edits kept for it, or for anything inside it, go where it went.
+        crate::recovery::follow_move(window.app_handle(), &path, &moved_to);
+        Ok(moved_to)
     })
     .await
 }
@@ -107,7 +111,10 @@ pub(crate) async fn move_entry(
         })?;
         follow_move(&vault, &old, &new_path);
         note_changes(&window, &[&old, &new_path]);
-        Ok(new_path.to_string_lossy().into_owned())
+        let moved_to = new_path.to_string_lossy().into_owned();
+        // Edits kept for it, or for anything inside it, go where it went.
+        crate::recovery::follow_move(window.app_handle(), &path, &moved_to);
+        Ok(moved_to)
     })
     .await
 }
@@ -619,6 +626,36 @@ pub(crate) async fn read_file(
 /// renamed over it - a rename within one filesystem is atomic, so a reader sees
 /// either the note as it was or the note as it now is, never the gap.
 pub(crate) fn write_atomically(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    write_through_a_temporary(path, bytes, false)
+}
+
+/// The same write, for a file that is nobody's business but its owner's: the
+/// edits kept outside the vault. A new one stays readable by them alone.
+pub(crate) fn write_privately(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    write_through_a_temporary(path, bytes, true)
+}
+
+/// A temporary file in `directory`, with the permissions a new file there
+/// would ordinarily get.
+///
+/// One made the default way is private to its owner, which is right for a
+/// scratch file in `/tmp` and wrong for a note: saved to a new path, it came
+/// out unreadable to a group it was shared with, or to whatever builds a site
+/// out of the folder. Asking for the usual mode lets the umask have its say,
+/// exactly as it does for a file made any other way.
+fn temporary_in(directory: &Path, private: bool) -> std::io::Result<tempfile::NamedTempFile> {
+    #[cfg(unix)]
+    if !private {
+        use std::os::unix::fs::PermissionsExt;
+        return tempfile::Builder::new()
+            .permissions(fs::Permissions::from_mode(0o666))
+            .tempfile_in(directory);
+    }
+    let _ = private;
+    tempfile::NamedTempFile::new_in(directory)
+}
+
+fn write_through_a_temporary(path: &Path, bytes: &[u8], private: bool) -> Result<(), String> {
     use std::io::Write;
 
     /// A failure in its own words, without the name of the temporary file it
@@ -638,10 +675,10 @@ pub(crate) fn write_atomically(path: &Path, bytes: &[u8]) -> Result<(), String> 
         .filter(|parent| !parent.as_os_str().is_empty())
         .ok_or_else(|| "Cannot write to this path".to_string())?;
 
-    let mut file = tempfile::NamedTempFile::new_in(directory).map_err(plainly)?;
+    let mut file = temporary_in(directory, private).map_err(plainly)?;
 
-    // A temporary file is created private to its owner. Left as it is, the
-    // first autosave would quietly take a note's own permissions away from it.
+    // A note that is already there keeps the permissions it has, whatever a
+    // new file would have been given.
     if let Ok(existing) = fs::metadata(path) {
         let _ = file.as_file().set_permissions(existing.permissions());
     }

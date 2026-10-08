@@ -103,6 +103,10 @@ pub fn run() {
             // The windows the last run ended with, brought back: the first on
             // the main window, the rest beside it.
             multiwindow::restore_windows(app.handle(), launched.as_ref());
+
+            // Edits kept for notes that have since been deleted are let go of,
+            // once they are old enough that nobody is coming back for them.
+            recovery::prune_in_background(app.handle());
             Ok(())
         })
         .on_window_event(|window, event| match event {
