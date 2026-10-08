@@ -27,28 +27,46 @@ interface ViewSwitcherProps {
  * asked for, and takes none of it when it is not.
  */
 export default function ViewSwitcher({ view, onChange }: ViewSwitcherProps) {
+  const index = Math.max(
+    0,
+    VIEWS.findIndex(({ id }) => id === view)
+  );
+
   return (
-    <div role="tablist" aria-label="Sidebar view" className="flex items-center gap-0.5 px-2 pt-2">
-      {VIEWS.map(({ id, label, title }) => {
-        const selected = id === view;
-        return (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={selected}
-            title={title}
-            onClick={() => onChange(id)}
-            className={`min-w-0 flex-1 cursor-pointer truncate rounded-md px-1.5 py-1 text-[11px] font-medium transition-colors compact:py-0.5 ${
-              selected
-                ? "bg-zinc-800 text-zinc-100"
-                : "text-zinc-500 hover:bg-zinc-800/40 hover:text-zinc-300"
-            }`}
-          >
-            {label}
-          </button>
-        );
-      })}
+    <div className="px-2 pt-2">
+      {/* One box behind all four, and one highlight inside it that slides to
+          whichever is chosen rather than going out under one name and coming
+          on under another. The names are equal widths, so the highlight is a
+          quarter of the box and moves by its own width at a time. */}
+      <div
+        role="tablist"
+        aria-label="Sidebar view"
+        className="relative grid grid-cols-4 rounded-lg bg-zinc-800/40 p-0.5"
+      >
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-y-0.5 left-0.5 w-[calc((100%-0.25rem)/4)] rounded-md bg-zinc-700/70 shadow-sm transition-transform duration-200 ease-out motion-reduce:transition-none"
+          style={{ transform: `translateX(${index * 100}%)` }}
+        />
+        {VIEWS.map(({ id, label, title }) => {
+          const selected = id === view;
+          return (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              title={title}
+              onClick={() => onChange(id)}
+              className={`relative cursor-pointer whitespace-nowrap rounded-md py-1 text-center text-[11px] font-medium transition-colors duration-200 compact:py-0.5 ${
+                selected ? "text-zinc-100" : "text-zinc-500 hover:text-zinc-300"
+              }`}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
