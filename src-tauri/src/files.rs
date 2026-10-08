@@ -639,6 +639,37 @@ pub(crate) async fn open_with_system(
     .await
 }
 
+/// When a file was last changed and when it was made, as the filesystem has
+/// them, in milliseconds since the epoch. Either may be missing: not every
+/// filesystem keeps a time of creation.
+#[derive(serde::Serialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct FileTimes {
+    pub(crate) modified: Option<u64>,
+    pub(crate) created: Option<u64>,
+}
+
+pub(crate) fn times_of(path: &Path) -> Result<FileTimes, String> {
+    let metadata = fs::metadata(path).map_err(|e| e.to_string())?;
+    Ok(FileTimes {
+        modified: crate::tree::epoch_millis(metadata.modified()),
+        created: crate::tree::epoch_millis(metadata.created()),
+    })
+}
+
+/// The open note's times, for the footer's "edited a while ago".
+#[tauri::command]
+pub(crate) async fn file_times(
+    window: tauri::WebviewWindow,
+    path: String,
+) -> Result<FileTimes, String> {
+    off_thread(move || {
+        let path = within_vault(&vault_of(&window), Path::new(&path))?;
+        times_of(&path)
+    })
+    .await
+}
+
 #[tauri::command]
 pub(crate) async fn read_file(
     window: tauri::WebviewWindow,

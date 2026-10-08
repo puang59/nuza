@@ -271,6 +271,10 @@ function App() {
       });
   }, [wantsTransparency]);
 
+  // The open note's file, for the footer's "edited a while ago". The scratch
+  // note has none.
+  const notePath = rootPath && isWithin(currentFile, rootPath) ? currentFile : null;
+
   const outline = useOutline(editorView);
   const onJumpToHeading = useCallback(
     (from: number) => {
@@ -768,9 +772,19 @@ function App() {
           what a writer actually wants from it. */}
       <div className="contents print:hidden">
         {vimEnabled ? (
-          <StatusBar mode={mode} currentFile={currentFile} subscribeToStats={subscribeToStats} />
+          <StatusBar
+            mode={mode}
+            currentFile={currentFile}
+            subscribeToStats={subscribeToStats}
+            notePath={notePath}
+            saved={!dirtyPaths.has(currentFile)}
+          />
         ) : (
-          <WritingStats subscribeToStats={subscribeToStats} />
+          <WritingStats
+            subscribeToStats={subscribeToStats}
+            notePath={notePath}
+            saved={!dirtyPaths.has(currentFile)}
+          />
         )}
       </div>
 
