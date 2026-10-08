@@ -175,9 +175,29 @@ export interface Outline {
   headings: Heading[];
   /** Index into `headings` of the section at the top of the pane, or -1. */
   active: number;
+  /**
+   * Whether that section's own heading has scrolled out above the pane - which
+   * is when it is worth saying, somewhere, which section this is.
+   */
+  headingOffscreen: boolean;
 }
 
-export const EMPTY_OUTLINE: Outline = { headings: [], active: -1 };
+export const EMPTY_OUTLINE: Outline = { headings: [], active: -1, headingOffscreen: false };
+
+/**
+ * The headings a section sits under, outermost first, ending with its own:
+ * "Setup", "Install", for the `### Install` under `## Setup`. Empty above the
+ * first heading.
+ */
+export function headingPath(headings: readonly Heading[], active: number): Heading[] {
+  if (active < 0 || active >= headings.length) return [];
+
+  const path = [headings[active]];
+  for (let index = active - 1; index >= 0; index--) {
+    if (headings[index].level < path[0].level) path.unshift(headings[index]);
+  }
+  return path;
+}
 
 type OutlineListener = (view: EditorView, outline: Outline) => void;
 const outlineListeners = new Set<OutlineListener>();
@@ -202,6 +222,7 @@ export const outlineReporter = ViewPlugin.fromClass(
   class {
     private headings: Heading[] = [];
     private active = -1;
+    private headingOffscreen = false;
     private timer: ReturnType<typeof setTimeout> | null = null;
     private frame = 0;
 
@@ -225,6 +246,7 @@ export const outlineReporter = ViewPlugin.fromClass(
       this.timer = null;
       this.headings = readHeadings(this.view.state);
       this.active = this.sectionInView();
+      this.headingOffscreen = this.isHeadingOffscreen(this.active);
       this.tell();
     }
 
@@ -237,19 +259,34 @@ export const outlineReporter = ViewPlugin.fromClass(
       return sectionAt(this.headings, this.view.lineBlockAtHeight(height).from);
     }
 
+    /** Whether the heading at `index` is wholly above the top of the pane. */
+    private isHeadingOffscreen(index: number) {
+      const heading = this.headings[index];
+      if (!heading || heading.from > this.view.state.doc.length) return false;
+      const { scrollDOM, documentTop } = this.view;
+      const top = scrollDOM.getBoundingClientRect().top - documentTop;
+      return this.view.lineBlockAt(heading.from).bottom <= top;
+    }
+
     private onScroll = () => {
       if (this.frame) return;
       this.frame = requestAnimationFrame(() => {
         this.frame = 0;
         const active = this.sectionInView();
-        if (active === this.active) return;
+        const headingOffscreen = this.isHeadingOffscreen(active);
+        if (active === this.active && headingOffscreen === this.headingOffscreen) return;
         this.active = active;
+        this.headingOffscreen = headingOffscreen;
         this.tell();
       });
     };
 
     private tell() {
-      const outline = { headings: this.headings, active: this.active };
+      const outline = {
+        headings: this.headings,
+        active: this.active,
+        headingOffscreen: this.headingOffscreen,
+      };
       for (const listener of outlineListeners) listener(this.view, outline);
     }
 

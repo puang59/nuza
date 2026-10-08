@@ -19,6 +19,7 @@ import { useSaveOnExit } from "./hooks/useSaveOnExit";
 import { useNotices } from "./hooks/useNotices";
 import { UNTITLED_FILE, useFileOperations } from "./hooks/useFileOperations";
 import GettingStarted from "./components/GettingStarted";
+import SectionGuides from "./components/SectionGuides";
 import type { KeymapAction } from "./lib/keymaps";
 import { useVimMode } from "./hooks/useVimMode";
 import { useVaults } from "./hooks/useVaults";
@@ -81,6 +82,7 @@ function App() {
   const [vimEnabled, setVimEnabled] = usePersistedState("vimEnabled", false);
   const [showLineNumbers, setShowLineNumbers] = usePersistedState("showLineNumbers", false);
   const [typewriter, setTypewriter] = usePersistedState("typewriterScrolling", false);
+  const [sectionGuides, setSectionGuides] = usePersistedState("sectionGuides", true);
   const [compactMode, setCompactMode] = usePersistedState("compactMode", false);
   const [autoUpdateEnabled, setAutoUpdateEnabled] = usePersistedState("autoUpdateEnabled", true);
   const [editorFont, setEditorFont] = usePersistedState("editorFont", DEFAULT_EDITOR_FONT);
@@ -724,6 +726,7 @@ function App() {
               onContextMenu={(event) => openEditorMenu(event, editorView)}
               className="flex-1 min-h-0 print:h-auto"
             />
+            {sectionGuides && <SectionGuides outline={outline} onJump={onJumpToHeading} />}
             <GettingStarted
               onScratch={currentFile === UNTITLED_FILE}
               hasVault={!!rootPath}
@@ -877,6 +880,8 @@ function App() {
         setShowLineNumbers={setShowLineNumbers}
         typewriterScrolling={typewriter}
         setTypewriterScrolling={setTypewriter}
+        sectionGuides={sectionGuides}
+        setSectionGuides={setSectionGuides}
         appearance={appearance}
         setAppearance={setAppearance}
         resetAppearance={resetAppearance}

@@ -15,7 +15,11 @@ export function useOutline(view: EditorView | null): Outline {
     return subscribeToOutline((from, next) => {
       if (from !== view) return;
       setOutline((last) =>
-        last.active === next.active && sameHeadings(last.headings, next.headings) ? last : next
+        last.active === next.active &&
+        last.headingOffscreen === next.headingOffscreen &&
+        sameHeadings(last.headings, next.headings)
+          ? last
+          : next
       );
     });
   }, [view]);
