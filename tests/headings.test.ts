@@ -3,7 +3,16 @@ import { markdown } from "@codemirror/lang-markdown";
 import { EditorState } from "@codemirror/state";
 import { GFM } from "@lezer/markdown";
 import type { EditorView } from "@codemirror/view";
-import { findHeading, headingSlug, jumpToHeading, readHeadings } from "../src/lib/markdown/headings";
+import {
+  adjacentHeading,
+  findHeading,
+  headingSlug,
+  jumpToHeading,
+  nextHeading,
+  previousHeading,
+  readHeadings,
+  sectionAt,
+} from "../src/lib/markdown/headings";
 
 function headings(doc: string) {
   return readHeadings(EditorState.create({ doc, extensions: [markdown({ extensions: GFM })] }));
@@ -97,5 +106,71 @@ describe("jumpToHeading", () => {
     const { view, sent } = editor("# First\n");
     expect(jumpToHeading(view, "missing")).toBe(false);
     expect(sent).toHaveLength(0);
+  });
+});
+
+describe("moving by heading", () => {
+  const doc = "intro\n\n# One\n\ntext\n\n## Two\n\n```\n# not a heading\n```\n\n# Three\n\nend";
+  const all = headings(doc);
+  const at = (text: string) => doc.indexOf(text);
+
+  test("reads the headings and not the hash inside a code fence", () => {
+    expect(all.map((heading) => heading.text)).toEqual(["One", "Two", "Three"]);
+  });
+
+  test("sectionAt names the heading a place falls under", () => {
+    expect(sectionAt(all, 0)).toBe(-1);
+    expect(sectionAt(all, at("# One"))).toBe(0);
+    expect(sectionAt(all, at("text"))).toBe(0);
+    expect(sectionAt(all, at("# not a heading"))).toBe(1);
+    expect(sectionAt(all, doc.length)).toBe(2);
+    expect(sectionAt([], 10)).toBe(-1);
+  });
+
+  test("adjacentHeading steps to the next one down and the nearest one up", () => {
+    expect(adjacentHeading(all, 0, 1)?.text).toBe("One");
+    expect(adjacentHeading(all, at("# One"), 1)?.text).toBe("Two");
+    expect(adjacentHeading(all, at("text"), -1)?.text).toBe("One");
+    // From a heading's own line, "previous" is the one before it.
+    expect(adjacentHeading(all, at("## Two"), -1)?.text).toBe("One");
+    expect(adjacentHeading(all, at("# Three"), 1)).toBeNull();
+    expect(adjacentHeading(all, 0, -1)).toBeNull();
+  });
+
+  /** An editor with its caret at `anchor`, recording where it is sent. */
+  function editorAt(anchor: number) {
+    const state = EditorState.create({
+      doc,
+      selection: { anchor },
+      extensions: [markdown({ extensions: GFM })],
+    });
+    const sent: { selection?: { anchor: number } }[] = [];
+    const view = {
+      state,
+      dispatch: (spec: { selection?: { anchor: number } }) => void sent.push(spec),
+      focus: () => {},
+      dom: { isConnected: false },
+    };
+    return { view: view as unknown as EditorView, sent };
+  }
+
+  test("the commands put the caret at the end of the heading they move to", () => {
+    const down = editorAt(at("text"));
+    expect(nextHeading(down.view)).toBe(true);
+    expect(down.sent[0].selection).toEqual({ anchor: at("## Two") + "## Two".length });
+
+    const up = editorAt(at("end"));
+    expect(previousHeading(up.view)).toBe(true);
+    expect(up.sent[0].selection).toEqual({ anchor: at("# Three") + "# Three".length });
+  });
+
+  test("the commands do nothing past the last heading or above the first", () => {
+    const last = editorAt(at("end"));
+    expect(nextHeading(last.view)).toBe(false);
+    expect(last.sent).toHaveLength(0);
+
+    const first = editorAt(0);
+    expect(previousHeading(first.view)).toBe(false);
+    expect(first.sent).toHaveLength(0);
   });
 });

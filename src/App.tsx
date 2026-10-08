@@ -24,6 +24,7 @@ import { useAppearance } from "./hooks/useAppearance";
 import { useAppUpdater } from "./hooks/useAppUpdater";
 import { usePersistedState } from "./hooks/usePersistedState";
 import { useRecentFiles } from "./hooks/useRecentFiles";
+import { useOutline } from "./hooks/useOutline";
 import { useResizableSidebar } from "./hooks/useResizableSidebar";
 import { report } from "./lib/notices";
 import { isMainWindow } from "./lib/windowLabel";
@@ -34,6 +35,7 @@ import { copyText } from "./lib/clipboard";
 import { directoryOf } from "./lib/markdown";
 import { noteLineNumbers } from "./lib/markdown/lineGutter";
 import { insertLink, toggleBold, toggleItalic } from "./lib/markdown/formatting";
+import { jumpToHeadingAt, nextHeading, previousHeading } from "./lib/markdown/headings";
 import { isMacPlatform } from "./lib/platform";
 import {
   DEFAULT_EDITOR_FONT,
@@ -240,6 +242,26 @@ function App() {
       });
   }, [wantsTransparency]);
 
+  const outline = useOutline(editorView);
+  const onJumpToHeading = useCallback(
+    (from: number) => {
+      if (editorView) jumpToHeadingAt(editorView, from);
+    },
+    [editorView]
+  );
+
+  /**
+   * Moves by heading in whichever pane has the keyboard - the main one when
+   * neither does, since the chord works from the sidebar too.
+   */
+  const moveByHeading = useCallback(
+    (move: (view: EditorView) => boolean) => {
+      const view = sideView?.hasFocus ? sideView : editorView;
+      if (view) move(view);
+    },
+    [editorView, sideView]
+  );
+
   // Stable identities, so the memoised chrome around the editor is not
   // re-rendered by a handler that was rebuilt for no reason.
   const returnFocusToEditor = useCallback(() => editorView?.focus(), [editorView]);
@@ -427,6 +449,8 @@ function App() {
       "toggle-italic": () => format(toggleItalic),
       "insert-link": () => format(insertLink),
       "print-note": printNote,
+      "next-heading": () => moveByHeading(nextHeading),
+      "previous-heading": () => moveByHeading(previousHeading),
     }),
     [
       save,
@@ -441,6 +465,7 @@ function App() {
       toggleSidebar,
       format,
       printNote,
+      moveByHeading,
     ]
   );
 
@@ -495,6 +520,14 @@ function App() {
     vimModule.Vim.defineEx("wall", "wa", async () => {
       await saveDirty();
     });
+    // `]]` and `[[`: by section, as they move in Vim through a file of them.
+    vimModule.Vim.defineAction("nuzaNextHeading", (cm: { cm6: EditorView }) => void nextHeading(cm.cm6));
+    vimModule.Vim.defineAction(
+      "nuzaPreviousHeading",
+      (cm: { cm6: EditorView }) => void previousHeading(cm.cm6)
+    );
+    vimModule.Vim.mapCommand("]]", "action", "nuzaNextHeading", {}, { context: "normal" });
+    vimModule.Vim.mapCommand("[[", "action", "nuzaPreviousHeading", {}, { context: "normal" });
   }, [vimModule, save, saveDirty]);
 
   return (
@@ -627,6 +660,8 @@ function App() {
               onResizeStart={startResize}
               onResizeReset={resetWidth}
               isResizing={isResizing}
+              outline={outline}
+              onJumpToHeading={onJumpToHeading}
               vimEnabled={vimEnabled}
               onReturnFocus={returnFocusToEditor}
             />

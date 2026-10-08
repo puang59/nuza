@@ -18,7 +18,9 @@ export type KeymapAction =
   | "toggle-bold"
   | "toggle-italic"
   | "insert-link"
-  | "print-note";
+  | "print-note"
+  | "next-heading"
+  | "previous-heading";
 
 export interface KeymapDefinition {
   id: KeymapAction;
@@ -155,6 +157,18 @@ export const KEYMAP_ACTIONS: KeymapDefinition[] = [
     label: "Print / Save as PDF",
     description: "Print the open note, or save it as a PDF from the print dialog",
     defaultBinding: "mod+shift+p",
+  },
+  {
+    id: "next-heading",
+    label: "Next Heading",
+    description: "Move to the next heading down the note",
+    defaultBinding: "mod+alt+arrowdown",
+  },
+  {
+    id: "previous-heading",
+    label: "Previous Heading",
+    description: "Move to the nearest heading above",
+    defaultBinding: "mod+alt+arrowup",
   },
 ];
 

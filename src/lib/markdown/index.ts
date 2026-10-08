@@ -18,7 +18,7 @@ import { MathSyntax } from "./math";
 import { findInNote } from "./searchPanel";
 import { scrollbarOnDemand } from "./scrollbar";
 import { noteDirectory } from "./sources";
-import { headingFlash, jumpToHeading } from "./headings";
+import { headingFlash, jumpToHeading, outlineReporter } from "./headings";
 import { Tag } from "./tags";
 import { WikiLink, followWikiLink } from "./wikiLinks";
 import { nuzaEditorTheme } from "./theme";
@@ -105,6 +105,7 @@ export const liveMarkdown: Extension = [
   nuzaEditorTheme,
   liveMarkdownPreview,
   headingFlash,
+  outlineReporter,
   findInNote,
   scrollbarOnDemand,
   listIndent,
