@@ -114,3 +114,65 @@ describe("firesWhileTyping", () => {
     expect(firesWhileTyping("")).toBe(false);
   });
 });
+
+describe("keys a modifier renames", () => {
+  /** An event with the key's position as well as what it typed. */
+  function pressed(
+    typed: string,
+    code: string,
+    mods: Partial<Record<"meta" | "ctrl" | "alt" | "shift" | "altGraph", boolean>> = {}
+  ) {
+    return {
+      key: typed,
+      code,
+      metaKey: !!mods.meta,
+      ctrlKey: !!mods.ctrl,
+      altKey: !!mods.alt,
+      shiftKey: !!mods.shift,
+      getModifierState: (name: string) => name === "AltGraph" && !!mods.altGraph,
+    } as unknown as KeyboardEvent;
+  }
+
+  // Option+1 on a Mac types "¡", and Shift+8 types "*": the binding names the key.
+  test("a digit is matched by where it is, whatever Shift or Option made it type", () => {
+    expect(matchesBinding(pressed("¡", "Digit1", { meta: true, alt: true }), "mod+alt+1", true)).toBe(true);
+    expect(matchesBinding(pressed("*", "Digit8", { meta: true, shift: true }), "mod+shift+8", true)).toBe(
+      true
+    );
+    expect(matchesBinding(pressed("*", "Digit8", { ctrl: true, shift: true }), "mod+shift+8", false)).toBe(
+      true
+    );
+    expect(matchesBinding(pressed("*", "Digit8", { meta: true, shift: true }), "mod+shift+7", true)).toBe(
+      false
+    );
+  });
+
+  test("a letter under Option, and the period under Shift, are matched the same way", () => {
+    expect(matchesBinding(pressed("∆", "KeyJ", { meta: true, alt: true }), "mod+alt+j", true)).toBe(true);
+    expect(matchesBinding(pressed(">", "Period", { meta: true, shift: true }), "mod+shift+.", true)).toBe(
+      true
+    );
+  });
+
+  test("recording one of those chords writes down the key, so it matches itself", () => {
+    const event = pressed("¡", "Digit1", { meta: true, alt: true });
+    expect(eventToBinding(event, true)).toBe("mod+alt+1");
+    expect(matchesBinding(event, eventToBinding(event, true), true)).toBe(true);
+  });
+
+  test("a plain digit or letter is still read as what it typed", () => {
+    expect(matchesBinding(pressed("0", "Digit0", { meta: true }), "mod+0", true)).toBe(true);
+    expect(matchesBinding(pressed("e", "KeyE", { meta: true }), "mod+e", true)).toBe(true);
+    // A layout where the E position types something else keeps its own letter.
+    expect(matchesBinding(pressed(".", "KeyE", { meta: true }), "mod+e", true)).toBe(false);
+  });
+
+  // AltGr reports as Control and Alt together, and is how `{` is typed on a
+  // German keyboard: on AltGr+7. That is typing, and must not make a heading.
+  test("AltGr is typing, never a chord", () => {
+    const brace = pressed("{", "Digit7", { ctrl: true, alt: true, altGraph: true });
+    expect(matchesBinding(brace, "mod+alt+7", false)).toBe(false);
+    const chord = pressed("7", "Digit7", { ctrl: true, alt: true });
+    expect(matchesBinding(chord, "mod+alt+7", false)).toBe(true);
+  });
+});
