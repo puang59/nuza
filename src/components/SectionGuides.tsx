@@ -3,8 +3,13 @@ import { Outline, headingPath } from "@/lib/markdown/headings";
 
 /** The deepest heading that gets a line on the rail. Below that it is noise. */
 const RAIL_DEPTH = 3;
-/** How long a line is, by how far down the levels its heading sits. */
-const LINE_WIDTHS = ["w-4", "w-3", "w-2"];
+/**
+ * How far a line is set in, by how far down the levels its heading sits. The
+ * lines are all one length and step to the right, the way an outline is
+ * written: a shorter line under a longer one read as a smaller thing rather
+ * than as a thing inside it, and three of them as a ragged edge.
+ */
+const LINE_INDENTS = ["ml-0", "ml-1.5", "ml-3"];
 /** How far each level is set in, in the list of names. */
 const NAME_INDENTS = ["pl-2.5", "pl-5", "pl-[1.875rem]"];
 
@@ -19,8 +24,8 @@ interface SectionGuidesProps {
  * panel is not open.
  *
  * At the left edge, level with the middle of the pane, a short stack of
- * lines - one to a heading, shorter for each level down - with the one for
- * the section in view a shade brighter. It is a picture of the note's shape,
+ * lines - one to a heading, set in for each level down - with the one for
+ * the section you are in a shade brighter. It is a picture of the note's shape,
  * not a set of buttons: lines that size are no target to aim at. Pointing at
  * the stack opens the same headings as a list of names, and it is a name that
  * is clicked.
@@ -59,7 +64,7 @@ function SectionGuides({ outline, onJump }: SectionGuidesProps) {
           {marks.map(({ heading, index, depth }) => (
             <span
               key={`${heading.from}:${heading.text}`}
-              className={`h-[2px] rounded-full transition-colors duration-200 ${LINE_WIDTHS[depth]} ${
+              className={`h-[2px] w-3 rounded-full transition-colors duration-200 ${LINE_INDENTS[depth]} ${
                 index === lit ? "bg-zinc-300" : "bg-zinc-700"
               }`}
             />
