@@ -1,4 +1,5 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { tabLabels } from "@/lib/tabLabels";
 import { X } from "lucide-react";
 
 /** Width of the fade at each end of the strip when there's more to scroll to. */
@@ -14,6 +15,8 @@ interface TabBarProps {
   onClose: (path: string) => void;
   /** Moves a tab so it sits before the tab at `before`; the strip's length is the end. */
   onReorder: (path: string, before: number) => void;
+  /** Asks for the tab's own menu, at a point on screen. */
+  onMenu?: (path: string, x: number, y: number) => void;
 }
 
 /**
@@ -41,7 +44,17 @@ function prefersReducedMotion() {
  * The strip is sized to its content rather than filling the bar, so whatever
  * space the tabs don't need stays draggable for moving the window.
  */
-function TabBar({ paths, activePath, dirtyPaths, missingPaths, onSelect, onClose, onReorder }: TabBarProps) {
+function TabBar({
+  paths,
+  activePath,
+  dirtyPaths,
+  missingPaths,
+  onSelect,
+  onClose,
+  onReorder,
+  onMenu,
+}: TabBarProps) {
+  const labels = useMemo(() => tabLabels(paths), [paths]);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [fade, setFade] = useState({ start: false, end: false });
   const [dragged, setDragged] = useState<string | null>(null);
@@ -148,6 +161,11 @@ function TabBar({ paths, activePath, dirtyPaths, missingPaths, onSelect, onClose
               endDrag();
             }}
             onClick={() => onSelect(path)}
+            onContextMenu={(event) => {
+              if (!onMenu) return;
+              event.preventDefault();
+              onMenu(path, event.clientX, event.clientY);
+            }}
             onAuxClick={(event) => {
               // Middle-click closes, as it does in a browser.
               if (event.button === 1) onClose(path);
@@ -177,8 +195,15 @@ function TabBar({ paths, activePath, dirtyPaths, missingPaths, onSelect, onClose
             )}
 
             <span className={`max-w-[140px] truncate ${isMissing ? "line-through opacity-70" : ""}`}>
-              {fileName(path)}
+              {labels.get(path)?.name ?? fileName(path)}
             </span>
+            {/* Only where two open notes share a name: the folder that tells
+                this one from the other. */}
+            {labels.get(path)?.hint && (
+              <span className="max-w-[90px] shrink-0 truncate text-[10px] opacity-50">
+                {labels.get(path)?.hint}
+              </span>
+            )}
 
             {/* The dot marks unsaved edits and gives way to the close button on hover,
                 so the tab never changes width between the two states. */}

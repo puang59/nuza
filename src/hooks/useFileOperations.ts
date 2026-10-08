@@ -963,6 +963,41 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
   );
 
   /**
+   * Closes several tabs at once, for "Close Others" and "Close to the Right".
+   * Done in one go rather than one `closeFile` after another: each of those
+   * reads the tabs as they were when this render started, and the second
+   * would put back what the first took away.
+   */
+  const closeFiles = useCallback(
+    (closing: readonly string[]) => {
+      const going = new Set(closing);
+      const paths = openPathsRef.current;
+      const remaining = paths.filter((path) => !going.has(path));
+      if (remaining.length === paths.length) return;
+
+      paths.forEach((path, index) => {
+        if (going.has(path) && path !== UNTITLED_FILE) {
+          closedRef.current = rememberClosed(closedRef.current, { path, index });
+        }
+      });
+      recentRef.current = recentRef.current.filter((path) => !going.has(path));
+
+      if (remaining.length === 0) {
+        resetToScratch();
+        return;
+      }
+
+      setOpenPaths(remaining);
+      if (going.has(currentFileRef.current)) {
+        const next =
+          recentRef.current.find((path) => remaining.includes(path)) ?? remaining[remaining.length - 1];
+        void selectFile(next);
+      }
+    },
+    [resetToScratch, selectFile]
+  );
+
+  /**
    * Lets go of a note whose file has gone, and of whatever was typed in it:
    * the tab closes, or the split does, and nothing is written. The other
    * answer to a missing file is `keepMine`, which puts it back on disk.
@@ -1351,6 +1386,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
     reopenClosedTab,
     reorderTabs,
     closeFile,
+    closeFiles,
     cycleFile,
     switchToRecent,
     jumpToFile,
