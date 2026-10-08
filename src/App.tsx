@@ -20,6 +20,9 @@ import { useNotices } from "./hooks/useNotices";
 import { UNTITLED_FILE, useFileOperations } from "./hooks/useFileOperations";
 import GettingStarted from "./components/GettingStarted";
 import SectionGuides from "./components/SectionGuides";
+import ZenBar from "./components/ZenBar";
+import { zenFocus } from "./lib/markdown/zen";
+import { formatBinding } from "./lib/keybinding";
 import type { KeymapAction } from "./lib/keymaps";
 import { useVimMode } from "./hooks/useVimMode";
 import { useVaults } from "./hooks/useVaults";
@@ -85,6 +88,18 @@ function App() {
   // Off unless asked for: marks on the writing surface are not something to
   // put in front of everyone.
   const [sectionGuides, setSectionGuides] = usePersistedState("sectionGuides", false);
+  // Zen mode: the note and nothing else. Not kept between launches - it is a
+  // way of working for a while, and an app that came back with no chrome and
+  // no hint of how to get it would be a worse surprise than one that did not.
+  const [zen, setZen] = useState(false);
+  const [zenDimming, setZenDimming] = usePersistedState("zenDimming", true);
+
+  // Read by the stylesheet, which turns the page black and folds the bars
+  // away - see `[data-zen]` and `.zen-fold` in App.css.
+  useEffect(() => {
+    if (zen) document.documentElement.dataset.zen = "";
+    else delete document.documentElement.dataset.zen;
+  }, [zen]);
   const [compactMode, setCompactMode] = usePersistedState("compactMode", false);
   const [autoUpdateEnabled, setAutoUpdateEnabled] = usePersistedState("autoUpdateEnabled", true);
   const [editorFont, setEditorFont] = usePersistedState("editorFont", DEFAULT_EDITOR_FONT);
@@ -139,8 +154,9 @@ function App() {
       editorFontTheme,
       ...(showLineNumbers ? [noteLineNumbers] : []),
       ...(typewriter ? [typewriterScrolling] : []),
+      ...(zen && zenDimming ? [zenFocus] : []),
     ],
-    [vimExtension, editorFontTheme, showLineNumbers, typewriter]
+    [vimExtension, editorFontTheme, showLineNumbers, typewriter, zen, zenDimming]
   );
 
   const {
@@ -273,7 +289,10 @@ function App() {
   // Deliberately keyed on the switch rather than on the amount: applying it
   // hangs a fresh NSVisualEffectView off the window, so depending on the number
   // would rebuild the window's backing layer on every frame of a slider drag.
-  const wantsTransparency = appearance.transparency > 0;
+  //
+  // Zen mode is a solid black page whatever the setting says: nothing of the
+  // desktop behind the note, so the effect is taken off for as long as it is on.
+  const wantsTransparency = appearance.transparency > 0 && !zen;
   useEffect(() => {
     invoke<boolean>("set_transparency", { enabled: wantsTransparency })
       .then(setHasBackdrop)
@@ -521,7 +540,15 @@ function App() {
 
   const keymapHandlers = useMemo(
     () => ({
-      "toggle-sidebar": toggleSidebar,
+      "toggle-sidebar": () => {
+        // Asking for the sidebar is asking to leave zen mode, which has none.
+        if (zen) {
+          setZen(false);
+          setIsSidebarOpen(true);
+          sidebarRef.current?.focusTree();
+        } else toggleSidebar();
+      },
+      "toggle-zen-mode": () => setZen((on) => !on),
       "save-file": save,
       "open-folder": openFolder,
       "quick-open": () => setIsQuickOpenOpen((open) => !open),
@@ -585,6 +612,7 @@ function App() {
       moveByHeading,
       createNote,
       retrace,
+      zen,
     ]
   );
 
@@ -670,27 +698,32 @@ function App() {
 
   return (
     <main
-      className="h-screen flex flex-col text-white overflow-hidden print:block print:h-auto print:overflow-visible"
+      className="relative h-screen flex flex-col text-white overflow-hidden transition-[background-color] duration-300 motion-reduce:transition-none print:block print:h-auto print:overflow-visible"
       style={{ backgroundColor: "var(--nuza-bg-alpha)" }}
     >
-      <div className="contents print:hidden">
-        <EditorHeader
-          updateStatus={updateStatus}
-          version={version}
-          openPaths={openPaths}
-          currentFile={currentFile}
-          dirtyPaths={dirtyPaths}
-          missingPaths={missing}
-          onSelectTab={selectFile}
-          onCloseTab={closeFile}
-          onReorderTabs={reorderTabs}
-          onTabMenu={openTabMenu}
-          onCheckUpdates={checkForUpdates}
-          onInstallUpdate={installUpdate}
-          onOpenSettings={openSettings}
-          onSave={save}
-          onToggleSidebar={toggleSidebar}
-        />
+      {zen && <ZenBar keys={formatBinding(keymapBindings["toggle-zen-mode"])} onExit={() => setZen(false)} />}
+      {/* Folded to nothing in zen mode rather than taken away, so it slides
+          shut and open again; `inert` keeps what is folded out of reach. */}
+      <div className="zen-fold print:hidden" data-folded={zen} inert={zen}>
+        <div className="min-h-0 overflow-hidden">
+          <EditorHeader
+            updateStatus={updateStatus}
+            version={version}
+            openPaths={openPaths}
+            currentFile={currentFile}
+            dirtyPaths={dirtyPaths}
+            missingPaths={missing}
+            onSelectTab={selectFile}
+            onCloseTab={closeFile}
+            onReorderTabs={reorderTabs}
+            onTabMenu={openTabMenu}
+            onCheckUpdates={checkForUpdates}
+            onInstallUpdate={installUpdate}
+            onOpenSettings={openSettings}
+            onSave={save}
+            onToggleSidebar={toggleSidebar}
+          />
+        </div>
       </div>
 
       <div className="flex-1 min-h-0 px-4 flex w-full relative z-20 print:block print:p-0">
@@ -698,7 +731,7 @@ function App() {
             surface reads as the deepest layer, with the sidebar and the bars
             above it. Tinted rather than filled so window vibrancy still shows
             through when transparency is on. */}
-        <div className="flex-1 min-w-0 h-full relative flex overflow-hidden rounded-t-lg bg-[var(--nuza-editor-tint)] print:block print:h-auto print:overflow-visible print:rounded-none print:bg-transparent">
+        <div className="flex-1 min-w-0 h-full relative flex overflow-hidden rounded-t-lg bg-[var(--nuza-editor-tint)] transition-[background-color] duration-300 motion-reduce:transition-none print:block print:h-auto print:overflow-visible print:rounded-none print:bg-transparent">
           <div className="relative flex min-w-0 flex-1 flex-col print:block">
             {/* Above the text rather than over it: the note underneath is what
               the choice is about, and covering it would be a poor way to ask. */}
@@ -730,7 +763,7 @@ function App() {
               onContextMenu={(event) => openEditorMenu(event, editorView)}
               className="flex-1 min-h-0 print:h-auto"
             />
-            {sectionGuides && <SectionGuides outline={outline} onJump={onJumpToHeading} />}
+            {sectionGuides && !zen && <SectionGuides outline={outline} onJump={onJumpToHeading} />}
             <GettingStarted
               onScratch={currentFile === UNTITLED_FILE}
               hasVault={!!rootPath}
@@ -786,8 +819,8 @@ function App() {
         */}
         <div
           className={`h-full shrink-0 overflow-hidden print:hidden ${isResizing ? "" : "sidebar-transition"}`}
-          style={{ width: isSidebarOpen ? sidebarWidth + SIDEBAR_GAP : 0 }}
-          inert={!isSidebarOpen}
+          style={{ width: isSidebarOpen && !zen ? sidebarWidth + SIDEBAR_GAP : 0 }}
+          inert={!isSidebarOpen || zen}
         >
           <div className="h-full" style={{ width: sidebarWidth + SIDEBAR_GAP, paddingLeft: SIDEBAR_GAP }}>
             <Sidebar
@@ -829,22 +862,24 @@ function App() {
       {/* The Vim bar earns its place for someone who is tracking a mode;
           without Vim there is no mode to track, so the footer steps back to
           what a writer actually wants from it. */}
-      <div className="contents print:hidden">
-        {vimEnabled ? (
-          <StatusBar
-            mode={mode}
-            currentFile={currentFile}
-            subscribeToStats={subscribeToStats}
-            notePath={notePath}
-            saved={!dirtyPaths.has(currentFile)}
-          />
-        ) : (
-          <WritingStats
-            subscribeToStats={subscribeToStats}
-            notePath={notePath}
-            saved={!dirtyPaths.has(currentFile)}
-          />
-        )}
+      <div className="zen-fold print:hidden" data-folded={zen} inert={zen}>
+        <div className="min-h-0 overflow-hidden">
+          {vimEnabled ? (
+            <StatusBar
+              mode={mode}
+              currentFile={currentFile}
+              subscribeToStats={subscribeToStats}
+              notePath={notePath}
+              saved={!dirtyPaths.has(currentFile)}
+            />
+          ) : (
+            <WritingStats
+              subscribeToStats={subscribeToStats}
+              notePath={notePath}
+              saved={!dirtyPaths.has(currentFile)}
+            />
+          )}
+        </div>
       </div>
 
       <FileSearchPalette
@@ -887,6 +922,8 @@ function App() {
         setTypewriterScrolling={setTypewriter}
         sectionGuides={sectionGuides}
         setSectionGuides={setSectionGuides}
+        zenDimming={zenDimming}
+        setZenDimming={setZenDimming}
         appearance={appearance}
         setAppearance={setAppearance}
         resetAppearance={resetAppearance}

@@ -19,6 +19,7 @@ export function startingPoints(hasVault: boolean): StartingPoint[] {
         { action: "new-note", label: "Create new note" },
         { action: "quick-open", label: "Go to file" },
         { action: "toggle-sidebar", label: "Toggle the sidebar" },
+        { action: "toggle-zen-mode", label: "Zen mode" },
         { action: "open-settings", label: "Settings" },
       ]
     : [

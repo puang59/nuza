@@ -415,6 +415,47 @@ textarea,
 }
 
 /*
+ * Zen mode: the note and nothing else.
+ *
+ * The page goes solid black - whatever the transparency is set to, nothing of
+ * the desktop shows through - and the editor's own tint goes with it, so the
+ * note is not a panel on the page but the page. These are set with
+ * `!important` because the colours they replace are written on the root
+ * element by the appearance settings, which a stylesheet cannot otherwise
+ * outrank. A light theme keeps its own paper, made opaque: black under dark
+ * ink would be no page at all.
+ */
+:root[data-zen] {
+  --nuza-bg-alpha: #000000 !important;
+  --nuza-editor-tint: transparent !important;
+}
+
+:root[data-zen][data-theme="light"] {
+  --nuza-bg-alpha: var(--nuza-bg) !important;
+}
+
+/*
+ * The bars above and below the note, which fold away in zen mode and back
+ * out of it. A grid row going from `1fr` to `0fr` is the one way to animate a
+ * height without knowing what it is; the fade runs a little ahead of it, so
+ * the bar is gone before the note has finished moving into its place.
+ */
+.zen-fold {
+  display: grid;
+  flex-shrink: 0;
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transition:
+    grid-template-rows 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 200ms ease;
+}
+
+.zen-fold[data-folded="true"] {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+
+/*
  * The explorer's search row. It stays mounted and collapses to nothing so the
  * tree beneath it slides instead of jumping. `max-height` rather than the
  * `grid-template-rows: 0fr/1fr` trick, which not every webview this app ships
@@ -665,6 +706,7 @@ textarea,
   }
 
   .sidebar-transition,
+  .zen-fold,
   .sidebar-search,
   .cm-drop-target,
   .cm-md-image img,
