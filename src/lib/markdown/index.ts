@@ -16,6 +16,7 @@ import { continueListItem, insertNewLine } from "./lists";
 import { liveMarkdownPreview } from "./livePreview";
 import { MathSyntax } from "./math";
 import { findInNote } from "./searchPanel";
+import { scrollbarOnDemand } from "./scrollbar";
 import { noteDirectory } from "./sources";
 import { headingFlash, jumpToHeading } from "./headings";
 import { Tag } from "./tags";
@@ -105,6 +106,7 @@ export const liveMarkdown: Extension = [
   liveMarkdownPreview,
   headingFlash,
   findInNote,
+  scrollbarOnDemand,
   listIndent,
   openLinkOnModClick,
   attachments,
