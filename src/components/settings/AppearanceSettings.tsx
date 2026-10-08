@@ -3,9 +3,17 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { report } from "@/lib/notices";
 import { isMacPlatform } from "@/lib/platform";
 import {
+  CONTENT_WIDTH_STEP,
+  LINE_HEIGHT_STEP,
+  MAX_CONTENT_WIDTH,
   MAX_EDITOR_FONT_SIZE,
+  MAX_LINE_HEIGHT,
+  MIN_CONTENT_WIDTH,
   MIN_EDITOR_FONT_SIZE,
+  MIN_LINE_HEIGHT,
+  clampContentWidth,
   clampEditorFontSize,
+  clampLineHeight,
   listSystemFonts,
 } from "@/lib/fonts";
 import { Appearance, THEME_CHOICES, clampTransparency } from "@/lib/appearance";
@@ -24,6 +32,10 @@ interface AppearanceSettingsProps {
   setEditorFont: (font: string) => void;
   editorFontSize: number;
   setEditorFontSize: (size: number) => void;
+  contentWidth: number;
+  setContentWidth: (width: number) => void;
+  lineHeight: number;
+  setLineHeight: (height: number) => void;
 }
 
 export default function AppearanceSettings({
@@ -36,6 +48,10 @@ export default function AppearanceSettings({
   setEditorFont,
   editorFontSize,
   setEditorFontSize,
+  contentWidth,
+  setContentWidth,
+  lineHeight,
+  setLineHeight,
 }: AppearanceSettingsProps) {
   const [fonts, setFonts] = useState<string[]>([]);
   const [fontSizeInput, setFontSizeInput] = useState(String(editorFontSize));
@@ -177,6 +193,54 @@ export default function AppearanceSettings({
               </button>
             </div>
           </div>
+        </div>
+      </SettingRow>
+
+      <SettingRow
+        title="Text Width"
+        description="How wide the column of text may get before the rest is margin"
+      >
+        <div className="flex w-40 items-center gap-3">
+          <input
+            type="range"
+            aria-label="Text column width"
+            min={MIN_CONTENT_WIDTH}
+            max={MAX_CONTENT_WIDTH}
+            step={CONTENT_WIDTH_STEP}
+            value={contentWidth}
+            onChange={(event) => setContentWidth(clampContentWidth(Number(event.target.value)))}
+            style={
+              {
+                "--nuza-slider-ratio":
+                  (contentWidth - MIN_CONTENT_WIDTH) / (MAX_CONTENT_WIDTH - MIN_CONTENT_WIDTH),
+              } as CSSProperties
+            }
+            className="nuza-slider min-w-0 flex-1"
+          />
+          <span className="w-11 shrink-0 text-right font-mono text-xs text-gray-400">{contentWidth}px</span>
+        </div>
+      </SettingRow>
+
+      <SettingRow title="Line Height" description="The space between lines of text">
+        <div className="flex w-40 items-center gap-3">
+          <input
+            type="range"
+            aria-label="Line height"
+            min={MIN_LINE_HEIGHT}
+            max={MAX_LINE_HEIGHT}
+            step={LINE_HEIGHT_STEP}
+            value={lineHeight}
+            onChange={(event) => setLineHeight(clampLineHeight(Number(event.target.value)))}
+            style={
+              {
+                "--nuza-slider-ratio": (lineHeight - MIN_LINE_HEIGHT) / (MAX_LINE_HEIGHT - MIN_LINE_HEIGHT),
+              } as CSSProperties
+            }
+            className="nuza-slider min-w-0 flex-1"
+          />
+          <span className="w-11 shrink-0 text-right font-mono text-xs text-gray-400">
+            {lineHeight.toFixed(2)}
+          </span>
         </div>
       </SettingRow>
     </div>

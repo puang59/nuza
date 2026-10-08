@@ -1,3 +1,5 @@
+import type { EditorView } from "@codemirror/view";
+import { readAltSize } from "./imageSize";
 import type { MarkdownConfig } from "@lezer/markdown";
 import { tags } from "@lezer/highlight";
 
@@ -48,6 +50,87 @@ export const WikiLink: MarkdownConfig = {
     },
   ],
 };
+
+const BANG = 33;
+
+/**
+ * `![[image.png]]`: a file from the vault shown where it is named, which is
+ * how a good many vaults written elsewhere hold every picture pasted into
+ * them. The same brackets as a wiki-link with a `!` in front, parsed ahead of
+ * it so that it is not read as a `!` followed by a link to a note called
+ * `image.png`.
+ */
+export const WikiEmbed: MarkdownConfig = {
+  defineNodes: [{ name: "WikiEmbed", style: tags.link }],
+  parseInline: [
+    {
+      name: "WikiEmbed",
+      before: "Link",
+      parse(cx, next, pos) {
+        if (next !== BANG || cx.char(pos + 1) !== OPEN_BRACKET || cx.char(pos + 2) !== OPEN_BRACKET)
+          return -1;
+
+        let end = pos + 3;
+        for (; end < cx.end; end++) {
+          const char = cx.char(end);
+          if (char === CLOSE_BRACKET) break;
+          if (char === OPEN_BRACKET || char === NEWLINE) return -1;
+        }
+        if (end === pos + 3 || cx.char(end) !== CLOSE_BRACKET || cx.char(end + 1) !== CLOSE_BRACKET)
+          return -1;
+
+        return cx.addElement(cx.elt("WikiEmbed", pos, end + 2));
+      },
+    },
+  ],
+};
+
+/**
+ * What is between an embed's brackets: the file named, and after a `|` either
+ * a width in pixels (`|300`) or the words to stand for the picture.
+ */
+export function readEmbed(inner: string) {
+  const bar = inner.indexOf("|");
+  const target = (bar < 0 ? inner : inner.slice(0, bar)).trim();
+  // After the name: words for the picture, a width, or the words and then
+  // the width - `|a dog|300` - which is what resizing one with words leaves.
+  const { alt, width } = readAltSize(bar < 0 ? "" : `|${inner.slice(bar + 1)}`);
+  const words = alt.replace(/^\|/, "").trim();
+  return { target, width, alt: words || null };
+}
+
+/**
+ * The file an embed names, out of `files` - every file in the vault, as full
+ * paths - or null when there is none. As for a wiki-link: a target with a
+ * slash in it is a path from the vault's root, one without is a file name,
+ * and where several files have that name the one beside the note wins, then
+ * the one nearest the root. Case is ignored; the extension is not, since
+ * `photo.png` and `photo.jpg` are different pictures.
+ */
+export function resolveEmbed(target: string, files: readonly string[], root: string, fromDirectory: string) {
+  const wanted = target.trim().replace(/\\/g, "/").replace(/^\/+/, "").toLowerCase();
+  if (!wanted) return null;
+
+  const relative = (file: string) =>
+    (file.startsWith(root) ? file.slice(root.length) : file)
+      .replace(/\\/g, "/")
+      .replace(/^\/+/, "")
+      .toLowerCase();
+
+  const byPath = wanted.includes("/");
+  const matches = files.filter((file) => {
+    const path = relative(file);
+    return byPath ? path === wanted : path.slice(path.lastIndexOf("/") + 1) === wanted;
+  });
+  if (matches.length <= 1) return matches[0] ?? null;
+
+  const depth = (file: string) => relative(file).split("/").length;
+  return matches.slice().sort((a, b) => {
+    const besideA = folderOf(a) === fromDirectory ? 0 : 1;
+    const besideB = folderOf(b) === fromDirectory ? 0 : 1;
+    return besideA - besideB || depth(a) - depth(b) || a.localeCompare(b);
+  })[0];
+}
 
 /** What is between the brackets: the note named, the label shown, and any heading. */
 export function readWikiLink(inner: string) {
@@ -111,6 +194,11 @@ export interface WikiLinkRequest {
   heading: string | null;
   /** The folder of the note the link is in, which a name is resolved against first. */
   fromDirectory: string;
+  /**
+   * The editor the link was followed in. With the split open there are two,
+   * and a link to a heading "in this note" means the note in that one.
+   */
+  view?: EditorView;
 }
 
 export function followWikiLink(request: WikiLinkRequest) {

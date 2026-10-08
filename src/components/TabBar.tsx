@@ -1,4 +1,5 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { tabLabels } from "@/lib/tabLabels";
 import { X } from "lucide-react";
 
 /** Width of the fade at each end of the strip when there's more to scroll to. */
@@ -8,10 +9,14 @@ interface TabBarProps {
   paths: string[];
   activePath: string;
   dirtyPaths: ReadonlySet<string>;
+  /** Open notes whose file has gone from disk; their names are struck through. */
+  missingPaths: ReadonlySet<string>;
   onSelect: (path: string) => void;
   onClose: (path: string) => void;
   /** Moves a tab so it sits before the tab at `before`; the strip's length is the end. */
   onReorder: (path: string, before: number) => void;
+  /** Asks for the tab's own menu, at a point on screen. */
+  onMenu?: (path: string, x: number, y: number) => void;
 }
 
 /**
@@ -39,7 +44,17 @@ function prefersReducedMotion() {
  * The strip is sized to its content rather than filling the bar, so whatever
  * space the tabs don't need stays draggable for moving the window.
  */
-function TabBar({ paths, activePath, dirtyPaths, onSelect, onClose, onReorder }: TabBarProps) {
+function TabBar({
+  paths,
+  activePath,
+  dirtyPaths,
+  missingPaths,
+  onSelect,
+  onClose,
+  onReorder,
+  onMenu,
+}: TabBarProps) {
+  const labels = useMemo(() => tabLabels(paths), [paths]);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [fade, setFade] = useState({ start: false, end: false });
   const [dragged, setDragged] = useState<string | null>(null);
@@ -109,6 +124,7 @@ function TabBar({ paths, activePath, dirtyPaths, onSelect, onClose, onReorder }:
       {paths.map((path, index) => {
         const isActive = path === activePath;
         const isDirty = dirtyPaths.has(path);
+        const isMissing = missingPaths.has(path);
         // The marker sits on the left edge of the tab it would land before,
         // or the right edge of the last tab for the end of the strip.
         const markerBefore = dragged !== null && dropBefore === index;
@@ -121,7 +137,7 @@ function TabBar({ paths, activePath, dirtyPaths, onSelect, onClose, onReorder }:
             aria-selected={isActive}
             tabIndex={isActive ? 0 : -1}
             data-active={isActive}
-            title={path}
+            title={isMissing ? `${path}\nNo longer on disk` : path}
             draggable
             onDragStart={(event) => {
               event.dataTransfer.setData(TAB_TYPE, path);
@@ -145,6 +161,11 @@ function TabBar({ paths, activePath, dirtyPaths, onSelect, onClose, onReorder }:
               endDrag();
             }}
             onClick={() => onSelect(path)}
+            onContextMenu={(event) => {
+              if (!onMenu) return;
+              event.preventDefault();
+              onMenu(path, event.clientX, event.clientY);
+            }}
             onAuxClick={(event) => {
               // Middle-click closes, as it does in a browser.
               if (event.button === 1) onClose(path);
@@ -173,7 +194,16 @@ function TabBar({ paths, activePath, dirtyPaths, onSelect, onClose, onReorder }:
               <span className="pointer-events-none absolute inset-x-2 bottom-0 h-[2px] rounded-full bg-[var(--nuza-accent)]" />
             )}
 
-            <span className="max-w-[140px] truncate">{fileName(path)}</span>
+            <span className={`max-w-[140px] truncate ${isMissing ? "line-through opacity-70" : ""}`}>
+              {labels.get(path)?.name ?? fileName(path)}
+            </span>
+            {/* Only where two open notes share a name: the folder that tells
+                this one from the other. */}
+            {labels.get(path)?.hint && (
+              <span className="max-w-[90px] shrink-0 truncate text-[10px] opacity-50">
+                {labels.get(path)?.hint}
+              </span>
+            )}
 
             {/* The dot marks unsaved edits and gives way to the close button on hover,
                 so the tab never changes width between the two states. */}

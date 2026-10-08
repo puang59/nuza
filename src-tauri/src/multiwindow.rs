@@ -98,7 +98,10 @@ fn spelled(path: &Path) -> PathBuf {
 
 /// The folder a target is about, for a window that has been opened for it and
 /// has not yet opened it.
-fn folder_of(target: &OpenTarget) -> PathBuf {
+pub(crate) fn folder_of(target: &OpenTarget) -> PathBuf {
+    if let Some(vault) = &target.vault {
+        return PathBuf::from(vault);
+    }
     let path = PathBuf::from(&target.path);
     if target.kind == "folder" {
         path
@@ -368,6 +371,58 @@ pub(crate) async fn open_new_window(app: tauri::AppHandle) -> Result<(), String>
         .map_err(|e| e.to_string())?
 }
 
+/// What a window opened for one note of `vault` is started on, or why not.
+///
+/// `resolved` is the note as the filesystem has it and `root` the calling
+/// window's vault, both already checked; `path` and `vault` are the same two
+/// as the frontend spells them, which is how the new window will ask for them.
+pub(crate) fn note_window_target(
+    resolved: &Path,
+    root: Option<&Path>,
+    path: &str,
+    vault: &str,
+) -> Result<OpenTarget, String> {
+    let root = root.ok_or_else(|| "No folder is open".to_string())?;
+    if !resolved.is_file() {
+        return Err("That is not a note to open".to_string());
+    }
+    // The folder named has to be the one this window really has open: the
+    // new window will open it as its vault, and must not be talked into
+    // opening some other folder that happens to hold the note.
+    let named = Path::new(vault).canonicalize().map_err(|e| e.to_string())?;
+    if named != root {
+        return Err("That is not the folder this window has open".to_string());
+    }
+    Ok(OpenTarget {
+        kind: "file",
+        path: path.to_string(),
+        vault: Some(vault.to_string()),
+    })
+}
+
+/// Moves a note into a window of its own: a new window on the same vault,
+/// showing that note and nothing else of the vault's tabs.
+///
+/// Opened directly rather than through `route`, which would only bring this
+/// window forward - it already has the vault open, and that is the point.
+#[tauri::command]
+pub(crate) async fn open_note_in_new_window(
+    window: tauri::WebviewWindow,
+    path: String,
+    vault: String,
+) -> Result<(), String> {
+    let app = window.app_handle().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let held = crate::state::vault_of(&window);
+        let resolved = crate::state::within_vault(&held, Path::new(&path))?;
+        let root = locked(&held.root).clone();
+        let target = note_window_target(&resolved, root.as_deref(), &path, &vault)?;
+        open_window(&app, Some(target), None).map(|_| ())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 // ---------------------------------------------------------------------------
 // Closing and quitting
 // ---------------------------------------------------------------------------
@@ -599,6 +654,7 @@ pub(crate) fn restore_windows(app: &tauri::AppHandle, launched: Option<&OpenTarg
             OpenTarget {
                 kind: "folder",
                 path: first.root,
+                vault: None,
             },
         );
         if let (Some(frame), Some(window)) = (first.frame, app.get_webview_window(MAIN_WINDOW)) {
@@ -618,6 +674,7 @@ pub(crate) fn restore_windows(app: &tauri::AppHandle, launched: Option<&OpenTarg
             let target = OpenTarget {
                 kind: "folder",
                 path: window.root,
+                vault: None,
             };
             if let Err(error) = open_window(&app, Some(target), window.frame) {
                 eprintln!("nuza: could not bring a window back: {}", error);

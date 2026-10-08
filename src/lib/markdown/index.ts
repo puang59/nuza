@@ -16,10 +16,14 @@ import { continueListItem, insertNewLine } from "./lists";
 import { liveMarkdownPreview } from "./livePreview";
 import { MathSyntax } from "./math";
 import { findInNote } from "./searchPanel";
+import { sectionFolding } from "./folding";
+import { codeBlockScrolling } from "./codeScroll";
+import { scrollbarOnDemand } from "./scrollbar";
+import { scrollMargin } from "./scrolling";
 import { noteDirectory } from "./sources";
-import { headingFlash, jumpToHeading } from "./headings";
+import { headingFlash, jumpToHeading, outlineReporter } from "./headings";
 import { Tag } from "./tags";
-import { WikiLink, followWikiLink } from "./wikiLinks";
+import { WikiEmbed, WikiLink, followWikiLink } from "./wikiLinks";
 import { nuzaEditorTheme } from "./theme";
 
 /**
@@ -40,7 +44,7 @@ const openLinkOnModClick = EditorView.domEventHandlers({
       event.preventDefault();
       const heading =
         target?.closest<HTMLElement>("[data-wikilink-heading]")?.dataset.wikilinkHeading ?? null;
-      followWikiLink({ target: wiki, heading, fromDirectory: view.state.facet(noteDirectory) });
+      followWikiLink({ target: wiki, heading, fromDirectory: view.state.facet(noteDirectory), view });
       return true;
     }
 
@@ -98,13 +102,22 @@ export const liveMarkdown: Extension = [
   // `codeLanguages` is what gives a fenced block its own colours. Each grammar
   // is fetched the first time a block asks for it, so a note that never shows
   // code never pays for one.
-  markdown({ extensions: [GFM, WikiLink, Tag, MathSyntax], codeLanguages: languages, addKeymap: false }),
+  markdown({
+    extensions: [GFM, WikiEmbed, WikiLink, Tag, MathSyntax],
+    codeLanguages: languages,
+    addKeymap: false,
+  }),
   markdownEditingKeymap,
   EditorView.lineWrapping,
   nuzaEditorTheme,
   liveMarkdownPreview,
   headingFlash,
+  outlineReporter,
   findInNote,
+  sectionFolding,
+  codeBlockScrolling,
+  scrollbarOnDemand,
+  scrollMargin,
   listIndent,
   openLinkOnModClick,
   attachments,

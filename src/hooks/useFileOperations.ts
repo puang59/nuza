@@ -9,28 +9,46 @@ import {
   touchEntry,
   findEntry,
   joinPath,
+  mergeListing,
   moveEntry as moveTreeEntry,
+  readFolders,
   removeEntry,
   setChildren,
 } from "@/lib/fileTree";
 import { report } from "@/lib/notices";
 import { listenHere } from "@/lib/windowEvents";
 import { readScratch, writeScratch } from "@/lib/scratch";
-import { readSession, writeSession } from "@/lib/session";
+import { EMPTY_SESSION, readSession, tabsToRestore, writeSession } from "@/lib/session";
 import { ATTACHMENT_EVENT, announceAttachment, fileNameOf, writeMedia } from "@/lib/media";
 import { isWithin, rewritePath } from "@/lib/path";
 import { ClosedTab, placeAt, rememberClosed } from "@/lib/closedTabs";
 import { moveTab } from "@/lib/tabOrder";
 import { OpenTarget, planOpen } from "@/lib/launchTarget";
 import { jumpToHeading } from "@/lib/markdown/headings";
+import { showLightbox } from "@/lib/markdown/lightbox";
+import { mediaSource } from "@/lib/markdown/sources";
+import { isNotText, openerFor } from "@/lib/openers";
+import { untitledName } from "@/lib/noteName";
+import { EMPTY_TRAIL, Trail, forgetPlaces, leave, renamePlaces, step } from "@/lib/navigation";
+import { directoryOf } from "@/lib/markdown/sources";
 import { WIKI_LINK_EVENT, WikiLinkRequest, resolveWikiLink } from "@/lib/markdown/wikiLinks";
 import { useDocuments } from "./useDocuments";
 import { useFileIndex } from "./useFileIndex";
 
-const UNTITLED_FILE = "untitled.md";
+/** The scratch note: the one document with no file behind it. */
+export const UNTITLED_FILE = "untitled.md";
 
 /** Announced by the backend when a note changes underneath the app. */
 const FILE_CHANGED_EVENT = "file-changed";
+/** Announced by the backend when the set of files in the vault changes. */
+const INDEX_CHANGED_EVENT = "index-changed";
+/** How long the tree waits for a burst of those to finish before reading again. */
+const TREE_SETTLE_DELAY = 250;
+/**
+ * How long a note that cannot be read is given before it is called gone. An
+ * editor that saves by replacing the file takes it away for a moment first.
+ */
+const MISSING_GRACE = 400;
 /** Matches `OPEN_TARGET_EVENT` in lib.rs. */
 const OPEN_TARGET_EVENT = "open-target";
 
@@ -57,6 +75,13 @@ function isConflict(error: unknown) {
  * than lost, since there is no prompt there to catch it.
  */
 const AUTOSAVE_DELAY = 800;
+
+/**
+ * How long a save that failed is left before it is tried again. A full disk or
+ * a folder that has gone read-only does not mend itself in under a second, and
+ * each attempt says that it failed.
+ */
+const AUTOSAVE_RETRY_DELAY = 10_000;
 
 interface UseFileOperationsOptions {
   /** Editor extensions that follow the app's settings. */
@@ -93,6 +118,12 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
    * entry goes when the offer has been answered either way.
    */
   const [recovered, setRecovered] = useState<ReadonlyMap<string, string>>(() => new Map());
+  /**
+   * Open notes whose file has gone from disk - deleted, moved or renamed by
+   * something other than the app. The tab still holds the text, which may be
+   * the last copy of it there is, so it stays and says so.
+   */
+  const [missing, setMissing] = useState<ReadonlySet<string>>(() => new Set());
 
   // Destructured rather than held as one object: every member is stable, so
   // the callbacks below keep their identity from one render to the next.
@@ -109,9 +140,11 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
     open: openDocument,
     replace: replaceDocument,
     showing: showingDocument,
+    showingSide: showingSideDocument,
     isOpen: isDocumentOpen,
     read: readDocument,
     revision: documentRevision,
+    caretOf,
     markSaved,
     forget: forgetDocuments,
     rewrite: rewriteDocuments,
@@ -171,6 +204,19 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
     });
     // The question has been answered, so there is nothing left to hold on to.
     void invoke("drop_recovery", { path }).catch(() => {});
+  }, []);
+
+  const flagMissing = useCallback((path: string) => {
+    setMissing((paths) => (paths.has(path) ? paths : new Set(paths).add(path)));
+  }, []);
+
+  const clearMissing = useCallback((path: string) => {
+    setMissing((paths) => {
+      if (!paths.has(path)) return paths;
+      const next = new Set(paths);
+      next.delete(path);
+      return next;
+    });
   }, []);
 
   /** Stops offering what was kept for `path`, and forgets it on disk. */
@@ -250,6 +296,38 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
    */
   const sessionVault = useRef<string | null>(null);
   const sessionReady = useRef(false);
+  /** The places left behind on the way here, and the ones gone back from. */
+  const trail = useRef<Trail>(EMPTY_TRAIL);
+  /** Set while going back or forward, so that move does not itself count as a place left. */
+  const retracing = useRef(false);
+
+  /**
+   * Notes that where the caret is now is about to be left - before following
+   * a link, opening a search hit or switching notes - so it can be come back
+   * to. The scratch note is not noted: it has no file to come back to once
+   * its tab has gone.
+   */
+  const leavePlace = useCallback(() => {
+    if (retracing.current) return;
+    const path = currentFileRef.current;
+    if (path === UNTITLED_FILE) return;
+    trail.current = leave(trail.current, { path, caret: caretOf(path) ?? 0 });
+  }, [caretOf]);
+
+  /** Counts the restores started, so one overtaken by the next can tell. */
+  const restoring = useRef(0);
+  /**
+   * Set in a window that was opened for one note of a vault. The vault's
+   * record of its tabs is the other window's to keep: written from here, it
+   * would be replaced by this window's one tab.
+   */
+  const sessionMuted = useRef(false);
+  /**
+   * Where the caret was in each of the session's notes, as last recorded: what
+   * a tab not looked at yet this run opens at, and what is written back for it
+   * until it has been.
+   */
+  const savedCarets = useRef<Record<string, number>>({});
 
   /**
    * Reopens the notes that were last open in `folder`, or leaves the editor on
@@ -258,42 +336,67 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
    * what keeps a vault with twenty tabs open as quick to launch as an empty one.
    */
   const restoreSession = useCallback(
-    async (folder: OpenedFolder, focus?: string) => {
-      const session = readSession(folder.path);
-      // Notes deleted or moved since last time are quietly dropped rather than
-      // reopened as tabs onto nothing.
-      const open = session.open.filter((path) => findEntry(folder.entries, path));
+    async (folder: OpenedFolder, focus?: string, alone = false) => {
+      const mine = ++restoring.current;
+      const overtaken = () => mine !== restoring.current;
+
+      // A window opened for one note has that note and nothing else: the
+      // vault's tabs belong to the window they were left in.
+      const session = alone ? EMPTY_SESSION : readSession(folder.path);
       // A note asked for by name - from a terminal - goes in front of whatever
       // was open, and joins the tabs if it was not one of them.
-      const asked = focus && findEntry(folder.entries, focus) ? focus : undefined;
-      if (asked && !open.includes(asked)) open.push(asked);
-      const current = asked ?? (open.includes(session.current) ? session.current : open[0]);
+      const wanted = focus && !session.open.includes(focus) ? [...session.open, focus] : session.open;
 
+      let restored = false;
       try {
+        // Notes deleted or moved since last time are quietly dropped rather
+        // than reopened as tabs onto nothing. The disk is asked, not the tree:
+        // the tree is read a folder at a time, and has not heard of a note in
+        // a folder nobody has opened yet - which used to lose every such tab.
+        let present = wanted;
+        if (wanted.length > 0) {
+          try {
+            present = await invoke<string[]>("existing_files", { paths: wanted });
+          } catch (error) {
+            // Not knowing which are gone is no reason to drop them all.
+            console.error("Couldn't check which notes are still there:", error);
+          }
+        }
+        if (overtaken()) return;
+
+        const { open, current } = tabsToRestore(session, present, focus);
         if (!current) throw new Error("nothing to reopen");
         const content = await invoke<string>("read_file", { path: current });
+        if (overtaken()) return;
+
+        savedCarets.current = { ...session.carets };
 
         recentRef.current = [current, ...open.filter((path) => path !== current)];
         setOpenPaths(open);
         setCurrentFile(current);
-        openDocument(current, content);
+        openDocument(current, content, savedCarets.current[current]);
+        restored = true;
 
         // The likeliest note to have edits waiting is the one that was open
         // when the app went away, and this is the path it comes back through -
         // it never goes near `selectFile`.
         void offerRecovered(current, content);
       } catch {
-        resetToScratch();
-      } finally {
-        sessionReady.current = true;
+        // Nothing to reopen, or the note in front could not be read.
       }
+
+      // Another folder was opened while this one was being read: the tabs on
+      // screen are that one's business now, and so is saying they are ready.
+      if (overtaken()) return;
+      if (!restored) resetToScratch();
+      sessionReady.current = true;
     },
     [openDocument, resetToScratch, offerRecovered]
   );
 
   /** Switches the app over to a folder that has already been read. */
   const adoptFolder = useCallback(
-    (folder: OpenedFolder, focus?: string) => {
+    (folder: OpenedFolder, focus?: string, alone = false) => {
       setRootPath(folder.path);
       setFolderData(folder.entries);
 
@@ -303,13 +406,18 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
       keepScratch();
       forgetDocuments(() => true);
       setSideFile(null);
+      setMissing(new Set());
       resetToScratch();
-      // The tabs closed in the vault being left are no tabs of this one.
+      // The tabs closed in the vault being left are no tabs of this one, and
+      // nor are the places its notes were left at.
       closedRef.current = [];
+      savedCarets.current = {};
+      trail.current = EMPTY_TRAIL;
 
       sessionVault.current = folder.path;
       sessionReady.current = false;
-      void restoreSession(folder, focus);
+      sessionMuted.current = alone;
+      void restoreSession(folder, focus, alone);
 
       onFolderOpened?.(folder.path);
     },
@@ -318,12 +426,29 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
 
   // What is open, kept for next time. The scratch note is left out: it is not
   // a file, so there is nothing to reopen it from.
-  useEffect(() => {
-    if (!sessionReady.current || sessionVault.current !== rootPath || !rootPath) return;
+  const recordSession = useCallback(() => {
+    const root = rootPathRef.current;
+    if (!sessionReady.current || sessionVault.current !== root || !root) return;
+    if (sessionMuted.current) return;
 
-    const open = openPaths.filter((path) => path !== UNTITLED_FILE);
-    writeSession(rootPath, { open, current: open.includes(currentFile) ? currentFile : (open[0] ?? "") });
-  }, [rootPath, openPaths, currentFile]);
+    const open = openPathsRef.current.filter((path) => path !== UNTITLED_FILE);
+    const current = currentFileRef.current;
+
+    // A tab that has not been looked at this run has no caret of its own
+    // yet, so the one it was recorded with stands.
+    const carets: Record<string, number> = {};
+    for (const path of open) {
+      const caret = caretOf(path) ?? savedCarets.current[path];
+      if (caret) carets[path] = caret;
+    }
+    savedCarets.current = carets;
+
+    writeSession(root, { open, current: open.includes(current) ? current : (open[0] ?? ""), carets });
+  }, [caretOf]);
+
+  useEffect(() => {
+    recordSession();
+  }, [rootPath, openPaths, currentFile, recordSession]);
 
   const openFolder = useCallback(async () => {
     try {
@@ -340,9 +465,9 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
    * moved or deleted since it was last opened.
    */
   const openVault = useCallback(
-    async (path: string, focus?: string) => {
+    async (path: string, focus?: string, alone = false) => {
       try {
-        adoptFolder(await invoke<OpenedFolder>("open_folder", { path }), focus);
+        adoptFolder(await invoke<OpenedFolder>("open_folder", { path }), focus, alone);
         return true;
       } catch (error) {
         // The switcher says its own piece about a vault that has moved, and
@@ -359,6 +484,13 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
    * only lowered if the text has not moved on since it was read, so an edit
    * made while the write was in flight stays flagged for the next one.
    */
+  /**
+   * How soon the autosave should run again once the one in hand is done, or
+   * null if it has nothing left to do. A note that is still dirty after a save
+   * does not change the dirty set, so nothing else would bring the timer back.
+   */
+  const saveAgain = useRef<number | null>(null);
+
   const writeDocument = useCallback(
     async (path: string, force = false) => {
       const before = documentRevision(path);
@@ -374,12 +506,17 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
       }
 
       if (documentRevision(path) === before) markSaved(path);
+      // Typed in while the write was on its way: what is on disk is already
+      // behind, and the autosave has to come round again for the rest.
+      else saveAgain.current = AUTOSAVE_DELAY;
       // Keeps "Date Modified" order honest about the notes written from here.
       setFolderData((tree) => touchEntry(tree, rootPathRef.current ?? "", path));
-      // What is on disk is this note now, whatever it was a moment ago.
+      // What is on disk is this note now, whatever it was a moment ago - and
+      // it is on disk, if it had gone from there.
       clearConflict(path);
+      clearMissing(path);
     },
-    [documentRevision, readDocument, markSaved, flagConflict, clearConflict]
+    [documentRevision, readDocument, markSaved, flagConflict, clearConflict, clearMissing]
   );
 
   const save = useCallback(async () => {
@@ -437,7 +574,11 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
         } catch (error) {
           // A note waiting on an answer already has the bar above it saying
           // so; the autosave being turned away is that bar working.
-          if (!isConflict(error)) report(`Couldn't save "${fileNameOf(path)}"`, error);
+          if (!isConflict(error)) {
+            report(`Couldn't save "${fileNameOf(path)}"`, error);
+            // Still unsaved, and nothing but another try will change that.
+            saveAgain.current ??= AUTOSAVE_RETRY_DELAY;
+          }
         }
       })
     );
@@ -481,19 +622,38 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
    */
   const flush = useCallback(async () => {
     keepScratch();
+    // Where the caret is in each note, along with the tabs: it moves without
+    // the tabs changing, so this is where it is caught up with - as notes are
+    // saved, and once more on the way out.
+    recordSession();
     await Promise.all([saveDirty(), keepConflicted()]);
-  }, [keepScratch, saveDirty, keepConflicted]);
+  }, [keepScratch, recordSession, saveDirty, keepConflicted]);
 
   // The dirty set only changes identity when a path joins or leaves it, so
   // this schedules a write shortly after a note *becomes* dirty rather than
   // restarting on every keystroke - a run of typing is saved every
   // AUTOSAVE_DELAY rather than only once the typing stops.
+  //
+  // A note typed in while its save was in flight is still dirty when the save
+  // lands, and the set is the same set - so the save asks for another round
+  // itself, through `saveAgain`, or that note would sit unsaved until quit.
+  const [autosave, setAutosave] = useState({ round: 0, delay: AUTOSAVE_DELAY });
   useEffect(() => {
     if (dirtyPaths.size === 0) return;
 
-    const timer = setTimeout(() => void flush(), AUTOSAVE_DELAY);
+    const timer = setTimeout(() => {
+      saveAgain.current = null;
+      void flush().finally(() => {
+        const delay = saveAgain.current;
+        setAutosave((last) => {
+          if (delay !== null) return { round: last.round + 1, delay };
+          // Nothing left over: back to the usual pace, if a failure slowed it.
+          return last.delay === AUTOSAVE_DELAY ? last : { ...last, delay: AUTOSAVE_DELAY };
+        });
+      });
+    }, autosave.delay);
     return () => clearTimeout(timer);
-  }, [dirtyPaths, flush]);
+  }, [dirtyPaths, flush, autosave]);
 
   /**
    * A note has changed underneath the app - a sync client, a git checkout, a
@@ -515,10 +675,23 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
       try {
         content = await invoke<string>("read_file", { path });
       } catch {
-        // Gone, or no longer readable. What is held here is the last copy of
-        // it there is, so it stays.
-        return;
+        // Gone, or no longer readable - or being replaced, which is how a
+        // good many editors save, and looks like gone for a moment. So it is
+        // asked again shortly before anything is said about it.
+        await new Promise((resolve) => setTimeout(resolve, MISSING_GRACE));
+        try {
+          content = await invoke<string>("read_file", { path });
+        } catch {
+          // What is held here is the last copy of it there is, so it stays -
+          // marked, if the file really is not there, so the tab does not go
+          // on looking like a note that is safely on disk.
+          const there = await invoke<string[]>("existing_files", { paths: [path] }).catch(() => [path]);
+          if (there.length === 0 && isDocumentOpen(path)) flagMissing(path);
+          return;
+        }
       }
+
+      clearMissing(path);
 
       // The app's own save, arriving back as news. Cheap to rule out, and
       // worth ruling out: replacing a document resets its undo history.
@@ -531,7 +704,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
     return () => {
       void listening.then((stop) => stop());
     };
-  }, [isDocumentOpen, readDocument, replaceDocument, flagConflict]);
+  }, [isDocumentOpen, readDocument, replaceDocument, flagConflict, flagMissing, clearMissing]);
 
   /** Takes the copy on disk, dropping the edits made here. */
   const reloadFromDisk = useCallback(
@@ -540,11 +713,12 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
         replaceDocument(path, await invoke<string>("read_file", { path }));
         markSaved(path);
         clearConflict(path);
+        clearMissing(path);
       } catch (error) {
         report(`Couldn't read "${fileNameOf(path)}" back from disk`, error);
       }
     },
-    [replaceDocument, markSaved, clearConflict]
+    [replaceDocument, markSaved, clearConflict, clearMissing]
   );
 
   /** Keeps what is in the editor, over the top of the copy on disk. */
@@ -611,9 +785,25 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
   const selectFile = useCallback(
     async (path: string) => {
       try {
-        if (path === currentFileRef.current) return;
+        // A picture or a document is not a note to put in a tab: one is shown
+        // where it is, the other handed to whatever the system opens it with.
+        // A file already open as text stays text, however it is named.
+        if (!isDocumentOpen(path)) {
+          const opener = openerFor(path);
+          if (opener === "image") {
+            showLightbox(mediaSource(path), fileNameOf(path));
+            return;
+          }
+          if (opener === "system") {
+            await invoke("open_with_system", { path });
+            return;
+          }
+        }
 
+        // Taken before anything else, so that going back to the note already
+        // on screen overtakes one that is still being read.
         const mine = ++selectionRef.current;
+        if (path === currentFileRef.current) return;
 
         // Only a document that has never been opened costs a read; everything
         // else is already sitting in memory as editor state.
@@ -626,7 +816,8 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
         // asking for any more.
         if (mine !== selectionRef.current) return;
 
-        openDocument(path, content);
+        leavePlace();
+        openDocument(path, content, firstRead ? savedCarets.current[path] : undefined);
         // A note the split was showing has moved across to this pane.
         setSideFile((side) => (side === path ? null : side));
 
@@ -640,10 +831,13 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
         setOpenPaths((paths) => (paths.includes(path) ? paths : [...paths, path]));
         recentRef.current = [path, ...recentRef.current.filter((p) => p !== path)];
       } catch (error) {
-        report(`Couldn't open "${fileNameOf(path)}"`, error);
+        // Not a kind that is known, and not text either. Said plainly rather
+        // than as the decoder's complaint about its bytes.
+        if (isNotText(error)) report(`"${fileNameOf(path)}" isn't text, so it can't be opened here`);
+        else report(`Couldn't open "${fileNameOf(path)}"`, error);
       }
     },
-    [isDocumentOpen, openDocument, offerRecovered]
+    [isDocumentOpen, openDocument, offerRecovered, leavePlace]
   );
 
   const sideSelectionRef = useRef(0);
@@ -657,15 +851,22 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
   const openToSide = useCallback(
     async (path: string) => {
       try {
-        if (path === currentFileRef.current) return;
+        // There is no putting a picture or a PDF in the split: it opens the
+        // way it would from anywhere else.
+        if (!isDocumentOpen(path) && openerFor(path) !== "editor") {
+          await selectFile(path);
+          return;
+        }
 
         const mine = ++sideSelectionRef.current;
+        if (path === currentFileRef.current) return;
+
         const firstRead = !isDocumentOpen(path);
         const content = firstRead ? await invoke<string>("read_file", { path }) : null;
 
         // Overtaken, or made the main pane's note while it was being read.
         if (mine !== sideSelectionRef.current || path === currentFileRef.current) return;
-        if (!openSideDocument(path, content)) return;
+        if (!openSideDocument(path, content, firstRead ? savedCarets.current[path] : undefined)) return;
 
         if (firstRead) void offerRecovered(path, content ?? "");
         setSideFile(path);
@@ -675,7 +876,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
         report(`Couldn't open "${fileNameOf(path)}"`, error);
       }
     },
-    [isDocumentOpen, openSideDocument, offerRecovered]
+    [isDocumentOpen, openSideDocument, offerRecovered, selectFile]
   );
 
   const closeSide = useCallback(() => {
@@ -686,6 +887,62 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
   }, [closeSideDocument]);
 
   /**
+   * The tree, brought back into line with the disk: every folder that has
+   * been read is read again, and what is new, gone or renamed since is taken
+   * in. This is what makes a file dropped in by a sync client, or made in a
+   * terminal, turn up in the sidebar without the vault being opened again -
+   * the tree is otherwise only ever changed by what the app itself does.
+   *
+   * Folders that have not been opened are left unread, as they were.
+   */
+  const refreshingTree = useRef(0);
+  const refreshTree = useCallback(async () => {
+    const root = rootPathRef.current;
+    if (!root) return;
+
+    const mine = ++refreshingTree.current;
+    const folders = [root, ...readFolders(folderDataRef.current)];
+    const listings = await Promise.all(
+      folders.map(async (path) => {
+        try {
+          return { path, listed: await invoke<FileEntry[]>("list_folder", { path }) };
+        } catch {
+          // Gone, or not answering. Its own row goes when the folder above it
+          // is read; until then it is left as it was.
+          return null;
+        }
+      })
+    );
+    // Overtaken by a later read, or the vault was switched meanwhile.
+    if (mine !== refreshingTree.current || root !== rootPathRef.current) return;
+
+    setFolderData((tree) => {
+      let next = tree;
+      for (const listing of listings) {
+        if (!listing) continue;
+        const had = listing.path === root ? next : findEntry(next, listing.path)?.children;
+        if (!had) continue;
+        const merged = mergeListing(had, listing.listed);
+        if (merged !== had) next = setChildren(next, root, listing.path, merged);
+      }
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const listening = listenHere(INDEX_CHANGED_EVENT, () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => void refreshTree(), TREE_SETTLE_DELAY);
+    });
+
+    return () => {
+      clearTimeout(timer);
+      void listening.then((stop) => stop());
+    };
+  }, [refreshTree]);
+
+  /**
    * Opens `path` with the caret on `line` (1-based) at `column`, counted in
    * UTF-16 units the way the editor counts positions - where a search hit in
    * the note's text was found. Left where it opened if something else was
@@ -694,6 +951,9 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
    */
   const openAt = useCallback(
     async (path: string, line: number, column: number) => {
+      // A hit further down the note already open is a place left as well;
+      // one in another note is noted by the switch itself.
+      if (path === currentFileRef.current) leavePlace();
       await selectFile(path);
       const view = editorView;
       if (!view || showingDocument() !== path) return;
@@ -705,7 +965,53 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
       view.dispatch({ selection: { anchor }, effects: EditorView.scrollIntoView(anchor, { y: "center" }) });
       view.focus();
     },
-    [selectFile, editorView, showingDocument]
+    [selectFile, editorView, showingDocument, leavePlace]
+  );
+
+  /**
+   * Goes back to the place left most recently, or forward again to the one
+   * gone back from: the note reopened if its tab has been closed, and the
+   * caret put where it was, in the middle of the pane. A place whose note
+   * can no longer be opened is passed over for the one before it.
+   */
+  const retrace = useCallback(
+    async (direction: "back" | "forward") => {
+      if (retracing.current) return;
+      retracing.current = true;
+      try {
+        for (;;) {
+          const here = currentFileRef.current;
+          const from = { path: showingDocument(), caret: caretOf(showingDocument()) ?? 0 };
+          const moved = step(trail.current, from, direction);
+          if (!moved) return;
+
+          // The scratch note is never a place to come back to, so it is not
+          // left on the other stack either.
+          trail.current =
+            here === UNTITLED_FILE
+              ? direction === "back"
+                ? { ...moved.trail, forward: moved.trail.forward.slice(0, -1) }
+                : { ...moved.trail, back: moved.trail.back.slice(0, -1) }
+              : moved.trail;
+
+          const { path, caret } = moved.to;
+          if (showingDocument() !== path) await selectFile(path);
+          const view = editorView;
+          if (!view || showingDocument() !== path) continue;
+
+          const anchor = Math.min(caret, view.state.doc.length);
+          view.dispatch({
+            selection: { anchor },
+            effects: EditorView.scrollIntoView(anchor, { y: "center" }),
+          });
+          view.focus();
+          return;
+        }
+      } finally {
+        retracing.current = false;
+      }
+    },
+    [selectFile, editorView, showingDocument, caretOf]
   );
 
   /**
@@ -735,6 +1041,117 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
       }
     },
     [resetToScratch, selectFile]
+  );
+
+  /**
+   * Closes several tabs at once, for "Close Others" and "Close to the Right".
+   * Done in one go rather than one `closeFile` after another: each of those
+   * reads the tabs as they were when this render started, and the second
+   * would put back what the first took away.
+   */
+  const closeFiles = useCallback(
+    (closing: readonly string[]) => {
+      const going = new Set(closing);
+      const paths = openPathsRef.current;
+      const remaining = paths.filter((path) => !going.has(path));
+      if (remaining.length === paths.length) return;
+
+      paths.forEach((path, index) => {
+        if (going.has(path) && path !== UNTITLED_FILE) {
+          closedRef.current = rememberClosed(closedRef.current, { path, index });
+        }
+      });
+      recentRef.current = recentRef.current.filter((path) => !going.has(path));
+
+      if (remaining.length === 0) {
+        resetToScratch();
+        return;
+      }
+
+      setOpenPaths(remaining);
+      if (going.has(currentFileRef.current)) {
+        const next =
+          recentRef.current.find((path) => remaining.includes(path)) ?? remaining[remaining.length - 1];
+        void selectFile(next);
+      }
+    },
+    [resetToScratch, selectFile]
+  );
+
+  /**
+   * Opens `path` in a window of its own, on the same vault. With `move`, the
+   * note leaves this window for that one - its tab closes here - which is
+   * what dragging a tab out of a browser does; without, it is opened there
+   * as well, and stays where it is here.
+   *
+   * What has been typed is written first: the new window reads the note from
+   * disk, and would otherwise open on the copy from before the last pause.
+   */
+  const openInNewWindow = useCallback(
+    async (path: string, move = false) => {
+      const root = rootPathRef.current;
+      if (!root || path === UNTITLED_FILE) return;
+
+      try {
+        if (dirtyPathsRef.current.has(path) && !conflictsRef.current.has(path)) await writeDocument(path);
+        await invoke("open_note_in_new_window", { path, vault: root });
+      } catch (error) {
+        report(`Couldn't open "${fileNameOf(path)}" in a new window`, error);
+        return;
+      }
+      if (move) closeFile(path);
+    },
+    [writeDocument, closeFile]
+  );
+
+  /**
+   * Lets go of a note whose file has gone, and of whatever was typed in it:
+   * the tab closes, or the split does, and nothing is written. The other
+   * answer to a missing file is `keepMine`, which puts it back on disk.
+   */
+  const discardMissing = useCallback(
+    async (path: string) => {
+      if (showingSideDocument() === path) {
+        sideSelectionRef.current++;
+        closeSideDocument();
+        setSideFile(null);
+      } else {
+        const paths = openPathsRef.current;
+        const index = paths.indexOf(path);
+        if (index === -1) return;
+
+        const remaining = paths.filter((p) => p !== path);
+        if (remaining.length === 0) {
+          resetToScratch();
+        } else {
+          // The editor moves on first, and is waited for: the document must
+          // not be forgotten while it is still the one on screen.
+          if (showingDocument() === path) {
+            await selectFile(remaining[index] ?? remaining[remaining.length - 1]);
+            // The note to fall back on could not be opened. Better a tab onto
+            // a missing file than an editor showing a note with no tab.
+            if (showingDocument() === path) return;
+          }
+          setOpenPaths((open) => open.filter((p) => p !== path));
+        }
+        recentRef.current = recentRef.current.filter((p) => p !== path);
+      }
+
+      forgetDocuments((open) => open === path);
+      clearConflict(path);
+      clearMissing(path);
+      closedRef.current = closedRef.current.filter((tab) => tab.path !== path);
+    },
+    [
+      showingSideDocument,
+      showingDocument,
+      closeSideDocument,
+      resetToScratch,
+      selectFile,
+      forgetDocuments,
+      clearConflict,
+      clearMissing,
+    ]
   );
 
   /**
@@ -803,8 +1220,13 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
       setOpenPaths((paths) => paths.map(rename));
       recentRef.current = recentRef.current.map(rename);
       closedRef.current = closedRef.current.map((tab) => ({ ...tab, path: rename(tab.path) }));
+      trail.current = renamePlaces(trail.current, rename);
+      savedCarets.current = Object.fromEntries(
+        Object.entries(savedCarets.current).map(([kept, caret]) => [rename(kept), caret])
+      );
       if (isWithin(currentFileRef.current, from)) setCurrentFile(rename(currentFileRef.current));
       setSideFile((side) => (side && isWithin(side, from) ? rename(side) : side));
+      setMissing((paths) => (paths.size === 0 ? paths : new Set(Array.from(paths, rename))));
     },
     [rewriteDocuments]
   );
@@ -823,6 +1245,44 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
     },
     [selectFile]
   );
+
+  /**
+   * Makes a new note beside the one that is open - or at the top of the vault
+   * when nothing from it is - under the first "Untitled" name that is free,
+   * and opens it. With no folder open there is nowhere to make one, and the
+   * scratch note is what there is to write in.
+   */
+  const createNote = useCallback(async () => {
+    const root = rootPathRef.current;
+    if (!root) return;
+
+    const here = currentFileRef.current;
+    const parent = here !== UNTITLED_FILE && isWithin(here, root) ? directoryOf(here) || root : root;
+
+    // The names the index and the tree know of in that folder. Neither is
+    // sure to be complete, so a name that turns out to be taken is stepped
+    // past rather than reported.
+    const taken = new Set<string>();
+    for (const path of fileIndexRef.current.paths) {
+      if (directoryOf(path) === parent) taken.add(fileNameOf(path));
+    }
+    const listed =
+      parent === root ? folderDataRef.current : findEntry(folderDataRef.current, parent)?.children;
+    for (const entry of listed ?? []) taken.add(entry.name);
+
+    for (let attempt = 0; attempt < 20; attempt++) {
+      try {
+        await createFile(parent, untitledName(taken, attempt));
+        return;
+      } catch (error) {
+        if (!String(error).includes("already exists")) {
+          report("Couldn't make a new note", error);
+          return;
+        }
+      }
+    }
+    report("Couldn't find a free name for a new note");
+  }, [createFile]);
 
   /**
    * Copies a note beside itself as "name 1.md" and opens the copy. Edits not
@@ -849,7 +1309,20 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
    */
   useEffect(() => {
     async function follow(event: Event) {
-      const { target, heading, fromDirectory } = (event as CustomEvent<WikiLinkRequest>).detail;
+      const { target, heading, fromDirectory, view: origin } = (event as CustomEvent<WikiLinkRequest>).detail;
+
+      // `[[#heading]]`: a heading in the note the link is written in - which,
+      // with the split open, is the note in the pane it was followed in, and
+      // not always the one in the main pane. It needs no vault to work.
+      if (!target) {
+        const view = origin ?? editorView;
+        if (view === editorView) leavePlace();
+        if (heading && view && !jumpToHeading(view, heading)) {
+          report(`There's no heading "${heading}" in this note`);
+        }
+        return;
+      }
+
       const root = rootPathRef.current;
       if (!root) return;
 
@@ -859,13 +1332,6 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
         if (!heading || !view || showingDocument() !== path) return;
         if (!jumpToHeading(view, heading)) report(`There's no heading "${heading}" in that note`);
       };
-
-      // `[[#heading]]`: a heading in the note the link is written in.
-      if (!target) {
-        const here = currentFileRef.current;
-        if (heading && here) goToHeading(here);
-        return;
-      }
 
       // The index knows the whole vault; the tree knows a note made a moment
       // ago, before the index has heard of it.
@@ -900,7 +1366,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
 
     window.addEventListener(WIKI_LINK_EVENT, follow);
     return () => window.removeEventListener(WIKI_LINK_EVENT, follow);
-  }, [selectFile, createFile, showingDocument, editorView]);
+  }, [selectFile, createFile, showingDocument, editorView, leavePlace]);
 
   /**
    * Opens what `nuza <path>` asked for: a folder as the vault, or a note in
@@ -913,7 +1379,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
 
       if ("select" in plan) {
         await selectFile(plan.select);
-      } else if (!(await openVault(plan.folder, plan.focus))) {
+      } else if (!(await openVault(plan.folder, plan.focus, plan.alone))) {
         report(`Couldn't open "${plan.folder}"`);
       }
     },
@@ -973,10 +1439,14 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
 
       forgetDocuments((open) => isWithin(open, path));
       setSideFile((side) => (side && isWithin(side, path) ? null : side));
+      setMissing((paths) =>
+        paths.size === 0 ? paths : new Set(Array.from(paths).filter((gone) => !isWithin(gone, path)))
+      );
 
       const remaining = openPathsRef.current.filter((p) => !isWithin(p, path));
       recentRef.current = recentRef.current.filter((p) => !isWithin(p, path));
       closedRef.current = closedRef.current.filter((tab) => !isWithin(tab.path, path));
+      trail.current = forgetPlaces(trail.current, (place) => isWithin(place, path));
 
       if (remaining.length === 0) {
         resetToScratch();
@@ -1009,6 +1479,8 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
     openPaths,
     dirtyPaths,
     conflicts,
+    missing,
+    discardMissing,
     folderData,
     fileIndex,
     loadFolder,
@@ -1021,9 +1493,12 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
     flush,
     selectFile,
     openAt,
+    retrace,
     reopenClosedTab,
     reorderTabs,
     closeFile,
+    closeFiles,
+    openInNewWindow,
     cycleFile,
     switchToRecent,
     jumpToFile,
@@ -1033,6 +1508,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
     restoreRecovered,
     discardRecovered,
     createFile,
+    createNote,
     createFolder,
     renameEntry,
     duplicateEntry,

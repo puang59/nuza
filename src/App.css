@@ -142,12 +142,34 @@ textarea,
   height: 100% !important;
   min-height: 100% !important;
   overflow: auto !important;
-  -ms-overflow-style: none !important; /* IE and Edge */
-  scrollbar-width: none !important; /* Firefox */
 }
 
-.cm-scroller::-webkit-scrollbar {
-  display: none !important;
+/*
+ * The note's own scrollbar. It is the app's usual hairline, and it is only
+ * there when it is wanted: while the note is being scrolled, and while the
+ * pointer is at the edge it lives on - see `scrollbar.ts`, which sets the
+ * attribute. The rest of the time the writing surface has nothing on it, but
+ * a long note no longer has no way of saying where in it you are, and a mouse
+ * with no wheel has something to drag.
+ *
+ * The lane is always kept, so the text does not step sideways when a note
+ * grows long enough to scroll.
+ */
+.cm-scroller {
+  scrollbar-gutter: stable;
+  scrollbar-color: transparent transparent;
+}
+
+.cm-scroller::-webkit-scrollbar-thumb {
+  background-color: transparent;
+}
+
+.cm-scroller[data-scrollbar="shown"] {
+  scrollbar-color: var(--nuza-scrollbar-strong) transparent;
+}
+
+.cm-scroller[data-scrollbar="shown"]::-webkit-scrollbar-thumb {
+  background-color: var(--nuza-scrollbar-strong);
 }
 
 .cm-content {

@@ -6,15 +6,22 @@
  * front, is what makes the app feel like somewhere you left something rather
  * than somewhere you start again.
  *
- * Only the paths are kept. The notes themselves are on disk and are read back
- * when a tab is actually looked at, so a vault full of open tabs costs nothing
- * at launch beyond the one note in front of you.
+ * Only the paths are kept, and where the caret was in each. The notes
+ * themselves are on disk and are read back when a tab is actually looked at,
+ * so a vault full of open tabs costs nothing at launch beyond the one note in
+ * front of you.
  */
 export interface Session {
   /** The open tabs, in the order the strip had them. */
   open: string[];
   /** The tab that was in front. */
   current: string;
+  /**
+   * Where the caret was in each open note, as an offset into its text, so a
+   * note comes back at the place it was left rather than at its first line.
+   * Notes left at their start are not listed.
+   */
+  carets?: Record<string, number>;
 }
 
 export const EMPTY_SESSION: Session = { open: [], current: "" };
@@ -36,6 +43,18 @@ type Sessions = Record<string, Session>;
  */
 let cache: { raw: string | null; sessions: Sessions } | null = null;
 
+/** The carets out of `stored` that belong to one of `paths` and are a place in a text. */
+export function caretsFor(paths: readonly string[], stored: unknown): Record<string, number> {
+  const kept: Record<string, number> = {};
+  if (!stored || typeof stored !== "object" || Array.isArray(stored)) return kept;
+
+  for (const path of paths) {
+    const caret = (stored as Record<string, unknown>)[path];
+    if (typeof caret === "number" && Number.isInteger(caret) && caret > 0) kept[path] = caret;
+  }
+  return kept;
+}
+
 /** Storage is a file anyone can edit, so what comes back is checked. */
 function parseSessions(raw: string | null): Sessions {
   try {
@@ -44,7 +63,7 @@ function parseSessions(raw: string | null): Sessions {
 
     const sessions: Sessions = {};
     for (const [vault, value] of Object.entries(stored as Record<string, unknown>)) {
-      const { open, current } = (value ?? {}) as Partial<Session>;
+      const { open, current, carets } = (value ?? {}) as Partial<Session>;
       if (!Array.isArray(open)) continue;
 
       const paths = open.filter((path): path is string => typeof path === "string" && !!path);
@@ -54,6 +73,9 @@ function parseSessions(raw: string | null): Sessions {
         open: paths,
         current: typeof current === "string" && paths.includes(current) ? current : paths[0],
       };
+
+      const kept = caretsFor(paths, carets);
+      if (Object.keys(kept).length > 0) sessions[vault].carets = kept;
     }
     return sessions;
   } catch {
@@ -108,4 +130,22 @@ export function writeSession(vault: string, session: Session) {
   } catch (error) {
     console.error("Failed to record the open tabs:", error);
   }
+}
+
+/**
+ * The tabs to reopen out of `session`, given which of its notes are still
+ * `present` on disk: the ones that are gone are dropped, a note asked for by
+ * name (`focus`) joins the rest and goes in front, and otherwise the note that
+ * was in front last time is - or the first tab, if that one has gone.
+ * `current` is undefined when there is nothing left to reopen.
+ */
+export function tabsToRestore(session: Session, present: readonly string[], focus?: string) {
+  const there = new Set(present);
+  const open = session.open.filter((path) => there.has(path));
+
+  const asked = focus && there.has(focus) ? focus : undefined;
+  if (asked && !open.includes(asked)) open.push(asked);
+
+  const current: string | undefined = asked ?? (open.includes(session.current) ? session.current : open[0]);
+  return { open, current };
 }

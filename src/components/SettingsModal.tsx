@@ -26,6 +26,10 @@ interface SettingsModalProps {
   setVimEnabled: (enabled: boolean) => void;
   showLineNumbers: boolean;
   setShowLineNumbers: (enabled: boolean) => void;
+  typewriterScrolling: boolean;
+  setTypewriterScrolling: (enabled: boolean) => void;
+  sectionGuides: boolean;
+  setSectionGuides: (enabled: boolean) => void;
   appearance: Appearance;
   setAppearance: (change: Partial<Appearance>) => void;
   resetAppearance: () => void;
@@ -37,6 +41,10 @@ interface SettingsModalProps {
   setEditorFont: (font: string) => void;
   editorFontSize: number;
   setEditorFontSize: (size: number) => void;
+  contentWidth: number;
+  setContentWidth: (width: number) => void;
+  lineHeight: number;
+  setLineHeight: (height: number) => void;
   keymapBindings: Record<KeymapAction, string>;
   setKeymapBinding: (action: KeymapAction, binding: string) => void;
   resetKeymapBinding: (action: KeymapAction) => void;
@@ -55,6 +63,10 @@ export default function SettingsModal({
   setVimEnabled,
   showLineNumbers,
   setShowLineNumbers,
+  typewriterScrolling,
+  setTypewriterScrolling,
+  sectionGuides,
+  setSectionGuides,
   appearance,
   setAppearance,
   resetAppearance,
@@ -66,6 +78,10 @@ export default function SettingsModal({
   setEditorFont,
   editorFontSize,
   setEditorFontSize,
+  contentWidth,
+  setContentWidth,
+  lineHeight,
+  setLineHeight,
   keymapBindings,
   setKeymapBinding,
   resetKeymapBinding,
@@ -143,6 +159,10 @@ export default function SettingsModal({
                 setVimEnabled={setVimEnabled}
                 showLineNumbers={showLineNumbers}
                 setShowLineNumbers={setShowLineNumbers}
+                typewriterScrolling={typewriterScrolling}
+                setTypewriterScrolling={setTypewriterScrolling}
+                sectionGuides={sectionGuides}
+                setSectionGuides={setSectionGuides}
               />
             )}
 
@@ -157,6 +177,10 @@ export default function SettingsModal({
                 setEditorFont={setEditorFont}
                 editorFontSize={editorFontSize}
                 setEditorFontSize={setEditorFontSize}
+                contentWidth={contentWidth}
+                setContentWidth={setContentWidth}
+                lineHeight={lineHeight}
+                setLineHeight={setLineHeight}
               />
             )}
 

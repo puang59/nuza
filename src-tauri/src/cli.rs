@@ -15,6 +15,11 @@ pub struct OpenTarget {
     /// "folder" or "file".
     pub kind: &'static str,
     pub path: String,
+    /// For a note moved into a window of its own: the vault it is in, which is
+    /// the folder that window opens, with nothing else of the vault's tabs
+    /// brought along. Without it a note opens in its own folder.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vault: Option<String>,
 }
 
 /// A path without the `\\?\` that canonicalising puts on one in Windows,
@@ -47,6 +52,7 @@ pub fn target_from_args(args: &[String], cwd: &Path) -> Option<OpenTarget> {
             Some(OpenTarget {
                 kind,
                 path: plain(path),
+                vault: None,
             })
         })
 }

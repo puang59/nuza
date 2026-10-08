@@ -90,6 +90,44 @@ pub(crate) fn remember(vault: &Vault, path: &Path) {
     }
 }
 
+/// Carries what is known about `from` across to `to`, after a rename or a move:
+/// the note itself, and for a folder every note that was read from inside it.
+///
+/// Without this the note at its new path is one the app has "never read", and a
+/// note never read is never out of date - so a change made to it elsewhere
+/// would not be noticed, and the next save from here would go over the top of
+/// it. The time recorded is the one from the read, not a fresh one: a rename
+/// does not move it, and taking it again would wave through a change that
+/// arrived just before the rename did.
+pub(crate) fn follow_move(vault: &Vault, from: &Path, to: &Path) {
+    let mut known = locked(&vault.known);
+    let moved: Vec<PathBuf> = known
+        .keys()
+        .filter(|path| path.starts_with(from))
+        .cloned()
+        .collect();
+
+    for path in moved {
+        let Some(recorded) = known.remove(&path) else {
+            continue;
+        };
+        let landed = match path.strip_prefix(from) {
+            Ok(rest) if !rest.as_os_str().is_empty() => to.join(rest),
+            _ => to.to_path_buf(),
+        };
+        known.insert(landed, recorded);
+    }
+}
+
+/// The paths out of `paths` that are files inside the vault right now, in the
+/// order they were given.
+pub(crate) fn files_present(vault: &Vault, paths: Vec<String>) -> Vec<String> {
+    paths
+        .into_iter()
+        .filter(|path| within_vault(vault, Path::new(path)).is_ok_and(|found| found.is_file()))
+        .collect()
+}
+
 /// Whether `path` has moved on since the app last read or wrote it.
 ///
 /// A note the app has never read is not "changed" - there is nothing to be

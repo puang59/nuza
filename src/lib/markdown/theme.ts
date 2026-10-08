@@ -32,7 +32,9 @@ const ink = {
  * so the column stops here and the rest of the window becomes margin - which is
  * what makes a maximised window feel calm rather than empty.
  */
-const MEASURE = "44rem";
+const MEASURE = "var(--nuza-measure, 44rem)";
+/** The space between lines of prose; set, like the measure, from Settings. */
+const LINE_HEIGHT = "var(--nuza-line-height, 1.75)";
 
 /** The checkbox tick: a centred background image, so it never drifts off. */
 const CHECK_MARK =
@@ -68,7 +70,7 @@ const editorTheme = EditorView.theme(
       flexGrow: "1",
       margin: "0 auto",
       padding: "4rem 0 45vh",
-      lineHeight: "1.75",
+      lineHeight: LINE_HEIGHT,
       caretColor: ink.caret,
     },
     ".cm-line": {
@@ -141,6 +143,9 @@ const editorTheme = EditorView.theme(
       color: ink.heading,
       fontWeight: "650",
       lineHeight: "1.3",
+      /* A heading that runs to a second line is split evenly, rather than
+         leaving a word or two on a line of their own. */
+      textWrapStyle: "balance",
     },
     ".cm-md-h1": { fontSize: "1.9em", padding: "0.55em 0 0.2em" },
     ".cm-md-h2": { fontSize: "1.52em", padding: "0.6em 0 0.2em" },
@@ -239,6 +244,10 @@ const editorTheme = EditorView.theme(
       backgroundColor: ink.surface,
       borderRadius: "0.3em",
       padding: "0.12em 0.35em",
+      /* Wrapped onto a second line, each part keeps its own padding and
+         corners instead of being cut off square where the line ended. */
+      boxDecorationBreak: "clone",
+      WebkitBoxDecorationBreak: "clone",
     },
     /* A tag: the accent, set in a quiet pill so it reads as a label and not as a
        link - it is not something you follow from here, it is listed in the sidebar. */
@@ -248,6 +257,8 @@ const editorTheme = EditorView.theme(
       boxShadow: "inset 0 0 0 1px var(--nuza-accent-underline)",
       borderRadius: "0.6em",
       padding: "0.05em 0.45em",
+      boxDecorationBreak: "clone",
+      WebkitBoxDecorationBreak: "clone",
     },
     ".cm-md-link": {
       color: ink.accent,
@@ -309,11 +320,20 @@ const editorTheme = EditorView.theme(
 
     /* A wide table scrolls inside its own box rather than widening the
        document and giving the whole editor a horizontal scrollbar. */
+    /* The editor wraps its lines with `overflow-wrap: anywhere`, which is
+       right for prose and wrong in here: it lets a word break between any two
+       letters *and* tells the table that a column may be one letter wide. The
+       layout then starves the short columns to feed the long one, and
+       ordinary words came out split across lines. `break-word` only breaks a
+       word that is wider than its column by itself, and a column is never
+       narrower than its longest word - a table too wide for that scrolls. */
     ".cm-md-table-wrap": {
       display: "block",
       overflowX: "auto",
       padding: "0.5em 0",
       whiteSpace: "normal",
+      overflowWrap: "break-word",
+      wordBreak: "normal",
     },
     ".cm-md-table": {
       borderCollapse: "collapse",
@@ -459,6 +479,8 @@ const editorTheme = EditorView.theme(
       display: "inline-block",
       maxWidth: "100%",
       verticalAlign: "top",
+      // For the resize handle, which sits in its corner.
+      position: "relative",
     },
     ".cm-md-image img": {
       maxWidth: "100%",
@@ -469,6 +491,27 @@ const editorTheme = EditorView.theme(
       transition: "opacity 220ms ease",
     },
     ".cm-md-image-loaded img": { opacity: "1" },
+    /* The corner a picture is resized by: there when the picture is pointed
+       at, and for as long as it is being dragged. */
+    ".cm-md-image-handle": {
+      position: "absolute",
+      right: "4px",
+      bottom: "4px",
+      width: "14px",
+      height: "14px",
+      borderRadius: "4px",
+      backgroundColor: "var(--nuza-bg)",
+      boxShadow: `0 0 0 1px ${ink.hairline}`,
+      backgroundImage: `linear-gradient(135deg, transparent 0 45%, ${ink.muted} 45% 55%, transparent 55% 70%, ${ink.muted} 70% 80%, transparent 80%)`,
+      cursor: "nwse-resize",
+      opacity: "0",
+      transition: "opacity 120ms ease",
+    },
+    ".cm-md-image:hover .cm-md-image-handle, .cm-md-image-resizing .cm-md-image-handle": { opacity: "0.9" },
+    ".cm-md-image-broken .cm-md-image-handle": { display: "none" },
+    /* Nothing under the pointer is selected or dragged off while a picture
+       is being sized. */
+    ".cm-md-image-resizing img": { pointerEvents: "none", userSelect: "none" },
 
     /* The small picture after a link to an image: a line tall and a bit more,
        set on the text's own baseline so it does not push the line apart. */
@@ -512,7 +555,7 @@ const editorTheme = EditorView.theme(
     ".cm-md-math-block": { display: "block", padding: "0.5em 0", textAlign: "center", overflowX: "auto" },
     ".cm-md-math-source": { fontFamily: CODE_FONT_FAMILY, color: ink.code },
     ".cm-md-html": { whiteSpace: "normal" },
-    ".cm-md-html-block": { display: "block", padding: "0.3em 0" },
+    ".cm-md-html-block": { display: "block", padding: "0.3em 0", overflowX: "auto" },
     ".cm-md-html h1": { fontSize: "1.6em" },
     ".cm-md-html h2": { fontSize: "1.4em" },
     ".cm-md-html h3": { fontSize: "1.2em" },
@@ -566,7 +609,10 @@ const editorTheme = EditorView.theme(
       borderTop: `1px solid ${ink.hairline}`,
       margin: "0.8em 0",
     },
+    /* As for a markdown table: columns no narrower than their longest word. */
     ".cm-md-html table": {
+      overflowWrap: "break-word",
+      wordBreak: "normal",
       borderCollapse: "collapse",
       width: "100%",
       fontSize: "0.94em",

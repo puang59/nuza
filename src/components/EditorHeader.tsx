@@ -10,9 +10,12 @@ interface EditorHeaderProps {
   openPaths: string[];
   currentFile: string;
   dirtyPaths: ReadonlySet<string>;
+  /** Open notes whose file has gone from disk. */
+  missingPaths: ReadonlySet<string>;
   onSelectTab: (path: string) => void;
   onCloseTab: (path: string) => void;
   onReorderTabs: (path: string, before: number) => void;
+  onTabMenu: (path: string, x: number, y: number) => void;
   onCheckUpdates: () => void;
   onInstallUpdate: () => void;
   onOpenSettings: () => void;
@@ -126,9 +129,11 @@ function EditorHeader({
   openPaths,
   currentFile,
   dirtyPaths,
+  missingPaths,
   onSelectTab,
   onCloseTab,
   onReorderTabs,
+  onTabMenu,
   onCheckUpdates,
   onInstallUpdate,
   onOpenSettings,
@@ -147,9 +152,11 @@ function EditorHeader({
         paths={openPaths}
         activePath={currentFile}
         dirtyPaths={dirtyPaths}
+        missingPaths={missingPaths}
         onSelect={onSelectTab}
         onClose={onCloseTab}
         onReorder={onReorderTabs}
+        onMenu={onTabMenu}
       />
 
       <div className="ml-auto flex shrink-0 items-center gap-3">

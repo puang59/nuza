@@ -34,4 +34,16 @@ describe("planOpen", () => {
     expect(planOpen(file("C:\\notes\\a.md"), "C:\\notes")).toEqual({ select: "C:\\notes\\a.md" });
     expect(planOpen(file("D:\\x\\a.md"), "C:\\notes")).toEqual({ folder: "D:\\x", focus: "D:\\x\\a.md" });
   });
+
+  // A note moved into a window of its own: that window has nothing open yet,
+  // and opens the vault the note is in with the note alone in it.
+  test("a note sent to its own window opens its vault, alone", () => {
+    const moved = { kind: "file" as const, path: "/notes/sub/a.md", vault: "/notes" };
+    expect(planOpen(moved, null)).toEqual({ folder: "/notes", focus: "/notes/sub/a.md", alone: true });
+  });
+
+  test("in a window that already has that vault, it is just brought up", () => {
+    const moved = { kind: "file" as const, path: "/notes/sub/a.md", vault: "/notes" };
+    expect(planOpen(moved, "/notes")).toEqual({ select: "/notes/sub/a.md" });
+  });
 });

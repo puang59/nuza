@@ -9,6 +9,8 @@ interface SidePaneProps {
   path: string;
   isDirty: boolean;
   hasConflict: boolean;
+  /** The note's file has gone from disk. */
+  isMissing: boolean;
   hasRecovered: boolean;
   /** CodeMirror mounts itself in here, as in the main pane. */
   containerRef: Ref<HTMLDivElement>;
@@ -16,6 +18,8 @@ interface SidePaneProps {
   onClose: () => void;
   onReload: () => void;
   onKeepMine: () => void;
+  /** Close a note whose file has gone, without writing it anywhere. */
+  onDiscardMissing: () => void;
   onRestore: () => void;
   onDiscard: () => void;
 }
@@ -30,12 +34,14 @@ export default function SidePane({
   path,
   isDirty,
   hasConflict,
+  isMissing,
   hasRecovered,
   containerRef,
   onContextMenu,
   onClose,
   onReload,
   onKeepMine,
+  onDiscardMissing,
   onRestore,
   onDiscard,
 }: SidePaneProps) {
@@ -67,7 +73,13 @@ export default function SidePane({
         </button>
       </header>
 
-      <ChangedOnDisk path={hasConflict ? path : null} onReload={onReload} onKeepMine={onKeepMine} />
+      <ChangedOnDisk
+        path={hasConflict || isMissing ? path : null}
+        missing={isMissing}
+        onReload={onReload}
+        onKeepMine={onKeepMine}
+        onDiscard={onDiscardMissing}
+      />
       <RecoveredEdits path={hasRecovered ? path : null} onRestore={onRestore} onDiscard={onDiscard} />
 
       <div ref={containerRef} onContextMenu={onContextMenu} className="min-h-0 flex-1" />

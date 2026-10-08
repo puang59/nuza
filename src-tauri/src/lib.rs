@@ -103,6 +103,10 @@ pub fn run() {
             // The windows the last run ended with, brought back: the first on
             // the main window, the rest beside it.
             multiwindow::restore_windows(app.handle(), launched.as_ref());
+
+            // Edits kept for notes that have since been deleted are let go of,
+            // once they are old enough that nobody is coming back for them.
+            recovery::prune_in_background(app.handle());
             Ok(())
         })
         .on_window_event(|window, event| match event {
@@ -136,6 +140,9 @@ pub fn run() {
             folder::open_folder,
             folder::list_folder,
             files::read_file,
+            files::existing_files,
+            files::file_times,
+            files::open_with_system,
             search::search_contents,
             search::list_files,
             wiki::list_wiki_links,
@@ -157,6 +164,7 @@ pub fn run() {
             files::delete_entry,
             fonts::list_system_fonts,
             multiwindow::open_new_window,
+            multiwindow::open_note_in_new_window,
             multiwindow::window_ready_to_quit,
             window::set_transparency,
             window::print_page,

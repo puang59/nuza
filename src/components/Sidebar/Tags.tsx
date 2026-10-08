@@ -2,29 +2,26 @@ import { useState } from "react";
 import { TagIndex, firstUseInEachNote } from "@/lib/tagIndex";
 import { fileNameOf } from "@/lib/media";
 import { FileIcon } from "@/lib/utils";
-import FooterSection from "./FooterSection";
 
 interface TagsProps {
   index: TagIndex;
-  isOpen: boolean;
-  onToggle: () => void;
   onOpen: (path: string, line: number) => void;
 }
 
 /**
- * Every `#tag` in the vault, under the tree. Folded to its heading when it is
- * not wanted; open, each tag is a row with the number of notes it is in, and
- * choosing one lists those notes - each opening at the line the tag is on.
+ * Every `#tag` in the vault: each a row with the number of notes it is in,
+ * and choosing one lists those notes - each opening at the line the tag is on.
  *
- * Not read at all while it is folded: it means reading every note in the
- * vault, which is not worth doing for a count nobody can see.
+ * The tags are not read at all until this is the view being shown: it means
+ * reading every note in the vault, which is not worth doing for a list nobody
+ * is looking at.
  */
-export default function Tags({ index, isOpen, onToggle, onOpen }: TagsProps) {
+export default function Tags({ index, onOpen }: TagsProps) {
   // The tag whose notes are showing, by name - one at a time keeps the list short.
   const [chosen, setChosen] = useState<string | null>(null);
 
   return (
-    <FooterSection title="Tags" count={isOpen ? index.tags.length : 0} isOpen={isOpen} onToggle={onToggle}>
+    <>
       {index.tags.length === 0 ? (
         <p className="px-2 py-1 text-xs text-zinc-600">No tags yet. Write #something in a note.</p>
       ) : (
@@ -70,6 +67,6 @@ export default function Tags({ index, isOpen, onToggle, onOpen }: TagsProps) {
           })}
         </ul>
       )}
-    </FooterSection>
+    </>
   );
 }

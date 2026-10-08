@@ -5,8 +5,18 @@ import type { SyntaxNode, SyntaxNodeRef, Tree } from "@lezer/common";
 import { FrontmatterRange, frontmatterRange, readFrontmatter } from "./frontmatter";
 import { mathSource } from "./math";
 import { rendersHtml } from "./sanitize";
-import { isLocalImageTarget, noteDirectory, resolveImageSource, safeExternalHref } from "./sources";
-import { readWikiLink } from "./wikiLinks";
+import {
+  isLocalImageTarget,
+  mediaSource,
+  noteDirectory,
+  resolveImageSource,
+  safeExternalHref,
+} from "./sources";
+import { isImagePath } from "../media";
+import { refreshEmbeds, vaultFiles } from "./embedIndex";
+import { readAltSize } from "./imageSize";
+import { SCROLLING_CODE_LINE } from "./codeScroll";
+import { readEmbed, readWikiLink, resolveEmbed } from "./wikiLinks";
 import {
   BulletWidget,
   HtmlWidget,
@@ -479,6 +489,28 @@ function decorateNode(node: SyntaxNodeRef, build: Build): boolean | undefined {
     return false;
   }
 
+  if (name === "WikiEmbed") {
+    // Being edited, it is all there to edit, with the brackets dimmed.
+    if (isBeingEdited(state, from, to)) {
+      out.push(DIMMED.range(from, from + 3), DIMMED.range(to - 2, to));
+      return false;
+    }
+
+    const { target, width, alt } = readEmbed(doc.sliceString(from + 3, to - 2));
+    // Only pictures are drawn. An embedded note, or anything else, is left
+    // as the text it is rather than shown as a picture that is not there.
+    if (!isImagePath(target)) return false;
+
+    const { root, files } = vaultFiles();
+    const file = resolveEmbed(target, files, root, directory);
+    out.push(
+      Decoration.replace({
+        widget: new ImageWidget(file ? mediaSource(file) : "", alt ?? target, width),
+      }).range(from, to)
+    );
+    return false;
+  }
+
   if (name === "WikiLink") {
     const inner = doc.sliceString(from + 2, to - 2);
     const { target, heading, label } = readWikiLink(inner);
@@ -537,17 +569,22 @@ function decorateNode(node: SyntaxNodeRef, build: Build): boolean | undefined {
     const urlNode = findChild(node.node, "URL");
     const source = urlNode && resolveImageSource(doc.sliceString(urlNode.from, urlNode.to), directory);
     if (!source) return;
+    // `![a dog|300](dog.png)`: the width rides on the end of the alt text.
+    const sized = readAltSize(imageAltText(doc, node.node));
     out.push(
       Decoration.replace({
-        widget: new ImageWidget(source, imageAltText(doc, node.node)),
+        widget: new ImageWidget(source, sized.alt, sized.width),
       }).range(from, to)
     );
     return false;
   }
 
   if (name === "FencedCode" || name === "CodeBlock") {
+    // At the top level of the note a block scrolls sideways (codeScroll.ts);
+    // inside a list or a quote its lines are already set in, and wrap.
+    const scrolls = !hasAncestor(node.node, "Blockquote", "ListItem");
     eachLine(doc, from, to, (lineStart, isFirst, isLast) => {
-      const classes = ["cm-md-code-line"];
+      const classes = scrolls ? ["cm-md-code-line", SCROLLING_CODE_LINE] : ["cm-md-code-line"];
       if (isFirst) classes.push("cm-md-code-first");
       if (isLast) classes.push("cm-md-code-last");
       out.push(Decoration.line({ class: classes.join(" ") }).range(lineStart));
@@ -844,7 +881,10 @@ export const liveMarkdownPreview = StateField.define<DecorationSet>({
     // happens while a file is being taken in, not while it is being written in.
     if (
       state.facet(noteDirectory) !== startState.facet(noteDirectory) ||
-      (newTree !== oldTree && !transaction.docChanged)
+      (newTree !== oldTree && !transaction.docChanged) ||
+      // Which file an embed names depends on what is in the vault, and that
+      // has changed - or this note was last drawn before it was known.
+      transaction.effects.some((effect) => effect.is(refreshEmbeds))
     ) {
       return buildDecorations(state);
     }

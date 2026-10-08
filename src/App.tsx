@@ -17,13 +17,18 @@ import { useKeymaps, useKeymapListener } from "./hooks/useKeymaps";
 import { useCloseTabMenu } from "./hooks/useCloseTabMenu";
 import { useSaveOnExit } from "./hooks/useSaveOnExit";
 import { useNotices } from "./hooks/useNotices";
-import { useFileOperations } from "./hooks/useFileOperations";
+import { UNTITLED_FILE, useFileOperations } from "./hooks/useFileOperations";
+import GettingStarted from "./components/GettingStarted";
+import SectionGuides from "./components/SectionGuides";
+import type { KeymapAction } from "./lib/keymaps";
 import { useVimMode } from "./hooks/useVimMode";
 import { useVaults } from "./hooks/useVaults";
 import { useAppearance } from "./hooks/useAppearance";
 import { useAppUpdater } from "./hooks/useAppUpdater";
 import { usePersistedState } from "./hooks/usePersistedState";
 import { useRecentFiles } from "./hooks/useRecentFiles";
+import { useOutline } from "./hooks/useOutline";
+import { hasEmbeds, refreshEmbeds, setVaultFiles } from "./lib/markdown/embedIndex";
 import { useResizableSidebar } from "./hooks/useResizableSidebar";
 import { report } from "./lib/notices";
 import { isMainWindow } from "./lib/windowLabel";
@@ -31,14 +36,35 @@ import { addFrontmatter, addProperty, canAddFrontmatter } from "./lib/markdown/a
 import { OpenTarget } from "./lib/launchTarget";
 import { wikiLinkText, wikiTargetFor } from "./lib/markdown/wikiLinks";
 import { copyText } from "./lib/clipboard";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { relativePath } from "./lib/media";
+import { isWithin } from "./lib/path";
+import { revealLabel } from "./lib/platform";
+import { tabsToClose } from "./lib/tabLabels";
 import { directoryOf } from "./lib/markdown";
 import { noteLineNumbers } from "./lib/markdown/lineGutter";
-import { insertLink, toggleBold, toggleItalic } from "./lib/markdown/formatting";
+import { typewriterScrolling } from "./lib/markdown/scrolling";
+import {
+  insertLink,
+  setHeading,
+  toggleBlockquote,
+  toggleBold,
+  toggleBulletList,
+  toggleInlineCode,
+  toggleItalic,
+  toggleNumberedList,
+  toggleStrikethrough,
+  toggleTaskList,
+} from "./lib/markdown/formatting";
+import { jumpToHeadingAt, nextHeading, previousHeading } from "./lib/markdown/headings";
 import { isMacPlatform } from "./lib/platform";
 import {
   DEFAULT_EDITOR_FONT,
+  DEFAULT_CONTENT_WIDTH,
   DEFAULT_EDITOR_FONT_SIZE,
+  DEFAULT_LINE_HEIGHT,
   EDITOR_FONT_SIZE_STEP,
+  applyTypography,
   clampEditorFontSize,
   editorFontFamily,
 } from "./lib/fonts";
@@ -55,10 +81,22 @@ function App() {
   // taking app should assume about whoever just opened it.
   const [vimEnabled, setVimEnabled] = usePersistedState("vimEnabled", false);
   const [showLineNumbers, setShowLineNumbers] = usePersistedState("showLineNumbers", false);
+  const [typewriter, setTypewriter] = usePersistedState("typewriterScrolling", false);
+  // Off unless asked for: marks on the writing surface are not something to
+  // put in front of everyone.
+  const [sectionGuides, setSectionGuides] = usePersistedState("sectionGuides", false);
   const [compactMode, setCompactMode] = usePersistedState("compactMode", false);
   const [autoUpdateEnabled, setAutoUpdateEnabled] = usePersistedState("autoUpdateEnabled", true);
   const [editorFont, setEditorFont] = usePersistedState("editorFont", DEFAULT_EDITOR_FONT);
   const [editorFontSize, setEditorFontSize] = usePersistedState("editorFontSize", DEFAULT_EDITOR_FONT_SIZE);
+  const [contentWidth, setContentWidth] = usePersistedState("editorContentWidth", DEFAULT_CONTENT_WIDTH);
+  const [lineHeight, setLineHeight] = usePersistedState("editorLineHeight", DEFAULT_LINE_HEIGHT);
+
+  // Read by the editor's theme through the stylesheet, so a slider being
+  // dragged restyles the note without the editor being reconfigured.
+  useEffect(() => {
+    applyTypography(document.documentElement, { contentWidth, lineHeight });
+  }, [contentWidth, lineHeight]);
 
   const { module: vimModule, extension: vimExtension } = useVimMode(vimEnabled);
   const { vaults, remember: rememberVault, rename: renameVault, forget: forgetVault } = useVaults();
@@ -100,8 +138,9 @@ function App() {
       ...(vimExtension ? [vimExtension] : []),
       editorFontTheme,
       ...(showLineNumbers ? [noteLineNumbers] : []),
+      ...(typewriter ? [typewriterScrolling] : []),
     ],
-    [vimExtension, editorFontTheme, showLineNumbers]
+    [vimExtension, editorFontTheme, showLineNumbers, typewriter]
   );
 
   const {
@@ -118,6 +157,8 @@ function App() {
     openPaths,
     dirtyPaths,
     conflicts,
+    missing,
+    discardMissing,
     recovered,
     restoreRecovered,
     discardRecovered,
@@ -133,7 +174,10 @@ function App() {
     flush,
     selectFile,
     openAt,
+    retrace,
     closeFile,
+    closeFiles,
+    openInNewWindow,
     reopenClosedTab,
     reorderTabs,
     cycleFile,
@@ -142,6 +186,7 @@ function App() {
     reloadFromDisk,
     keepMine,
     createFile,
+    createNote,
     createFolder,
     renameEntry,
     duplicateEntry,
@@ -238,6 +283,45 @@ function App() {
       });
   }, [wantsTransparency]);
 
+  // An embed names a file, and which file that is depends on what the vault
+  // holds. The editors are told when that changes, and when a note comes to
+  // the front that may have been drawn before the list was known - but only
+  // a note with an embed in it is put through being drawn again.
+  const vaultFileList = fileIndex.files;
+  useEffect(() => {
+    setVaultFiles(
+      rootPath ?? "",
+      vaultFileList.map((file) => file.path)
+    );
+    for (const view of [editorView, sideView]) {
+      if (view && hasEmbeds(view.state.doc)) view.dispatch({ effects: refreshEmbeds.of(null) });
+    }
+  }, [rootPath, vaultFileList, editorView, sideView, sideFile, viewGeneration]);
+
+  // The open note's file, for the footer's "edited a while ago". The scratch
+  // note has none.
+  const notePath = rootPath && isWithin(currentFile, rootPath) ? currentFile : null;
+
+  const outline = useOutline(editorView);
+  const onJumpToHeading = useCallback(
+    (from: number) => {
+      if (editorView) jumpToHeadingAt(editorView, from);
+    },
+    [editorView]
+  );
+
+  /**
+   * Moves by heading in whichever pane has the keyboard - the main one when
+   * neither does, since the chord works from the sidebar too.
+   */
+  const moveByHeading = useCallback(
+    (move: (view: EditorView) => boolean) => {
+      const view = sideView?.hasFocus ? sideView : editorView;
+      if (view) move(view);
+    },
+    [editorView, sideView]
+  );
+
   // Stable identities, so the memoised chrome around the editor is not
   // re-rendered by a handler that was rebuilt for no reason.
   const returnFocusToEditor = useCallback(() => editorView?.focus(), [editorView]);
@@ -318,6 +402,46 @@ function App() {
       view.focus();
     },
     [linkView, editorView, sideView, sideFile, rootPath, fileIndex.notes, currentFile]
+  );
+
+  /** Where a tab's own menu is open, and for which tab. */
+  const [tabMenu, setTabMenu] = useState<{ x: number; y: number; path: string } | null>(null);
+  const openTabMenu = useCallback((path: string, x: number, y: number) => setTabMenu({ x, y, path }), []);
+  const closeTabMenu = useCallback(() => setTabMenu(null), []);
+
+  const tabMenuItems = useCallback(
+    (path: string) => {
+      // The scratch note has no file: nothing to show in a folder, no path to copy.
+      const isFile = !!rootPath && isWithin(path, rootPath);
+      const copy = (text: string) =>
+        void copyText(text).catch((error) => report("Couldn't copy that", error));
+      const others = tabsToClose(openPaths, path, "others");
+      const toTheRight = tabsToClose(openPaths, path, "right");
+
+      return [
+        { label: "Close", onClick: () => closeFile(path) },
+        ...(others.length ? [{ label: "Close Others", onClick: () => closeFiles(others) }] : []),
+        ...(toTheRight.length
+          ? [{ label: "Close to the Right", onClick: () => closeFiles(toTheRight) }]
+          : []),
+        ...(isFile
+          ? [
+              ...(path !== currentFile
+                ? [{ label: "Open to the Side", onClick: () => void openToSide(path) }]
+                : []),
+              { label: "Move to New Window", onClick: () => void openInNewWindow(path, true) },
+              {
+                label: revealLabel(),
+                onClick: () =>
+                  void revealItemInDir(path).catch((error) => report("Couldn't show that file", error)),
+              },
+              { label: "Copy Path", onClick: () => copy(path) },
+              { label: "Copy Relative Path", onClick: () => copy(relativePath(rootPath ?? "", path)) },
+            ]
+          : []),
+      ];
+    },
+    [rootPath, openPaths, currentFile, closeFile, closeFiles, openToSide, openInNewWindow]
   );
 
   const editorMenuItems = useCallback(
@@ -421,10 +545,29 @@ function App() {
       "recent-tab": switchToRecent,
       "close-tab": closeCurrentTab,
       "reopen-closed-tab": () => void reopenClosedTab(),
+      "go-back": () => void retrace("back"),
+      "go-forward": () => void retrace("forward"),
+      "new-note": () => void createNote(),
+      "reset-font-size": () => setEditorFontSize(DEFAULT_EDITOR_FONT_SIZE),
+      "toggle-inline-code": () => format(toggleInlineCode),
+      "toggle-strikethrough": () => format(toggleStrikethrough),
+      "toggle-bullet-list": () => format(toggleBulletList),
+      "toggle-numbered-list": () => format(toggleNumberedList),
+      "toggle-task-list": () => format(toggleTaskList),
+      "toggle-blockquote": () => format(toggleBlockquote),
+      "heading-1": () => format(setHeading(1)),
+      "heading-2": () => format(setHeading(2)),
+      "heading-3": () => format(setHeading(3)),
+      "heading-4": () => format(setHeading(4)),
+      "heading-5": () => format(setHeading(5)),
+      "heading-6": () => format(setHeading(6)),
+      "heading-none": () => format(setHeading(0)),
       "toggle-bold": () => format(toggleBold),
       "toggle-italic": () => format(toggleItalic),
       "insert-link": () => format(insertLink),
       "print-note": printNote,
+      "next-heading": () => moveByHeading(nextHeading),
+      "previous-heading": () => moveByHeading(previousHeading),
     }),
     [
       save,
@@ -439,10 +582,32 @@ function App() {
       toggleSidebar,
       format,
       printNote,
+      moveByHeading,
+      createNote,
+      retrace,
     ]
   );
 
   useKeymapListener(keymapBindings, keymapHandlers);
+
+  /** Does what an action's keys would, for something on screen that offers it. */
+  const runAction = useCallback(
+    (action: KeymapAction) => (keymapHandlers as Partial<Record<KeymapAction, () => void>>)[action]?.(),
+    [keymapHandlers]
+  );
+
+  // The two extra buttons on the side of a mouse, which go back and forward
+  // everywhere else they are found.
+  useEffect(() => {
+    function onMouseUp(event: MouseEvent) {
+      if (event.button !== 3 && event.button !== 4) return;
+      event.preventDefault();
+      void retrace(event.button === 3 ? "back" : "forward");
+    }
+
+    window.addEventListener("mouseup", onMouseUp);
+    return () => window.removeEventListener("mouseup", onMouseUp);
+  }, [retrace]);
   useCloseTabMenu(keymapBindings["close-tab"], closeCurrentTab);
   useSaveOnExit(flush);
 
@@ -493,6 +658,14 @@ function App() {
     vimModule.Vim.defineEx("wall", "wa", async () => {
       await saveDirty();
     });
+    // `]]` and `[[`: by section, as they move in Vim through a file of them.
+    vimModule.Vim.defineAction("nuzaNextHeading", (cm: { cm6: EditorView }) => void nextHeading(cm.cm6));
+    vimModule.Vim.defineAction(
+      "nuzaPreviousHeading",
+      (cm: { cm6: EditorView }) => void previousHeading(cm.cm6)
+    );
+    vimModule.Vim.mapCommand("]]", "action", "nuzaNextHeading", {}, { context: "normal" });
+    vimModule.Vim.mapCommand("[[", "action", "nuzaPreviousHeading", {}, { context: "normal" });
   }, [vimModule, save, saveDirty]);
 
   return (
@@ -507,9 +680,11 @@ function App() {
           openPaths={openPaths}
           currentFile={currentFile}
           dirtyPaths={dirtyPaths}
+          missingPaths={missing}
           onSelectTab={selectFile}
           onCloseTab={closeFile}
           onReorderTabs={reorderTabs}
+          onTabMenu={openTabMenu}
           onCheckUpdates={checkForUpdates}
           onInstallUpdate={installUpdate}
           onOpenSettings={openSettings}
@@ -529,9 +704,11 @@ function App() {
               the choice is about, and covering it would be a poor way to ask. */}
             <div className="contents print:hidden">
               <ChangedOnDisk
-                path={conflicts.has(currentFile) ? currentFile : null}
+                path={conflicts.has(currentFile) || missing.has(currentFile) ? currentFile : null}
+                missing={missing.has(currentFile)}
                 onReload={() => void reloadFromDisk(currentFile)}
                 onKeepMine={() => void keepMine(currentFile)}
+                onDiscard={() => void discardMissing(currentFile)}
               />
               {/* Under the conflict bar, on the rare occasion both are up: the
               one about what is happening now comes before the one about what
@@ -553,6 +730,14 @@ function App() {
               onContextMenu={(event) => openEditorMenu(event, editorView)}
               className="flex-1 min-h-0 print:h-auto"
             />
+            {sectionGuides && <SectionGuides outline={outline} onJump={onJumpToHeading} />}
+            <GettingStarted
+              onScratch={currentFile === UNTITLED_FILE}
+              hasVault={!!rootPath}
+              subscribeToStats={subscribeToStats}
+              bindings={keymapBindings}
+              onRun={runAction}
+            />
           </div>
 
           {/* The split: a second note beside the first, with its own editor. */}
@@ -561,6 +746,8 @@ function App() {
               path={sideFile}
               isDirty={dirtyPaths.has(sideFile)}
               hasConflict={conflicts.has(sideFile)}
+              isMissing={missing.has(sideFile)}
+              onDiscardMissing={() => void discardMissing(sideFile)}
               hasRecovered={recovered.has(sideFile)}
               containerRef={sideContainer}
               onContextMenu={(event) => openEditorMenu(event, sideView)}
@@ -569,6 +756,15 @@ function App() {
               onKeepMine={() => void keepMine(sideFile)}
               onRestore={() => void restoreRecovered(sideFile)}
               onDiscard={() => discardRecovered(sideFile)}
+            />
+          )}
+
+          {tabMenu && (
+            <ContextMenu
+              x={tabMenu.x}
+              y={tabMenu.y}
+              items={tabMenuItems(tabMenu.path)}
+              onClose={closeTabMenu}
             />
           )}
 
@@ -604,6 +800,7 @@ function App() {
               onOpenFolder={openFolder}
               onFileSelect={selectFile}
               onOpenToSide={(path) => void openToSide(path)}
+              onOpenInWindow={(path) => void openInNewWindow(path)}
               onOpenAt={(path, line, column) => void openAt(path, line, column)}
               currentFile={currentFile}
               onCreateFile={createFile}
@@ -620,6 +817,8 @@ function App() {
               onResizeStart={startResize}
               onResizeReset={resetWidth}
               isResizing={isResizing}
+              outline={outline}
+              onJumpToHeading={onJumpToHeading}
               vimEnabled={vimEnabled}
               onReturnFocus={returnFocusToEditor}
             />
@@ -632,9 +831,19 @@ function App() {
           what a writer actually wants from it. */}
       <div className="contents print:hidden">
         {vimEnabled ? (
-          <StatusBar mode={mode} currentFile={currentFile} subscribeToStats={subscribeToStats} />
+          <StatusBar
+            mode={mode}
+            currentFile={currentFile}
+            subscribeToStats={subscribeToStats}
+            notePath={notePath}
+            saved={!dirtyPaths.has(currentFile)}
+          />
         ) : (
-          <WritingStats subscribeToStats={subscribeToStats} />
+          <WritingStats
+            subscribeToStats={subscribeToStats}
+            notePath={notePath}
+            saved={!dirtyPaths.has(currentFile)}
+          />
         )}
       </div>
 
@@ -674,6 +883,10 @@ function App() {
         setVimEnabled={setVimEnabled}
         showLineNumbers={showLineNumbers}
         setShowLineNumbers={setShowLineNumbers}
+        typewriterScrolling={typewriter}
+        setTypewriterScrolling={setTypewriter}
+        sectionGuides={sectionGuides}
+        setSectionGuides={setSectionGuides}
         appearance={appearance}
         setAppearance={setAppearance}
         resetAppearance={resetAppearance}
@@ -685,6 +898,10 @@ function App() {
         setEditorFont={setEditorFont}
         editorFontSize={editorFontSize}
         setEditorFontSize={(size) => setEditorFontSize(clampEditorFontSize(size))}
+        contentWidth={contentWidth}
+        setContentWidth={setContentWidth}
+        lineHeight={lineHeight}
+        setLineHeight={setLineHeight}
         keymapBindings={keymapBindings}
         setKeymapBinding={setKeymapBinding}
         resetKeymapBinding={resetKeymapBinding}

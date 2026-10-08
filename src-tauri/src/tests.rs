@@ -1,21 +1,27 @@
 use crate::cli::OpenTarget;
 use crate::files::{
     already_exists, create_unused, duplicate_file, exact_file_name, move_destination,
-    rename_no_replace, safe_file_name, write_atomically,
+    opened_by_the_system, rename_no_replace, safe_file_name, times_of, write_atomically,
 };
+// Only asked about where a file has a mode to ask about.
+#[cfg(unix)]
+use crate::files::write_privately;
 use crate::fonts::system_font_families;
 use crate::index::VaultIndex;
-use crate::media::{body_bytes, header_text, media_body, requested_path};
+use crate::media::{body_bytes, header_text, media_body, media_body_in_chunks, requested_path};
 use crate::multiwindow::{
-    plan_restore, read_saved, route, usable_frame, Frame, Open, Quit, Quitting, Route, SavedWindow,
-    Screen,
+    folder_of, note_window_target, plan_restore, read_saved, route, usable_frame, Frame, Open,
+    Quit, Quitting, Route, SavedWindow, Screen,
 };
-use crate::recovery::{recovery_file, Recovery};
+use crate::recovery::{
+    drop_kept, kept_for, legacy_recovery_file, move_kept, moved_path, prune_kept, recovery_file,
+    stable_hash, Recovery,
+};
 use crate::search::{search_index, search_notes, search_text, search_vault, ContentHit, Matcher};
 use crate::slow::{run_all, run_one};
 use crate::state::{
-    changed_since_read, locked, remember, within_vault, within_vault_to_create,
-    within_vault_to_write, Vault, Windows,
+    changed_since_read, files_present, follow_move, locked, remember, within_vault,
+    within_vault_to_create, within_vault_to_write, Vault, Windows,
 };
 use crate::tree::{
     list_folder_with, probe, read_dir_recursive, read_dir_recursive_with, FileEntry, Patience,
@@ -84,6 +90,39 @@ fn keeps_the_permissions_the_note_already_had() {
 
     let mode = fs::metadata(&note).unwrap().permissions().mode() & 0o777;
     assert_eq!(mode, 0o644);
+}
+
+/// A note saved to a path of its own for the first time is as readable as a
+/// file made any other way - not private to its owner, as a temporary file is.
+#[cfg(unix)]
+#[test]
+fn a_new_note_gets_the_permissions_any_new_file_would() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let vault = tempfile::tempdir().unwrap();
+    let note = vault.path().join("note.md");
+    let ordinary = vault.path().join("ordinary.md");
+    fs::write(&ordinary, "made the usual way").unwrap();
+
+    write_atomically(&note, b"hello").unwrap();
+
+    let mode = |path: &Path| fs::metadata(path).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode(&note), mode(&ordinary));
+}
+
+/// What is kept outside the vault is the owner's alone, whatever the umask.
+#[cfg(unix)]
+#[test]
+fn a_private_write_stays_private() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let dir = tempfile::tempdir().unwrap();
+    let kept = dir.path().join("kept.json");
+
+    write_privately(&kept, b"{}").unwrap();
+
+    let mode = fs::metadata(&kept).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode, 0o600);
 }
 
 /// A write into a folder that is not there fails outright rather than
@@ -323,6 +362,98 @@ fn a_note_nobody_touched_has_not_changed() {
     assert!(!changed_since_read(&vault, &note));
 }
 
+/// A renamed note is still a note that was read: a change made to it
+/// elsewhere afterwards has to be noticed under its new name.
+#[test]
+fn a_renamed_note_is_still_watched_for_changes() {
+    let dir = tempfile::tempdir().unwrap();
+    let vault = opened(dir.path());
+    let root = dir.path().canonicalize().unwrap();
+    let (old, new) = (root.join("a.md"), root.join("b.md"));
+    fs::write(&old, "hello").unwrap();
+    remember(&vault, &old);
+
+    fs::rename(&old, &new).unwrap();
+    follow_move(&vault, &old, &new);
+    assert!(!changed_since_read(&vault, &new));
+
+    touch(&new);
+
+    assert!(changed_since_read(&vault, &new));
+    assert!(!locked(&vault.known).contains_key(&old));
+}
+
+/// Moving a folder moves every note that was read from inside it.
+#[test]
+fn notes_in_a_moved_folder_are_still_watched_for_changes() {
+    let dir = tempfile::tempdir().unwrap();
+    let vault = opened(dir.path());
+    let root = dir.path().canonicalize().unwrap();
+    fs::create_dir_all(root.join("drafts").join("deep")).unwrap();
+    let note = root.join("drafts").join("deep").join("note.md");
+    let beside = root.join("drafts-old.md");
+    fs::write(&note, "hello").unwrap();
+    fs::write(&beside, "hello").unwrap();
+    remember(&vault, &note);
+    remember(&vault, &beside);
+
+    fs::rename(root.join("drafts"), root.join("archive")).unwrap();
+    follow_move(&vault, &root.join("drafts"), &root.join("archive"));
+
+    let landed = root.join("archive").join("deep").join("note.md");
+    touch(&landed);
+    assert!(changed_since_read(&vault, &landed));
+    // A name that only starts the same way is not inside the folder.
+    assert!(locked(&vault.known).contains_key(&beside));
+}
+
+/// A change that arrived before the rename is not waved through by it.
+#[test]
+fn a_rename_does_not_forgive_an_earlier_change() {
+    let dir = tempfile::tempdir().unwrap();
+    let vault = opened(dir.path());
+    let root = dir.path().canonicalize().unwrap();
+    let (old, new) = (root.join("a.md"), root.join("b.md"));
+    fs::write(&old, "hello").unwrap();
+    remember(&vault, &old);
+    touch(&old);
+
+    fs::rename(&old, &new).unwrap();
+    follow_move(&vault, &old, &new);
+
+    assert!(changed_since_read(&vault, &new));
+}
+
+/// Reopening a session asks which of its notes are still there, wherever in
+/// the vault they are - not only at the top of it.
+#[test]
+fn finds_the_notes_of_a_session_that_are_still_there() {
+    let dir = tempfile::tempdir().unwrap();
+    let elsewhere = tempfile::tempdir().unwrap();
+    let vault = opened(dir.path());
+    fs::create_dir_all(dir.path().join("folder").join("deeper")).unwrap();
+    let top = dir.path().join("top.md");
+    let nested = dir.path().join("folder").join("deeper").join("nested.md");
+    let outside = elsewhere.path().join("outside.md");
+    for note in [&top, &nested, &outside] {
+        fs::write(note, "hello").unwrap();
+    }
+    let text = |path: &Path| path.to_string_lossy().into_owned();
+
+    let found = files_present(
+        &vault,
+        vec![
+            text(&nested),
+            text(&dir.path().join("gone.md")),
+            text(&dir.path().join("folder")),
+            text(&outside),
+            text(&top),
+        ],
+    );
+
+    assert_eq!(found, vec![text(&nested), text(&top)]);
+}
+
 /// The case the whole thing exists for: something else wrote to the note
 /// after the app read it.
 #[test]
@@ -438,6 +569,39 @@ fn a_request_from_a_point_onwards_runs_to_the_end() {
 
     assert_eq!(bytes, b"uvwxyz");
     assert_eq!(content_range.as_deref(), Some("bytes 20-25/26"));
+}
+
+/// "From here to the end" of a large file is answered a piece at a time: the
+/// player comes back for the rest, and the rest is not held in memory for it.
+#[test]
+fn an_open_ended_request_gets_one_chunk() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut file, length) = alphabet(dir.path());
+
+    let (bytes, content_range, status) =
+        media_body_in_chunks(&mut file, length, Some("bytes=0-"), 10).unwrap();
+    assert_eq!(bytes, b"abcdefghij");
+    assert_eq!(content_range.as_deref(), Some("bytes 0-9/26"));
+    assert_eq!(status, 206);
+
+    // The last piece is whatever is left, not a chunk's worth.
+    let (bytes, content_range, _) =
+        media_body_in_chunks(&mut file, length, Some("bytes=20-"), 10).unwrap();
+    assert_eq!(bytes, b"uvwxyz");
+    assert_eq!(content_range.as_deref(), Some("bytes 20-25/26"));
+}
+
+/// A request with no range is an `<img>`, and gets the whole picture however
+/// large it is.
+#[test]
+fn a_request_with_no_range_is_not_cut_short() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut file, length) = alphabet(dir.path());
+
+    let (bytes, _, status) = media_body_in_chunks(&mut file, length, None, 10).unwrap();
+
+    assert_eq!(bytes.len(), 26);
+    assert_eq!(status, 200);
 }
 
 /// A range header that makes no sense is not worth refusing over - the
@@ -592,6 +756,146 @@ fn a_note_is_kept_under_a_name_of_its_own() {
     let file = recovery_file(dir, "/vault/deep/note.md");
     assert_eq!(file.parent(), Some(dir));
     assert!(file.extension().is_some_and(|e| e == "json"));
+}
+
+/// The name of a kept file must not change from one build to the next, so the
+/// hash behind it is pinned to values worked out by hand from its definition.
+#[test]
+fn the_name_of_a_kept_file_never_changes() {
+    assert_eq!(stable_hash(""), 0xcbf2_9ce4_8422_2325);
+    assert_eq!(stable_hash("a"), 0xaf63_dc4c_8601_ec8c);
+    assert_eq!(stable_hash("foobar"), 0x8594_4171_f739_67e8);
+}
+
+fn keep(file: &Path, note: &str, content: &str) {
+    let kept = Recovery {
+        path: note.to_string(),
+        content: content.to_string(),
+    };
+    fs::write(file, serde_json::to_vec(&kept).unwrap()).unwrap();
+}
+
+/// What a build from before the fixed hash kept is still found, and let go
+/// of when the question is answered.
+#[test]
+fn edits_kept_by_an_older_build_are_still_found() {
+    let dir = tempfile::tempdir().unwrap();
+    let note = "/vault/note.md";
+    keep(
+        &legacy_recovery_file(dir.path(), note),
+        note,
+        "typed last year",
+    );
+
+    assert_eq!(
+        kept_for(dir.path(), note).as_deref(),
+        Some("typed last year")
+    );
+
+    drop_kept(dir.path(), note).unwrap();
+    assert_eq!(kept_for(dir.path(), note), None);
+    assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 0);
+}
+
+/// A file under the old name that belongs to some other note is not this
+/// note's to read or to throw away.
+#[test]
+fn another_notes_file_is_left_alone() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = legacy_recovery_file(dir.path(), "/vault/note.md");
+    keep(&file, "/vault/other.md", "someone else's");
+
+    assert_eq!(kept_for(dir.path(), "/vault/note.md"), None);
+    drop_kept(dir.path(), "/vault/note.md").unwrap();
+    assert!(file.exists());
+}
+
+#[test]
+fn a_path_moves_with_the_folder_it_is_in() {
+    assert_eq!(
+        moved_path("/v/a.md", "/v/a.md", "/v/b.md").as_deref(),
+        Some("/v/b.md")
+    );
+    assert_eq!(
+        moved_path("/v/old/deep/a.md", "/v/old", "/v/new").as_deref(),
+        Some("/v/new/deep/a.md")
+    );
+    assert_eq!(
+        moved_path("C:\\v\\old\\a.md", "C:\\v\\old", "C:\\v\\new").as_deref(),
+        Some("C:\\v\\new\\a.md")
+    );
+    // A name that only starts the same way is not inside the folder.
+    assert_eq!(moved_path("/v/older.md", "/v/old", "/v/new"), None);
+    assert_eq!(moved_path("/v/elsewhere.md", "/v/old", "/v/new"), None);
+}
+
+/// Edits kept for a note go where the note goes: renamed, or carried along
+/// inside a folder that was.
+#[test]
+fn kept_edits_follow_a_rename() {
+    let dir = tempfile::tempdir().unwrap();
+    keep(
+        &recovery_file(dir.path(), "/v/old/a.md"),
+        "/v/old/a.md",
+        "in the folder",
+    );
+    keep(
+        &legacy_recovery_file(dir.path(), "/v/old/b.md"),
+        "/v/old/b.md",
+        "from an older build",
+    );
+    keep(
+        &recovery_file(dir.path(), "/v/other.md"),
+        "/v/other.md",
+        "not moved",
+    );
+
+    move_kept(dir.path(), "/v/old", "/v/new");
+
+    assert_eq!(
+        kept_for(dir.path(), "/v/new/a.md").as_deref(),
+        Some("in the folder")
+    );
+    assert_eq!(
+        kept_for(dir.path(), "/v/new/b.md").as_deref(),
+        Some("from an older build")
+    );
+    assert_eq!(kept_for(dir.path(), "/v/old/a.md"), None);
+    assert_eq!(
+        kept_for(dir.path(), "/v/other.md").as_deref(),
+        Some("not moved")
+    );
+    assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 3);
+}
+
+/// Only what nobody will be asked about goes: old, and for a note that is
+/// not there. A buffer whose note still exists is kept however old it is.
+#[test]
+fn only_old_edits_for_notes_that_are_gone_are_let_go() {
+    let dir = tempfile::tempdir().unwrap();
+    let vault = tempfile::tempdir().unwrap();
+    let there = vault.path().join("there.md");
+    fs::write(&there, "hello").unwrap();
+    let there = there.to_string_lossy().into_owned();
+    let gone = vault.path().join("gone.md").to_string_lossy().into_owned();
+
+    keep(&recovery_file(dir.path(), &there), &there, "still wanted");
+    keep(&recovery_file(dir.path(), &gone), &gone, "nobody to ask");
+    fs::write(dir.path().join("broken.json"), "not json").unwrap();
+    fs::write(dir.path().join("notes.txt"), "not ours").unwrap();
+
+    // Nothing is old enough yet.
+    prune_kept(dir.path(), Duration::from_secs(3600));
+    assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 4);
+
+    prune_kept(dir.path(), Duration::ZERO);
+    assert_eq!(
+        kept_for(dir.path(), &there).as_deref(),
+        Some("still wanted")
+    );
+    assert_eq!(kept_for(dir.path(), &gone), None);
+    assert!(!dir.path().join("broken.json").exists());
+    assert!(dir.path().join("notes.txt").exists());
 }
 
 /// Saving the scratch note somewhere by hand is consent for that file, and
@@ -1714,6 +2018,7 @@ fn folder(path: &str) -> OpenTarget {
     OpenTarget {
         kind: "folder",
         path: path.to_string(),
+        vault: None,
     }
 }
 
@@ -1721,6 +2026,7 @@ fn note_at(path: &str) -> OpenTarget {
     OpenTarget {
         kind: "file",
         path: path.to_string(),
+        vault: None,
     }
 }
 
@@ -1953,4 +2259,87 @@ fn the_folder_a_window_has_open_is_told_without_making_a_vault() {
     *locked(&windows.vault("main").root) = Some(dir.path().to_path_buf());
     assert_eq!(windows.root("main"), Some(dir.path().to_path_buf()));
     assert_eq!(windows.root("w-1"), None);
+}
+
+/// Only documents and media go to the system. A script, an app or anything
+/// unknown does not: for those, "open" means "run".
+#[test]
+fn only_documents_and_media_are_handed_to_the_system() {
+    for name in ["paper.pdf", "Talk.MP4", "notes.final.docx", "song.flac"] {
+        assert!(opened_by_the_system(Path::new(name)), "{name}");
+    }
+    for name in [
+        "run.command",
+        "setup.sh",
+        "tool.exe",
+        "Thing.app",
+        "note.md",
+        "pdf",
+        ".pdf",
+        "archive.pdf.sh",
+        "noextension",
+    ] {
+        assert!(!opened_by_the_system(Path::new(name)), "{name}");
+    }
+}
+
+/// A note has a time it was last changed, and it is a recent one for a note
+/// just written; a file that is not there has no times at all.
+#[test]
+fn reads_when_a_note_was_last_changed() {
+    let dir = tempfile::tempdir().unwrap();
+    let note = dir.path().join("note.md");
+    fs::write(&note, "hello").unwrap();
+
+    let times = times_of(&note).unwrap();
+    let now = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+    let modified = times.modified.expect("a modification time");
+    assert!(modified <= now + 2_000 && now.saturating_sub(modified) < 60_000);
+
+    assert!(times_of(&dir.path().join("missing.md")).is_err());
+}
+
+/// A note moved into its own window opens the vault it is in, not its own
+/// folder - and only when the folder named is the one the window really has.
+#[test]
+fn a_note_window_opens_the_vault_the_note_is_in() {
+    let dir = tempfile::tempdir().unwrap();
+    let elsewhere = tempfile::tempdir().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    fs::create_dir_all(root.join("sub")).unwrap();
+    let note = root.join("sub").join("note.md");
+    fs::write(&note, "hello").unwrap();
+    let text = |path: &Path| path.to_string_lossy().into_owned();
+
+    let target = note_window_target(&note, Some(&root), &text(&note), &text(dir.path())).unwrap();
+    assert_eq!(target.kind, "file");
+    assert_eq!(target.path, text(&note));
+    assert_eq!(target.vault, Some(text(dir.path())));
+
+    // Some other folder, a folder in place of a note, and no vault at all.
+    assert!(note_window_target(&note, Some(&root), &text(&note), &text(elsewhere.path())).is_err());
+    assert!(note_window_target(&root.join("sub"), Some(&root), "x", &text(dir.path())).is_err());
+    assert!(note_window_target(&note, None, &text(&note), &text(dir.path())).is_err());
+}
+
+/// A window on its way up for one note of a vault counts as holding that
+/// vault, not the note's own folder, when a path is being routed.
+#[test]
+fn a_note_window_counts_as_its_vault_while_it_opens() {
+    let pending = OpenTarget {
+        kind: "file",
+        path: "/vault/sub/note.md".to_string(),
+        vault: Some("/vault".to_string()),
+    };
+    let windows = vec![Open {
+        label: "w-1".to_string(),
+        root: Some(folder_of(&pending)),
+    }];
+    assert_eq!(
+        route(&windows, &note_at("/vault/other.md")),
+        Route::Existing("w-1".to_string())
+    );
 }

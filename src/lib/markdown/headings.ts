@@ -1,6 +1,6 @@
 import { ensureSyntaxTree } from "@codemirror/language";
 import { EditorState, StateEffect, StateField } from "@codemirror/state";
-import { Decoration, DecorationSet, EditorView } from "@codemirror/view";
+import { Decoration, DecorationSet, EditorView, ViewPlugin, ViewUpdate } from "@codemirror/view";
 
 /**
  * A note's headings, and the way a link to one gets there: `[[note#heading]]`,
@@ -108,6 +108,219 @@ const flashField = StateField.define<DecorationSet>({
 export const headingFlash = flashField;
 
 /**
+ * Takes `view` to the heading whose line starts at `from`: scrolled to the top
+ * of the pane, the caret at the end of it, and the editor holding the keyboard.
+ * The caret goes too because, left where it was, the first arrow key or
+ * letter typed scrolled straight back to it.
+ */
+function goToHeading(view: EditorView, from: number, flash = true) {
+  view.dispatch({
+    selection: { anchor: view.state.doc.lineAt(from).to },
+    effects: [
+      EditorView.scrollIntoView(from, { y: "start", yMargin: 48 }),
+      ...(flash ? [setFlash.of(from)] : []),
+    ],
+  });
+  view.focus();
+}
+
+/**
+ * Which heading's section `pos` is in: the index of the last heading that
+ * starts at or before it, or -1 above the first heading.
+ */
+export function sectionAt(headings: readonly Heading[], pos: number) {
+  let found = -1;
+  for (let index = 0; index < headings.length; index++) {
+    if (headings[index].from > pos) break;
+    found = index;
+  }
+  return found;
+}
+
+/**
+ * The heading to move to from a caret on the line starting at `lineStart`:
+ * the next one below it, or the nearest one above. Null at either end.
+ */
+export function adjacentHeading(headings: readonly Heading[], lineStart: number, direction: 1 | -1) {
+  if (direction === 1) return headings.find((heading) => heading.from > lineStart) ?? null;
+  for (let index = headings.length - 1; index >= 0; index--) {
+    if (headings[index].from < lineStart) return headings[index];
+  }
+  return null;
+}
+
+function moveByHeading(direction: 1 | -1) {
+  return (view: EditorView) => {
+    const head = view.state.selection.main.head;
+    const heading = adjacentHeading(readHeadings(view.state), view.state.doc.lineAt(head).from, direction);
+    if (!heading) return false;
+    goToHeading(view, heading.from, false);
+    return true;
+  };
+}
+
+/** Moves to the next heading down the note. False when there is none. */
+export const nextHeading = moveByHeading(1);
+/** Moves to the nearest heading above the caret's line. False when there is none. */
+export const previousHeading = moveByHeading(-1);
+
+/** Takes `view` to the heading starting at `from`, for a row of the outline. */
+export function jumpToHeadingAt(view: EditorView, from: number) {
+  if (from < 0 || from > view.state.doc.length) return;
+  goToHeading(view, view.state.doc.lineAt(from).from);
+}
+
+/** What the outline is told: a note's headings, and which section is in view. */
+export interface Outline {
+  headings: Heading[];
+  /** Index into `headings` of the section at the top of the pane, or -1. */
+  active: number;
+  /**
+   * Whether that section's own heading has scrolled out above the pane - which
+   * is when it is worth saying, somewhere, which section this is.
+   */
+  headingOffscreen: boolean;
+}
+
+export const EMPTY_OUTLINE: Outline = { headings: [], active: -1, headingOffscreen: false };
+
+/**
+ * The headings a section sits under, outermost first, ending with its own:
+ * "Setup", "Install", for the `### Install` under `## Setup`. Empty above the
+ * first heading.
+ */
+export function headingPath(headings: readonly Heading[], active: number): Heading[] {
+  if (active < 0 || active >= headings.length) return [];
+
+  const path = [headings[active]];
+  for (let index = active - 1; index >= 0; index--) {
+    if (headings[index].level < path[0].level) path.unshift(headings[index]);
+  }
+  return path;
+}
+
+type OutlineListener = (view: EditorView, outline: Outline) => void;
+const outlineListeners = new Set<OutlineListener>();
+
+/** Hears about every editor's outline as it changes. Returns the way to stop. */
+export function subscribeToOutline(listener: OutlineListener) {
+  outlineListeners.add(listener);
+  return () => void outlineListeners.delete(listener);
+}
+
+/** How soon after a scroll or a move of the caret the section in view is worked out again. */
+const SECTION_DELAY = 40;
+
+/** How long after the last edit the headings are read again. */
+const OUTLINE_DELAY = 250;
+
+/**
+ * Keeps whoever is listening told about the note's headings and about which
+ * of them the pane is in. The headings are read when the note is opened and
+ * shortly after it stops being typed in - reading them walks the whole note -
+ * and the section in view is worked out a moment after a scroll or a move of
+ * the caret, from the heights the editor already knows.
+ */
+export const outlineReporter = ViewPlugin.fromClass(
+  class {
+    private headings: Heading[] = [];
+    private active = -1;
+    private headingOffscreen = false;
+    private timer: ReturnType<typeof setTimeout> | null = null;
+    private frame = 0;
+
+    constructor(private readonly view: EditorView) {
+      view.scrollDOM.addEventListener("scroll", this.onScroll, { passive: true });
+      // Not during construction: the editor is mid-update, and has not been
+      // measured yet.
+      this.timer = setTimeout(() => this.read(), 0);
+    }
+
+    update(update: ViewUpdate) {
+      if (update.docChanged) {
+        if (this.timer) clearTimeout(this.timer);
+        this.timer = setTimeout(() => this.read(), OUTLINE_DELAY);
+      } else if (update.geometryChanged || update.selectionSet) {
+        // The caret moving to another section moves the mark with it.
+        this.onScroll();
+      }
+    }
+
+    private read() {
+      this.timer = null;
+      this.headings = readHeadings(this.view.state);
+      this.active = this.sectionInView();
+      this.headingOffscreen = this.isHeadingOffscreen(this.active);
+      this.tell();
+    }
+
+    private sectionInView() {
+      if (this.headings.length === 0) return -1;
+      const { scrollDOM, documentTop, state } = this.view;
+      const top = scrollDOM.getBoundingClientRect().top - documentTop;
+
+      // Where the caret is, while the caret is on screen: that is the section
+      // being worked in. Going by the top of the pane alone, a note short
+      // enough to fit in the window was always "in" its first section,
+      // however far down it the writing was.
+      const head = Math.min(state.selection.main.head, state.doc.length);
+      const caret = this.view.lineBlockAt(head);
+      if (caret.bottom > top && caret.top < top + scrollDOM.clientHeight) {
+        return sectionAt(this.headings, head);
+      }
+
+      // Scrolled away from the caret, it is the section being read: the one
+      // a little way into the pane, so a heading at its very top counts as
+      // that section rather than the one just left.
+      return sectionAt(this.headings, this.view.lineBlockAtHeight(top + 64).from);
+    }
+
+    /** Whether the heading at `index` is wholly above the top of the pane. */
+    private isHeadingOffscreen(index: number) {
+      const heading = this.headings[index];
+      if (!heading || heading.from > this.view.state.doc.length) return false;
+      const { scrollDOM, documentTop } = this.view;
+      const top = scrollDOM.getBoundingClientRect().top - documentTop;
+      return this.view.lineBlockAt(heading.from).bottom <= top;
+    }
+
+    /**
+     * Works out the section again shortly, however many times it is asked in
+     * the meantime. On a timer rather than the next frame: a window that is
+     * not being painted - covered, or on another desktop - is given no frames,
+     * and the mark would sit where it was until it was looked at again.
+     */
+    private onScroll = () => {
+      if (this.frame) return;
+      this.frame = window.setTimeout(() => {
+        this.frame = 0;
+        const active = this.sectionInView();
+        const headingOffscreen = this.isHeadingOffscreen(active);
+        if (active === this.active && headingOffscreen === this.headingOffscreen) return;
+        this.active = active;
+        this.headingOffscreen = headingOffscreen;
+        this.tell();
+      }, SECTION_DELAY);
+    };
+
+    private tell() {
+      const outline = {
+        headings: this.headings,
+        active: this.active,
+        headingOffscreen: this.headingOffscreen,
+      };
+      for (const listener of outlineListeners) listener(this.view, outline);
+    }
+
+    destroy() {
+      if (this.timer) clearTimeout(this.timer);
+      if (this.frame) clearTimeout(this.frame);
+      this.view.scrollDOM.removeEventListener("scroll", this.onScroll);
+    }
+  }
+);
+
+/**
  * Scrolls `view` to the heading `wanted` and highlights it for a moment.
  * Returns whether there was such a heading - a link to one that is gone, or
  * was never written, leaves the note where it is.
@@ -116,13 +329,7 @@ export function jumpToHeading(view: EditorView, wanted: string) {
   const heading = findHeading(readHeadings(view.state), wanted);
   if (!heading) return false;
 
-  view.dispatch({
-    effects: [
-      EditorView.scrollIntoView(heading.from, { y: "start", yMargin: 48 }),
-      setFlash.of(heading.from),
-    ],
-  });
-  view.focus();
+  goToHeading(view, heading.from);
 
   // One timer to a view: a second jump inside the first's time takes the
   // first's timer with it, so it is not cut short by it.

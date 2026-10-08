@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { readSession, writeSession } from "../src/lib/session";
+import { caretsFor, readSession, tabsToRestore, writeSession } from "../src/lib/session";
 
 /** A `localStorage` that two "windows" can share, as two real ones do. */
 function fakeStorage() {
@@ -86,5 +86,73 @@ describe("session store", () => {
   test("a note that is not a string, or a current tab that is not open, is put right", () => {
     storage.setItem(KEY, JSON.stringify({ "/a": { open: ["/a/1.md", 7, ""], current: "/gone.md" } }));
     expect(readSession("/a")).toEqual({ open: ["/a/1.md"], current: "/a/1.md" });
+  });
+});
+
+describe("tabsToRestore", () => {
+  const session = { open: ["/v/a.md", "/v/folder/b.md", "/v/folder/deep/c.md"], current: "/v/folder/b.md" };
+
+  test("keeps the tabs for notes in folders, not only the ones at the top of the vault", () => {
+    expect(tabsToRestore(session, session.open)).toEqual({ open: session.open, current: "/v/folder/b.md" });
+  });
+
+  test("drops the notes that are gone, and falls back to the first tab when the one in front went", () => {
+    expect(tabsToRestore(session, ["/v/a.md", "/v/folder/deep/c.md"])).toEqual({
+      open: ["/v/a.md", "/v/folder/deep/c.md"],
+      current: "/v/a.md",
+    });
+  });
+
+  test("puts a note asked for by name in front, adding a tab for it if it had none", () => {
+    expect(tabsToRestore(session, [...session.open, "/v/new.md"], "/v/new.md")).toEqual({
+      open: [...session.open, "/v/new.md"],
+      current: "/v/new.md",
+    });
+    expect(tabsToRestore(session, session.open, "/v/a.md").current).toBe("/v/a.md");
+  });
+
+  test("ignores a note asked for that is not there", () => {
+    expect(tabsToRestore(session, session.open, "/v/missing.md")).toEqual({
+      open: session.open,
+      current: "/v/folder/b.md",
+    });
+  });
+
+  test("has nothing in front when nothing is left", () => {
+    expect(tabsToRestore(session, [])).toEqual({ open: [], current: undefined });
+  });
+
+  test("leaves the stored session as it was", () => {
+    const before = JSON.stringify(session);
+    tabsToRestore(session, session.open, "/v/new.md");
+    expect(JSON.stringify(session)).toBe(before);
+  });
+});
+
+describe("where the caret was", () => {
+  test("is kept with the tabs and read back", () => {
+    writeSession("/v", { open: ["/v/a.md", "/v/b.md"], current: "/v/a.md", carets: { "/v/a.md": 120 } });
+    expect(readSession("/v").carets).toEqual({ "/v/a.md": 120 });
+  });
+
+  test("a session from before carets were kept reads as one with none", () => {
+    storage.setItem(KEY, JSON.stringify({ "/v": { open: ["/v/a.md"], current: "/v/a.md" } }));
+    expect(readSession("/v").carets).toBeUndefined();
+  });
+
+  test("only a place in the text of an open note is taken from storage", () => {
+    const stored = {
+      "/v/a.md": 12,
+      "/v/closed.md": 5,
+      "/v/b.md": -3,
+      "/v/c.md": "7",
+      "/v/d.md": 1.5,
+      "/v/e.md": 0,
+    };
+    expect(caretsFor(["/v/a.md", "/v/b.md", "/v/c.md", "/v/d.md", "/v/e.md"], stored)).toEqual({
+      "/v/a.md": 12,
+    });
+    expect(caretsFor(["/v/a.md"], null)).toEqual({});
+    expect(caretsFor(["/v/a.md"], [1, 2])).toEqual({});
   });
 });

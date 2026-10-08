@@ -1,11 +1,18 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Compartment, EditorState, Extension, Text } from "@codemirror/state";
+import { Compartment, EditorState, Extension, StateEffect, Text } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { indentWithTab } from "@codemirror/commands";
 import { basicSetup } from "@uiw/codemirror-extensions-basic-setup";
 import { directoryOf, liveMarkdown, noteDirectory, vaultDirectory } from "@/lib/markdown";
 import { documentsToEvict } from "@/lib/documentCache";
-import { countDocument, DocumentStats, EMPTY_DOCUMENT_STATS, recount, WordTally } from "@/lib/documentStats";
+import {
+  countDocument,
+  countSelection,
+  DocumentStats,
+  EMPTY_DOCUMENT_STATS,
+  recount,
+  WordTally,
+} from "@/lib/documentStats";
 
 /**
  * Nothing in the margins and nothing highlighted: the rendered markdown is the
@@ -29,6 +36,14 @@ const writingSurface: Extension = [
  * a few lines at a time.
  */
 const COUNT_DELAY = 250;
+
+/**
+ * The longest selection counted as it changes. Dragging one out reports on
+ * every move of the mouse, and counting the words of a selection means going
+ * through all of it - so past this it waits, like the first count of a note,
+ * for the selection to stop moving.
+ */
+const SELECTION_COUNT_LIMIT = 20_000;
 
 /** Settings that change while the app is running: the font, and Vim mode. */
 const preferences = new Compartment();
@@ -77,6 +92,13 @@ export function useDocuments({
   const container = useRef<HTMLDivElement>(null);
   /** Every document held, least recently shown first. */
   const states = useRef(new Map<string, EditorState>());
+  /**
+   * Where each document was scrolled to when it was last put away. The state
+   * remembers the caret; this is the other half of "where I was", which lives
+   * in the view and would otherwise be lost every time a tab is switched -
+   * leaving the note switched to at whatever height the last one was left at.
+   */
+  const scrolls = useRef(new Map<string, StateEffect<unknown>>());
   /** The editor, as a ref for callbacks and as state for effects that follow it. */
   const editor = useRef<EditorView | null>(null);
   const [view, setView] = useState<EditorView | null>(null);
@@ -131,7 +153,10 @@ export function useDocuments({
       open.has(path) ||
       latestDirty.current.has(path);
 
-    for (const path of documentsToEvict(states.current.keys(), keep)) states.current.delete(path);
+    for (const path of documentsToEvict(states.current.keys(), keep)) {
+      states.current.delete(path);
+      scrolls.current.delete(path);
+    }
   }, [initialPath]);
 
   // Tracked in a layout effect so the next eviction sees a keystroke's dirty
@@ -157,17 +182,49 @@ export function useDocuments({
     for (const listener of listeners.current) listener(stats);
   }, []);
 
+  /**
+   * The count fields for whatever is on screen: a selection's own words and
+   * characters stand in for the document's, and the document's paragraphs
+   * carry on either way. Shared by the debounced count and the per-edit
+   * report so neither can publish the other's shape.
+   *
+   * A long selection's words are only counted when `settled` - until then the
+   * number already showing is left where it is.
+   */
+  const statsPartial = useCallback((state: EditorState, settled = false) => {
+    const counted = tally.current?.doc === state.doc ? tally.current : null;
+    const { from, to, empty } = state.selection.main;
+    if (empty) {
+      return {
+        ...(counted && { words: counted.words, paragraphs: counted.paragraphs }),
+        characters: state.doc.length,
+      };
+    }
+
+    const selected =
+      settled || to - from <= SELECTION_COUNT_LIMIT ? countSelection(state.doc.sliceString(from, to)) : null;
+    return {
+      ...(counted && { paragraphs: counted.paragraphs }),
+      ...(selected && { words: selected.words }),
+      characters: to - from,
+    };
+  }, []);
+
   const scheduleCount = useCallback(() => {
     if (countTimer.current) clearTimeout(countTimer.current);
     countTimer.current = setTimeout(() => {
       countTimer.current = null;
-      const doc = editor.current?.state.doc;
-      if (!doc) return;
-      const { words, paragraphs } = countDocument(doc);
-      tally.current = { doc, words, paragraphs };
-      publish({ ...latestStats.current, words, paragraphs });
+      const state = editor.current?.state;
+      if (!state) return;
+      // Asked for by a long selection as well as by a note with no count yet,
+      // and only the second of those needs the note counted again.
+      if (tally.current?.doc !== state.doc) {
+        const { words, paragraphs } = countDocument(state.doc);
+        tally.current = { doc: state.doc, words, paragraphs };
+      }
+      publish({ ...latestStats.current, ...statsPartial(state, true) });
     }, COUNT_DELAY);
-  }, [publish]);
+  }, [publish, statsPartial]);
 
   const reportStats = useCallback(
     (state: EditorState) => {
@@ -176,16 +233,17 @@ export function useDocuments({
       const counted = tally.current?.doc === state.doc ? tally.current : null;
       publish({
         ...latestStats.current,
-        ...(counted && { words: counted.words, paragraphs: counted.paragraphs }),
-        characters: state.doc.length,
+        ...statsPartial(state),
         line: line.number,
         column: head - line.from + 1,
       });
       // A document with no count yet - one just swapped in - is counted in
-      // full once things settle.
-      if (!counted) scheduleCount();
+      // full once things settle, and so is a selection too long to count on
+      // every move of it.
+      const { from, to } = state.selection.main;
+      if (!counted || to - from > SELECTION_COUNT_LIMIT) scheduleCount();
     },
-    [publish, scheduleCount]
+    [publish, scheduleCount, statsPartial]
   );
 
   /** Adds a listener for the open document's statistics, called straight away. */
@@ -231,7 +289,9 @@ export function useDocuments({
 
     const created = EditorState.create({
       doc: content,
-      selection: anchor === undefined ? undefined : { anchor },
+      // Clamped: a caret kept from another day may be past the end of a note
+      // that has been cut short since.
+      selection: anchor === undefined ? undefined : { anchor: Math.min(anchor, content.length) },
       extensions: [
         writingSurface,
         trackEdits.current!,
@@ -241,6 +301,23 @@ export function useDocuments({
     });
     states.current.set(path, created);
     return created;
+  }, []);
+
+  /**
+   * Puts `view` where the note at `path` was left: at the height it was
+   * scrolled to when it was put away, or - for one opened afresh, or changed
+   * underneath since - with its caret in the middle of the pane. A note with
+   * no history starts at the top.
+   */
+  const settleScroll = useCallback((view: EditorView, path: string) => {
+    const snapshot = scrolls.current.get(path);
+    if (snapshot) {
+      view.dispatch({ effects: snapshot });
+      return;
+    }
+    const head = view.state.selection.main.head;
+    if (head > 0) view.dispatch({ effects: EditorView.scrollIntoView(head, { y: "center" }) });
+    else view.scrollDOM.scrollTop = 0;
   }, []);
 
   useLayoutEffect(() => {
@@ -291,6 +368,7 @@ export function useDocuments({
     if (view && path) {
       states.current.delete(path);
       states.current.set(path, view.state);
+      scrolls.current.set(path, view.scrollSnapshot());
     }
   }, []);
 
@@ -307,6 +385,7 @@ export function useDocuments({
     const view = new EditorView({ state, parent });
     sideEditor.current = view;
     setSideView(view);
+    if (path) settleScroll(view, path);
     view.focus();
 
     return () => {
@@ -314,7 +393,7 @@ export function useDocuments({
       sideEditor.current = null;
       setSideView(null);
     };
-  }, [hasSide]);
+  }, [hasSide, settleScroll]);
 
   /**
    * Shows `path` in the split, beside the note in the main pane, creating its
@@ -323,14 +402,14 @@ export function useDocuments({
    * the main pane is showing: it cannot be in both.
    */
   const openSide = useCallback(
-    (path: string, content: string | null) => {
+    (path: string, content: string | null, anchor?: number) => {
       if (path === currentPath.current) return false;
       if (content === null && !states.current.has(path)) {
         throw new Error(`openSide(${path}) with no content and no document in memory`);
       }
 
       parkSide();
-      const next = stateFor(path, content ?? "");
+      const next = stateFor(path, content ?? "", anchor);
       states.current.delete(path);
       states.current.set(path, next);
       sidePathRef.current = path;
@@ -346,13 +425,14 @@ export function useDocuments({
           ],
         });
         swapping.current = false;
+        settleScroll(view, path);
         view.focus();
       }
       setSidePath(path);
       evict();
       return true;
     },
-    [stateFor, parkSide, evict]
+    [stateFor, parkSide, evict, settleScroll]
   );
 
   /** Closes the split. Its note is kept, with its edits, as a closed tab's is. */
@@ -368,7 +448,7 @@ export function useDocuments({
    * invitation to invent an empty one.
    */
   const open = useCallback(
-    (path: string, content: string | null) => {
+    (path: string, content: string | null, anchor?: number) => {
       const view = editor.current;
       if (!view) return;
 
@@ -390,9 +470,10 @@ export function useDocuments({
       // rather than updated, so the map's order stays the order of use.
       states.current.delete(currentPath.current);
       states.current.set(currentPath.current, view.state);
+      scrolls.current.set(currentPath.current, view.scrollSnapshot());
       currentPath.current = path;
 
-      const next = stateFor(path, content ?? "");
+      const next = stateFor(path, content ?? "", anchor);
       states.current.delete(path);
       states.current.set(path, next);
       view.setState(next);
@@ -403,6 +484,7 @@ export function useDocuments({
         ],
       });
       swapping.current = false;
+      settleScroll(view, path);
       setViewGeneration((generation) => generation + 1);
       reportStats(view.state);
       evict();
@@ -410,7 +492,7 @@ export function useDocuments({
       // rather than leaving the sidebar holding focus.
       view.focus();
     },
-    [stateFor, reportStats, evict, closeSide]
+    [stateFor, reportStats, evict, closeSide, settleScroll]
   );
 
   /**
@@ -434,6 +516,8 @@ export function useDocuments({
       const anchor = Math.min(previous?.selection.main.anchor ?? 0, content.length);
 
       states.current.delete(path);
+      // Taken of a text that is no longer the note's.
+      scrolls.current.delete(path);
       const next = stateFor(path, content, anchor);
 
       const view = inSide ? sideEditor.current : editor.current;
@@ -494,6 +578,9 @@ export function useDocuments({
    */
   const revision = useCallback((path: string) => liveState(path)?.doc ?? null, [liveState]);
 
+  /** Where the caret is in `path`, for coming back to another day; undefined if it is not held. */
+  const caretOf = useCallback((path: string) => liveState(path)?.selection.main.head, [liveState]);
+
   const markSaved = useCallback((path: string) => {
     setDirtyPaths((paths) => {
       if (!paths.has(path)) return paths;
@@ -514,6 +601,9 @@ export function useDocuments({
     for (const path of Array.from(states.current.keys())) {
       if (matches(path)) states.current.delete(path);
     }
+    for (const path of Array.from(scrolls.current.keys())) {
+      if (matches(path)) scrolls.current.delete(path);
+    }
     setDirtyPaths((paths) => {
       const next = new Set(Array.from(paths).filter((path) => !matches(path)));
       return next.size === paths.size ? paths : next;
@@ -527,6 +617,13 @@ export function useDocuments({
       if (renamed === path) continue;
       states.current.delete(path);
       states.current.set(renamed, state);
+    }
+
+    for (const [path, snapshot] of Array.from(scrolls.current.entries())) {
+      const renamed = rename(path);
+      if (renamed === path) continue;
+      scrolls.current.delete(path);
+      scrolls.current.set(renamed, snapshot);
     }
 
     const side = sidePathRef.current;
@@ -568,6 +665,7 @@ export function useDocuments({
     isOpen,
     read,
     revision,
+    caretOf,
     markSaved,
     forget,
     rewrite,
