@@ -82,7 +82,9 @@ function App() {
   const [vimEnabled, setVimEnabled] = usePersistedState("vimEnabled", false);
   const [showLineNumbers, setShowLineNumbers] = usePersistedState("showLineNumbers", false);
   const [typewriter, setTypewriter] = usePersistedState("typewriterScrolling", false);
-  const [sectionGuides, setSectionGuides] = usePersistedState("sectionGuides", true);
+  // Off unless asked for: marks on the writing surface are not something to
+  // put in front of everyone.
+  const [sectionGuides, setSectionGuides] = usePersistedState("sectionGuides", false);
   const [compactMode, setCompactMode] = usePersistedState("compactMode", false);
   const [autoUpdateEnabled, setAutoUpdateEnabled] = usePersistedState("autoUpdateEnabled", true);
   const [editorFont, setEditorFont] = usePersistedState("editorFont", DEFAULT_EDITOR_FONT);
