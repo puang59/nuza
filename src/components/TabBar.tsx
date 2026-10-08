@@ -8,6 +8,8 @@ interface TabBarProps {
   paths: string[];
   activePath: string;
   dirtyPaths: ReadonlySet<string>;
+  /** Open notes whose file has gone from disk; their names are struck through. */
+  missingPaths: ReadonlySet<string>;
   onSelect: (path: string) => void;
   onClose: (path: string) => void;
   /** Moves a tab so it sits before the tab at `before`; the strip's length is the end. */
@@ -39,7 +41,7 @@ function prefersReducedMotion() {
  * The strip is sized to its content rather than filling the bar, so whatever
  * space the tabs don't need stays draggable for moving the window.
  */
-function TabBar({ paths, activePath, dirtyPaths, onSelect, onClose, onReorder }: TabBarProps) {
+function TabBar({ paths, activePath, dirtyPaths, missingPaths, onSelect, onClose, onReorder }: TabBarProps) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [fade, setFade] = useState({ start: false, end: false });
   const [dragged, setDragged] = useState<string | null>(null);
@@ -109,6 +111,7 @@ function TabBar({ paths, activePath, dirtyPaths, onSelect, onClose, onReorder }:
       {paths.map((path, index) => {
         const isActive = path === activePath;
         const isDirty = dirtyPaths.has(path);
+        const isMissing = missingPaths.has(path);
         // The marker sits on the left edge of the tab it would land before,
         // or the right edge of the last tab for the end of the strip.
         const markerBefore = dragged !== null && dropBefore === index;
@@ -121,7 +124,7 @@ function TabBar({ paths, activePath, dirtyPaths, onSelect, onClose, onReorder }:
             aria-selected={isActive}
             tabIndex={isActive ? 0 : -1}
             data-active={isActive}
-            title={path}
+            title={isMissing ? `${path}\nNo longer on disk` : path}
             draggable
             onDragStart={(event) => {
               event.dataTransfer.setData(TAB_TYPE, path);
@@ -173,7 +176,9 @@ function TabBar({ paths, activePath, dirtyPaths, onSelect, onClose, onReorder }:
               <span className="pointer-events-none absolute inset-x-2 bottom-0 h-[2px] rounded-full bg-[var(--nuza-accent)]" />
             )}
 
-            <span className="max-w-[140px] truncate">{fileName(path)}</span>
+            <span className={`max-w-[140px] truncate ${isMissing ? "line-through opacity-70" : ""}`}>
+              {fileName(path)}
+            </span>
 
             {/* The dot marks unsaved edits and gives way to the close button on hover,
                 so the tab never changes width between the two states. */}

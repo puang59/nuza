@@ -9,7 +9,9 @@ import {
   touchEntry,
   findEntry,
   joinPath,
+  mergeListing,
   moveEntry as moveTreeEntry,
+  readFolders,
   removeEntry,
   setChildren,
 } from "@/lib/fileTree";
@@ -31,6 +33,15 @@ const UNTITLED_FILE = "untitled.md";
 
 /** Announced by the backend when a note changes underneath the app. */
 const FILE_CHANGED_EVENT = "file-changed";
+/** Announced by the backend when the set of files in the vault changes. */
+const INDEX_CHANGED_EVENT = "index-changed";
+/** How long the tree waits for a burst of those to finish before reading again. */
+const TREE_SETTLE_DELAY = 250;
+/**
+ * How long a note that cannot be read is given before it is called gone. An
+ * editor that saves by replacing the file takes it away for a moment first.
+ */
+const MISSING_GRACE = 400;
 /** Matches `OPEN_TARGET_EVENT` in lib.rs. */
 const OPEN_TARGET_EVENT = "open-target";
 
@@ -100,6 +111,12 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
    * entry goes when the offer has been answered either way.
    */
   const [recovered, setRecovered] = useState<ReadonlyMap<string, string>>(() => new Map());
+  /**
+   * Open notes whose file has gone from disk - deleted, moved or renamed by
+   * something other than the app. The tab still holds the text, which may be
+   * the last copy of it there is, so it stays and says so.
+   */
+  const [missing, setMissing] = useState<ReadonlySet<string>>(() => new Set());
 
   // Destructured rather than held as one object: every member is stable, so
   // the callbacks below keep their identity from one render to the next.
@@ -116,6 +133,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
     open: openDocument,
     replace: replaceDocument,
     showing: showingDocument,
+    showingSide: showingSideDocument,
     isOpen: isDocumentOpen,
     read: readDocument,
     revision: documentRevision,
@@ -178,6 +196,19 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
     });
     // The question has been answered, so there is nothing left to hold on to.
     void invoke("drop_recovery", { path }).catch(() => {});
+  }, []);
+
+  const flagMissing = useCallback((path: string) => {
+    setMissing((paths) => (paths.has(path) ? paths : new Set(paths).add(path)));
+  }, []);
+
+  const clearMissing = useCallback((path: string) => {
+    setMissing((paths) => {
+      if (!paths.has(path)) return paths;
+      const next = new Set(paths);
+      next.delete(path);
+      return next;
+    });
   }, []);
 
   /** Stops offering what was kept for `path`, and forgets it on disk. */
@@ -333,6 +364,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
       keepScratch();
       forgetDocuments(() => true);
       setSideFile(null);
+      setMissing(new Set());
       resetToScratch();
       // The tabs closed in the vault being left are no tabs of this one.
       closedRef.current = [];
@@ -416,10 +448,12 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
       else saveAgain.current = AUTOSAVE_DELAY;
       // Keeps "Date Modified" order honest about the notes written from here.
       setFolderData((tree) => touchEntry(tree, rootPathRef.current ?? "", path));
-      // What is on disk is this note now, whatever it was a moment ago.
+      // What is on disk is this note now, whatever it was a moment ago - and
+      // it is on disk, if it had gone from there.
       clearConflict(path);
+      clearMissing(path);
     },
-    [documentRevision, readDocument, markSaved, flagConflict, clearConflict]
+    [documentRevision, readDocument, markSaved, flagConflict, clearConflict, clearMissing]
   );
 
   const save = useCallback(async () => {
@@ -574,10 +608,23 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
       try {
         content = await invoke<string>("read_file", { path });
       } catch {
-        // Gone, or no longer readable. What is held here is the last copy of
-        // it there is, so it stays.
-        return;
+        // Gone, or no longer readable - or being replaced, which is how a
+        // good many editors save, and looks like gone for a moment. So it is
+        // asked again shortly before anything is said about it.
+        await new Promise((resolve) => setTimeout(resolve, MISSING_GRACE));
+        try {
+          content = await invoke<string>("read_file", { path });
+        } catch {
+          // What is held here is the last copy of it there is, so it stays -
+          // marked, if the file really is not there, so the tab does not go
+          // on looking like a note that is safely on disk.
+          const there = await invoke<string[]>("existing_files", { paths: [path] }).catch(() => [path]);
+          if (there.length === 0 && isDocumentOpen(path)) flagMissing(path);
+          return;
+        }
       }
+
+      clearMissing(path);
 
       // The app's own save, arriving back as news. Cheap to rule out, and
       // worth ruling out: replacing a document resets its undo history.
@@ -590,7 +637,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
     return () => {
       void listening.then((stop) => stop());
     };
-  }, [isDocumentOpen, readDocument, replaceDocument, flagConflict]);
+  }, [isDocumentOpen, readDocument, replaceDocument, flagConflict, flagMissing, clearMissing]);
 
   /** Takes the copy on disk, dropping the edits made here. */
   const reloadFromDisk = useCallback(
@@ -599,11 +646,12 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
         replaceDocument(path, await invoke<string>("read_file", { path }));
         markSaved(path);
         clearConflict(path);
+        clearMissing(path);
       } catch (error) {
         report(`Couldn't read "${fileNameOf(path)}" back from disk`, error);
       }
     },
-    [replaceDocument, markSaved, clearConflict]
+    [replaceDocument, markSaved, clearConflict, clearMissing]
   );
 
   /** Keeps what is in the editor, over the top of the copy on disk. */
@@ -746,6 +794,62 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
   }, [closeSideDocument]);
 
   /**
+   * The tree, brought back into line with the disk: every folder that has
+   * been read is read again, and what is new, gone or renamed since is taken
+   * in. This is what makes a file dropped in by a sync client, or made in a
+   * terminal, turn up in the sidebar without the vault being opened again -
+   * the tree is otherwise only ever changed by what the app itself does.
+   *
+   * Folders that have not been opened are left unread, as they were.
+   */
+  const refreshingTree = useRef(0);
+  const refreshTree = useCallback(async () => {
+    const root = rootPathRef.current;
+    if (!root) return;
+
+    const mine = ++refreshingTree.current;
+    const folders = [root, ...readFolders(folderDataRef.current)];
+    const listings = await Promise.all(
+      folders.map(async (path) => {
+        try {
+          return { path, listed: await invoke<FileEntry[]>("list_folder", { path }) };
+        } catch {
+          // Gone, or not answering. Its own row goes when the folder above it
+          // is read; until then it is left as it was.
+          return null;
+        }
+      })
+    );
+    // Overtaken by a later read, or the vault was switched meanwhile.
+    if (mine !== refreshingTree.current || root !== rootPathRef.current) return;
+
+    setFolderData((tree) => {
+      let next = tree;
+      for (const listing of listings) {
+        if (!listing) continue;
+        const had = listing.path === root ? next : findEntry(next, listing.path)?.children;
+        if (!had) continue;
+        const merged = mergeListing(had, listing.listed);
+        if (merged !== had) next = setChildren(next, root, listing.path, merged);
+      }
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const listening = listenHere(INDEX_CHANGED_EVENT, () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => void refreshTree(), TREE_SETTLE_DELAY);
+    });
+
+    return () => {
+      clearTimeout(timer);
+      void listening.then((stop) => stop());
+    };
+  }, [refreshTree]);
+
+  /**
    * Opens `path` with the caret on `line` (1-based) at `column`, counted in
    * UTF-16 units the way the editor counts positions - where a search hit in
    * the note's text was found. Left where it opened if something else was
@@ -795,6 +899,56 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
       }
     },
     [resetToScratch, selectFile]
+  );
+
+  /**
+   * Lets go of a note whose file has gone, and of whatever was typed in it:
+   * the tab closes, or the split does, and nothing is written. The other
+   * answer to a missing file is `keepMine`, which puts it back on disk.
+   */
+  const discardMissing = useCallback(
+    async (path: string) => {
+      if (showingSideDocument() === path) {
+        sideSelectionRef.current++;
+        closeSideDocument();
+        setSideFile(null);
+      } else {
+        const paths = openPathsRef.current;
+        const index = paths.indexOf(path);
+        if (index === -1) return;
+
+        const remaining = paths.filter((p) => p !== path);
+        if (remaining.length === 0) {
+          resetToScratch();
+        } else {
+          // The editor moves on first, and is waited for: the document must
+          // not be forgotten while it is still the one on screen.
+          if (showingDocument() === path) {
+            await selectFile(remaining[index] ?? remaining[remaining.length - 1]);
+            // The note to fall back on could not be opened. Better a tab onto
+            // a missing file than an editor showing a note with no tab.
+            if (showingDocument() === path) return;
+          }
+          setOpenPaths((open) => open.filter((p) => p !== path));
+        }
+        recentRef.current = recentRef.current.filter((p) => p !== path);
+      }
+
+      forgetDocuments((open) => open === path);
+      clearConflict(path);
+      clearMissing(path);
+      closedRef.current = closedRef.current.filter((tab) => tab.path !== path);
+    },
+    [
+      showingSideDocument,
+      showingDocument,
+      closeSideDocument,
+      resetToScratch,
+      selectFile,
+      forgetDocuments,
+      clearConflict,
+      clearMissing,
+    ]
   );
 
   /**
@@ -865,6 +1019,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
       closedRef.current = closedRef.current.map((tab) => ({ ...tab, path: rename(tab.path) }));
       if (isWithin(currentFileRef.current, from)) setCurrentFile(rename(currentFileRef.current));
       setSideFile((side) => (side && isWithin(side, from) ? rename(side) : side));
+      setMissing((paths) => (paths.size === 0 ? paths : new Set(Array.from(paths, rename))));
     },
     [rewriteDocuments]
   );
@@ -1038,6 +1193,9 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
 
       forgetDocuments((open) => isWithin(open, path));
       setSideFile((side) => (side && isWithin(side, path) ? null : side));
+      setMissing((paths) =>
+        paths.size === 0 ? paths : new Set(Array.from(paths).filter((gone) => !isWithin(gone, path)))
+      );
 
       const remaining = openPathsRef.current.filter((p) => !isWithin(p, path));
       recentRef.current = recentRef.current.filter((p) => !isWithin(p, path));
@@ -1074,6 +1232,8 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
     openPaths,
     dirtyPaths,
     conflicts,
+    missing,
+    discardMissing,
     folderData,
     fileIndex,
     loadFolder,

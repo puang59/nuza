@@ -88,6 +88,59 @@ export function setChildren(tree: FileEntry[], rootPath: string, path: string, c
   return update(tree);
 }
 
+/** Whether two rows say the same thing about the same entry, whatever is inside it. */
+function sameRow(a: FileEntry, b: FileEntry) {
+  return (
+    a.path === b.path &&
+    a.name === b.name &&
+    a.isDirectory === b.isDirectory &&
+    a.modified === b.modified &&
+    a.created === b.created &&
+    !!a.unavailable === !!b.unavailable
+  );
+}
+
+/**
+ * A folder's rows as they are now on disk (`listed`), laid over the rows the
+ * tree had for it: what is new comes in, what is gone goes, and a folder that
+ * had already been read keeps what was read of it - a fresh listing never
+ * looks inside the folders it lists, and taking it as it is would fold every
+ * one of them shut.
+ *
+ * Rows that have not changed are handed back as the same objects, and a
+ * listing that changes nothing as the same array, so a refresh that found
+ * nothing new redraws nothing.
+ */
+export function mergeListing(had: FileEntry[], listed: FileEntry[]): FileEntry[] {
+  const before = new Map(had.map((entry) => [entry.path, entry]));
+
+  const merged = listed.map((entry) => {
+    const old = before.get(entry.path);
+    if (!old) return entry;
+    if (sameRow(old, entry)) return old;
+    return entry.isDirectory && old.isDirectory && old.children
+      ? { ...entry, children: old.children }
+      : entry;
+  });
+
+  const unchanged = merged.length === had.length && merged.every((entry, index) => entry === had[index]);
+  return unchanged ? had : merged;
+}
+
+/** The folders of `tree` that have been read, parents before what is inside them. */
+export function readFolders(tree: FileEntry[]): string[] {
+  const paths: string[] = [];
+  const collect = (entries: FileEntry[]) => {
+    for (const entry of entries) {
+      if (!entry.isDirectory || !entry.children) continue;
+      paths.push(entry.path);
+      collect(entry.children);
+    }
+  };
+  collect(tree);
+  return paths;
+}
+
 /** Whether a folder has been read, or only listed. */
 export function isRead(entry: FileEntry) {
   return !!entry.children;

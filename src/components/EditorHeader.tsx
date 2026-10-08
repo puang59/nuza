@@ -10,6 +10,8 @@ interface EditorHeaderProps {
   openPaths: string[];
   currentFile: string;
   dirtyPaths: ReadonlySet<string>;
+  /** Open notes whose file has gone from disk. */
+  missingPaths: ReadonlySet<string>;
   onSelectTab: (path: string) => void;
   onCloseTab: (path: string) => void;
   onReorderTabs: (path: string, before: number) => void;
@@ -126,6 +128,7 @@ function EditorHeader({
   openPaths,
   currentFile,
   dirtyPaths,
+  missingPaths,
   onSelectTab,
   onCloseTab,
   onReorderTabs,
@@ -147,6 +150,7 @@ function EditorHeader({
         paths={openPaths}
         activePath={currentFile}
         dirtyPaths={dirtyPaths}
+        missingPaths={missingPaths}
         onSelect={onSelectTab}
         onClose={onCloseTab}
         onReorder={onReorderTabs}

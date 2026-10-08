@@ -118,6 +118,8 @@ function App() {
     openPaths,
     dirtyPaths,
     conflicts,
+    missing,
+    discardMissing,
     recovered,
     restoreRecovered,
     discardRecovered,
@@ -507,6 +509,7 @@ function App() {
           openPaths={openPaths}
           currentFile={currentFile}
           dirtyPaths={dirtyPaths}
+          missingPaths={missing}
           onSelectTab={selectFile}
           onCloseTab={closeFile}
           onReorderTabs={reorderTabs}
@@ -529,9 +532,11 @@ function App() {
               the choice is about, and covering it would be a poor way to ask. */}
             <div className="contents print:hidden">
               <ChangedOnDisk
-                path={conflicts.has(currentFile) ? currentFile : null}
+                path={conflicts.has(currentFile) || missing.has(currentFile) ? currentFile : null}
+                missing={missing.has(currentFile)}
                 onReload={() => void reloadFromDisk(currentFile)}
                 onKeepMine={() => void keepMine(currentFile)}
+                onDiscard={() => void discardMissing(currentFile)}
               />
               {/* Under the conflict bar, on the rare occasion both are up: the
               one about what is happening now comes before the one about what
@@ -561,6 +566,8 @@ function App() {
               path={sideFile}
               isDirty={dirtyPaths.has(sideFile)}
               hasConflict={conflicts.has(sideFile)}
+              isMissing={missing.has(sideFile)}
+              onDiscardMissing={() => void discardMissing(sideFile)}
               hasRecovered={recovered.has(sideFile)}
               containerRef={sideContainer}
               onContextMenu={(event) => openEditorMenu(event, sideView)}

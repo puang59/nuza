@@ -13,6 +13,8 @@ import {
   setChildren,
   sortTree,
   touchEntry,
+  mergeListing,
+  readFolders,
 } from "../src/lib/fileTree";
 import type { FileEntry } from "../src/lib/types";
 
@@ -289,5 +291,78 @@ describe("hasUnavailable", () => {
 
   test("is false for a folder that has not been read", () => {
     expect(hasUnavailable({ name: "d", path: "/v/d", isDirectory: true })).toBe(false);
+  });
+});
+
+describe("mergeListing", () => {
+  const file = (path: string, modified = 1) => ({
+    name: path.slice(path.lastIndexOf("/") + 1),
+    path,
+    isDirectory: false,
+    modified,
+  });
+  const folder = (path: string, children?: ReturnType<typeof file>[]) => ({
+    name: path.slice(path.lastIndexOf("/") + 1),
+    path,
+    isDirectory: true,
+    ...(children && { children }),
+  });
+
+  test("takes in what is new and lets go of what is gone", () => {
+    const had = [file("/v/a.md"), file("/v/gone.md")];
+    const merged = mergeListing(had, [file("/v/a.md"), file("/v/new.md")]);
+    expect(merged.map((entry) => entry.path)).toEqual(["/v/a.md", "/v/new.md"]);
+  });
+
+  // A listing never looks inside the folders it lists. Taken as it is, it
+  // would fold shut every folder that had been opened.
+  test("a folder that had been read keeps what was read of it", () => {
+    const inside = [file("/v/notes/x.md")];
+    const had = [folder("/v/notes", inside), file("/v/a.md")];
+    const merged = mergeListing(had, [folder("/v/notes"), file("/v/a.md"), file("/v/b.md")]);
+    expect(merged[0].children).toBe(inside);
+  });
+
+  test("a folder whose own row changed still keeps its contents", () => {
+    const inside = [file("/v/notes/x.md")];
+    const had = [{ ...folder("/v/notes", inside), modified: 1 }];
+    const merged = mergeListing(had, [{ ...folder("/v/notes"), modified: 2 }]);
+    expect(merged[0].modified).toBe(2);
+    expect(merged[0].children).toBe(inside);
+  });
+
+  test("hands back the same rows, and the same list, when nothing changed", () => {
+    const had = [folder("/v/notes", []), file("/v/a.md")];
+    expect(mergeListing(had, [folder("/v/notes"), file("/v/a.md")])).toBe(had);
+
+    const merged = mergeListing(had, [folder("/v/notes"), file("/v/a.md", 2)]);
+    expect(merged).not.toBe(had);
+    expect(merged[0]).toBe(had[0]);
+    expect(merged[1].modified).toBe(2);
+  });
+
+  test("a file that became a folder of the same name does not inherit anything", () => {
+    const merged = mergeListing([file("/v/thing")], [folder("/v/thing")]);
+    expect(merged[0].isDirectory).toBe(true);
+    expect(merged[0].children).toBeUndefined();
+  });
+});
+
+describe("readFolders", () => {
+  test("lists the folders that have been read, parents first, and none that have not", () => {
+    const tree = [
+      {
+        name: "a",
+        path: "/v/a",
+        isDirectory: true,
+        children: [
+          { name: "deep", path: "/v/a/deep", isDirectory: true, children: [] },
+          { name: "unread", path: "/v/a/unread", isDirectory: true },
+        ],
+      },
+      { name: "b", path: "/v/b", isDirectory: true },
+      { name: "n.md", path: "/v/n.md", isDirectory: false },
+    ];
+    expect(readFolders(tree)).toEqual(["/v/a", "/v/a/deep"]);
   });
 });
