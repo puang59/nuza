@@ -20,6 +20,9 @@ import { useNotices } from "./hooks/useNotices";
 import { UNTITLED_FILE, useFileOperations } from "./hooks/useFileOperations";
 import GettingStarted from "./components/GettingStarted";
 import SectionGuides from "./components/SectionGuides";
+import ZenBar from "./components/ZenBar";
+import { zenFocus } from "./lib/markdown/zen";
+import { formatBinding } from "./lib/keybinding";
 import type { KeymapAction } from "./lib/keymaps";
 import { useVimMode } from "./hooks/useVimMode";
 import { useVaults } from "./hooks/useVaults";
@@ -85,6 +88,11 @@ function App() {
   // Off unless asked for: marks on the writing surface are not something to
   // put in front of everyone.
   const [sectionGuides, setSectionGuides] = usePersistedState("sectionGuides", false);
+  // Zen mode: the note and nothing else. Not kept between launches - it is a
+  // way of working for a while, and an app that came back with no chrome and
+  // no hint of how to get it would be a worse surprise than one that did not.
+  const [zen, setZen] = useState(false);
+  const [zenDimming, setZenDimming] = usePersistedState("zenDimming", true);
   const [compactMode, setCompactMode] = usePersistedState("compactMode", false);
   const [autoUpdateEnabled, setAutoUpdateEnabled] = usePersistedState("autoUpdateEnabled", true);
   const [editorFont, setEditorFont] = usePersistedState("editorFont", DEFAULT_EDITOR_FONT);
@@ -139,8 +147,9 @@ function App() {
       editorFontTheme,
       ...(showLineNumbers ? [noteLineNumbers] : []),
       ...(typewriter ? [typewriterScrolling] : []),
+      ...(zen && zenDimming ? [zenFocus] : []),
     ],
-    [vimExtension, editorFontTheme, showLineNumbers, typewriter]
+    [vimExtension, editorFontTheme, showLineNumbers, typewriter, zen, zenDimming]
   );
 
   const {
@@ -521,7 +530,15 @@ function App() {
 
   const keymapHandlers = useMemo(
     () => ({
-      "toggle-sidebar": toggleSidebar,
+      "toggle-sidebar": () => {
+        // Asking for the sidebar is asking to leave zen mode, which has none.
+        if (zen) {
+          setZen(false);
+          setIsSidebarOpen(true);
+          sidebarRef.current?.focusTree();
+        } else toggleSidebar();
+      },
+      "toggle-zen-mode": () => setZen((on) => !on),
       "save-file": save,
       "open-folder": openFolder,
       "quick-open": () => setIsQuickOpenOpen((open) => !open),
@@ -585,6 +602,7 @@ function App() {
       moveByHeading,
       createNote,
       retrace,
+      zen,
     ]
   );
 
@@ -673,7 +691,8 @@ function App() {
       className="h-screen flex flex-col text-white overflow-hidden print:block print:h-auto print:overflow-visible"
       style={{ backgroundColor: "var(--nuza-bg-alpha)" }}
     >
-      <div className="contents print:hidden">
+      {zen && <ZenBar keys={formatBinding(keymapBindings["toggle-zen-mode"])} onExit={() => setZen(false)} />}
+      <div className={zen ? "hidden" : "contents print:hidden"}>
         <EditorHeader
           updateStatus={updateStatus}
           version={version}
@@ -730,7 +749,7 @@ function App() {
               onContextMenu={(event) => openEditorMenu(event, editorView)}
               className="flex-1 min-h-0 print:h-auto"
             />
-            {sectionGuides && <SectionGuides outline={outline} onJump={onJumpToHeading} />}
+            {sectionGuides && !zen && <SectionGuides outline={outline} onJump={onJumpToHeading} />}
             <GettingStarted
               onScratch={currentFile === UNTITLED_FILE}
               hasVault={!!rootPath}
@@ -786,8 +805,8 @@ function App() {
         */}
         <div
           className={`h-full shrink-0 overflow-hidden print:hidden ${isResizing ? "" : "sidebar-transition"}`}
-          style={{ width: isSidebarOpen ? sidebarWidth + SIDEBAR_GAP : 0 }}
-          inert={!isSidebarOpen}
+          style={{ width: isSidebarOpen && !zen ? sidebarWidth + SIDEBAR_GAP : 0 }}
+          inert={!isSidebarOpen || zen}
         >
           <div className="h-full" style={{ width: sidebarWidth + SIDEBAR_GAP, paddingLeft: SIDEBAR_GAP }}>
             <Sidebar
@@ -829,7 +848,7 @@ function App() {
       {/* The Vim bar earns its place for someone who is tracking a mode;
           without Vim there is no mode to track, so the footer steps back to
           what a writer actually wants from it. */}
-      <div className="contents print:hidden">
+      <div className={zen ? "hidden" : "contents print:hidden"}>
         {vimEnabled ? (
           <StatusBar
             mode={mode}
@@ -887,6 +906,8 @@ function App() {
         setTypewriterScrolling={setTypewriter}
         sectionGuides={sectionGuides}
         setSectionGuides={setSectionGuides}
+        zenDimming={zenDimming}
+        setZenDimming={setZenDimming}
         appearance={appearance}
         setAppearance={setAppearance}
         resetAppearance={resetAppearance}

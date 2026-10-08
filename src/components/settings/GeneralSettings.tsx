@@ -11,6 +11,8 @@ interface GeneralSettingsProps {
   setTypewriterScrolling: (enabled: boolean) => void;
   sectionGuides: boolean;
   setSectionGuides: (enabled: boolean) => void;
+  zenDimming: boolean;
+  setZenDimming: (enabled: boolean) => void;
 }
 
 export default function GeneralSettings({
@@ -22,6 +24,8 @@ export default function GeneralSettings({
   setTypewriterScrolling,
   sectionGuides,
   setSectionGuides,
+  zenDimming,
+  setZenDimming,
 }: GeneralSettingsProps) {
   return (
     <div className="divide-y divide-zinc-800">
@@ -42,6 +46,12 @@ export default function GeneralSettings({
         description="Marks for a note's headings down the edge, and the current section's name at the top"
       >
         <Switch checked={sectionGuides} onCheckedChange={setSectionGuides} />
+      </SettingRow>
+      <SettingRow
+        title="Dim in Zen Mode"
+        description="In zen mode, fade everything but the paragraph you are writing"
+      >
+        <Switch checked={zenDimming} onCheckedChange={setZenDimming} />
       </SettingRow>
       <CommandLineSetting />
     </div>

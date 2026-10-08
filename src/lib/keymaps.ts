@@ -37,7 +37,8 @@ export type KeymapAction =
   | "heading-6"
   | "heading-none"
   | "go-back"
-  | "go-forward";
+  | "go-forward"
+  | "toggle-zen-mode";
 
 export interface KeymapDefinition {
   id: KeymapAction;
@@ -288,6 +289,12 @@ export const KEYMAP_ACTIONS: KeymapDefinition[] = [
     label: "Go Forward",
     description: "Return to the place you went back from",
     defaultBinding: "mod+]",
+  },
+  {
+    id: "toggle-zen-mode",
+    label: "Zen Mode",
+    description: "Hide everything but the note, and dim all but the paragraph you are in",
+    defaultBinding: "mod+alt+z",
   },
 ];
 
