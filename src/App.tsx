@@ -50,8 +50,11 @@ import { jumpToHeadingAt, nextHeading, previousHeading } from "./lib/markdown/he
 import { isMacPlatform } from "./lib/platform";
 import {
   DEFAULT_EDITOR_FONT,
+  DEFAULT_CONTENT_WIDTH,
   DEFAULT_EDITOR_FONT_SIZE,
+  DEFAULT_LINE_HEIGHT,
   EDITOR_FONT_SIZE_STEP,
+  applyTypography,
   clampEditorFontSize,
   editorFontFamily,
 } from "./lib/fonts";
@@ -72,6 +75,14 @@ function App() {
   const [autoUpdateEnabled, setAutoUpdateEnabled] = usePersistedState("autoUpdateEnabled", true);
   const [editorFont, setEditorFont] = usePersistedState("editorFont", DEFAULT_EDITOR_FONT);
   const [editorFontSize, setEditorFontSize] = usePersistedState("editorFontSize", DEFAULT_EDITOR_FONT_SIZE);
+  const [contentWidth, setContentWidth] = usePersistedState("editorContentWidth", DEFAULT_CONTENT_WIDTH);
+  const [lineHeight, setLineHeight] = usePersistedState("editorLineHeight", DEFAULT_LINE_HEIGHT);
+
+  // Read by the editor's theme through the stylesheet, so a slider being
+  // dragged restyles the note without the editor being reconfigured.
+  useEffect(() => {
+    applyTypography(document.documentElement, { contentWidth, lineHeight });
+  }, [contentWidth, lineHeight]);
 
   const { module: vimModule, extension: vimExtension } = useVimMode(vimEnabled);
   const { vaults, remember: rememberVault, rename: renameVault, forget: forgetVault } = useVaults();
@@ -755,6 +766,10 @@ function App() {
         setEditorFont={setEditorFont}
         editorFontSize={editorFontSize}
         setEditorFontSize={(size) => setEditorFontSize(clampEditorFontSize(size))}
+        contentWidth={contentWidth}
+        setContentWidth={setContentWidth}
+        lineHeight={lineHeight}
+        setLineHeight={setLineHeight}
         keymapBindings={keymapBindings}
         setKeymapBinding={setKeymapBinding}
         resetKeymapBinding={resetKeymapBinding}
