@@ -1,4 +1,5 @@
 import type { EditorView } from "@codemirror/view";
+import { readAltSize } from "./imageSize";
 import type { MarkdownConfig } from "@lezer/markdown";
 import { tags } from "@lezer/highlight";
 
@@ -91,9 +92,11 @@ export const WikiEmbed: MarkdownConfig = {
 export function readEmbed(inner: string) {
   const bar = inner.indexOf("|");
   const target = (bar < 0 ? inner : inner.slice(0, bar)).trim();
-  const rest = bar < 0 ? "" : inner.slice(bar + 1).trim();
-  const width = /^\d{1,4}$/.test(rest) ? Number(rest) : null;
-  return { target, width: width && width > 0 ? width : null, alt: width === null && rest ? rest : null };
+  // After the name: words for the picture, a width, or the words and then
+  // the width - `|a dog|300` - which is what resizing one with words leaves.
+  const { alt, width } = readAltSize(bar < 0 ? "" : `|${inner.slice(bar + 1)}`);
+  const words = alt.replace(/^\|/, "").trim();
+  return { target, width, alt: words || null };
 }
 
 /**
