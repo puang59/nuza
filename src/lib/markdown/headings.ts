@@ -208,6 +208,9 @@ export function subscribeToOutline(listener: OutlineListener) {
   return () => void outlineListeners.delete(listener);
 }
 
+/** How soon after a scroll or a move of the caret the section in view is worked out again. */
+const SECTION_DELAY = 40;
+
 /** How long after the last edit the headings are read again. */
 const OUTLINE_DELAY = 250;
 
@@ -215,8 +218,8 @@ const OUTLINE_DELAY = 250;
  * Keeps whoever is listening told about the note's headings and about which
  * of them the pane is in. The headings are read when the note is opened and
  * shortly after it stops being typed in - reading them walks the whole note -
- * and the section in view is worked out once a frame while scrolling, from
- * the heights the editor already knows.
+ * and the section in view is worked out a moment after a scroll or a move of
+ * the caret, from the heights the editor already knows.
  */
 export const outlineReporter = ViewPlugin.fromClass(
   class {
@@ -281,9 +284,15 @@ export const outlineReporter = ViewPlugin.fromClass(
       return this.view.lineBlockAt(heading.from).bottom <= top;
     }
 
+    /**
+     * Works out the section again shortly, however many times it is asked in
+     * the meantime. On a timer rather than the next frame: a window that is
+     * not being painted - covered, or on another desktop - is given no frames,
+     * and the mark would sit where it was until it was looked at again.
+     */
     private onScroll = () => {
       if (this.frame) return;
-      this.frame = requestAnimationFrame(() => {
+      this.frame = window.setTimeout(() => {
         this.frame = 0;
         const active = this.sectionInView();
         const headingOffscreen = this.isHeadingOffscreen(active);
@@ -291,7 +300,7 @@ export const outlineReporter = ViewPlugin.fromClass(
         this.active = active;
         this.headingOffscreen = headingOffscreen;
         this.tell();
-      });
+      }, SECTION_DELAY);
     };
 
     private tell() {
@@ -305,7 +314,7 @@ export const outlineReporter = ViewPlugin.fromClass(
 
     destroy() {
       if (this.timer) clearTimeout(this.timer);
-      if (this.frame) cancelAnimationFrame(this.frame);
+      if (this.frame) clearTimeout(this.frame);
       this.view.scrollDOM.removeEventListener("scroll", this.onScroll);
     }
   }
