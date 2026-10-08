@@ -309,11 +309,20 @@ const editorTheme = EditorView.theme(
 
     /* A wide table scrolls inside its own box rather than widening the
        document and giving the whole editor a horizontal scrollbar. */
+    /* The editor wraps its lines with `overflow-wrap: anywhere`, which is
+       right for prose and wrong in here: it lets a word break between any two
+       letters *and* tells the table that a column may be one letter wide. The
+       layout then starves the short columns to feed the long one, and
+       ordinary words came out split across lines. `break-word` only breaks a
+       word that is wider than its column by itself, and a column is never
+       narrower than its longest word - a table too wide for that scrolls. */
     ".cm-md-table-wrap": {
       display: "block",
       overflowX: "auto",
       padding: "0.5em 0",
       whiteSpace: "normal",
+      overflowWrap: "break-word",
+      wordBreak: "normal",
     },
     ".cm-md-table": {
       borderCollapse: "collapse",
@@ -512,7 +521,7 @@ const editorTheme = EditorView.theme(
     ".cm-md-math-block": { display: "block", padding: "0.5em 0", textAlign: "center", overflowX: "auto" },
     ".cm-md-math-source": { fontFamily: CODE_FONT_FAMILY, color: ink.code },
     ".cm-md-html": { whiteSpace: "normal" },
-    ".cm-md-html-block": { display: "block", padding: "0.3em 0" },
+    ".cm-md-html-block": { display: "block", padding: "0.3em 0", overflowX: "auto" },
     ".cm-md-html h1": { fontSize: "1.6em" },
     ".cm-md-html h2": { fontSize: "1.4em" },
     ".cm-md-html h3": { fontSize: "1.2em" },
@@ -566,7 +575,10 @@ const editorTheme = EditorView.theme(
       borderTop: `1px solid ${ink.hairline}`,
       margin: "0.8em 0",
     },
+    /* As for a markdown table: columns no narrower than their longest word. */
     ".cm-md-html table": {
+      overflowWrap: "break-word",
+      wordBreak: "normal",
       borderCollapse: "collapse",
       width: "100%",
       fontSize: "0.94em",
