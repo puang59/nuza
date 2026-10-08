@@ -1,5 +1,6 @@
 import { memo, useEffect, useState } from "react";
 import { StatsSubscription, useDocumentStats } from "@/hooks/useDocumentStats";
+import NoteAge from "./NoteAge";
 
 /**
  * The wall clock, ticking on its own. It used to come in as a prop that was
@@ -22,6 +23,10 @@ interface StatusBarProps {
   mode: string;
   currentFile: string;
   subscribeToStats: StatsSubscription;
+  /** The open note's file, or null for the scratch note. */
+  notePath: string | null;
+  /** Whether the note has nothing unsaved in it. */
+  saved: boolean;
 }
 
 /** Background/text color for each Vim mode indicator, keyed by CodeMirror's mode name. */
@@ -36,7 +41,7 @@ const VIM_MODE_STYLES: Record<string, string> = {
  * The bottom bar as Vim users get it: mode on the left, then where the caret is
  * and how much has been written, with the file name and the time on the right.
  */
-function StatusBar({ mode, currentFile, subscribeToStats }: StatusBarProps) {
+function StatusBar({ mode, currentFile, subscribeToStats, notePath, saved }: StatusBarProps) {
   const modeStyle = VIM_MODE_STYLES[mode];
   const fileName = currentFile.split(/[/\\]/).pop() || "untitled.md";
   const timestamp = useClock();
@@ -56,6 +61,7 @@ function StatusBar({ mode, currentFile, subscribeToStats }: StatusBarProps) {
             Ln {line}, Col {column}
           </span>
           {words > 0 && <span>{words.toLocaleString()} words</span>}
+          <NoteAge path={notePath} saved={saved} />
         </span>
       </div>
 

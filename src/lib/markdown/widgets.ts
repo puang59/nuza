@@ -290,24 +290,37 @@ export class RuleWidget extends WidgetType {
 /** An embedded image, falling back to its alt text when the file is missing. */
 export class ImageWidget extends WidgetType {
   constructor(
+    /** Where the picture is, or empty for one that could not be found. */
     readonly src: string,
-    readonly alt: string
+    readonly alt: string,
+    /** How wide to draw it, in pixels, when the note says. */
+    readonly width: number | null = null
   ) {
     super();
   }
 
   eq(other: ImageWidget) {
-    return other.src === this.src && other.alt === this.alt;
+    return other.src === this.src && other.alt === this.alt && other.width === this.width;
   }
 
   toDOM() {
     const wrapper = document.createElement("span");
     wrapper.className = "cm-md-image";
 
+    // Nothing to load: said straight away, rather than left to an `<img>`
+    // with no source, which never reports that it failed.
+    if (!this.src) {
+      wrapper.classList.add("cm-md-image-loaded", "cm-md-image-broken");
+      wrapper.textContent = this.alt || "image not found";
+      return wrapper;
+    }
+
     const image = document.createElement("img");
     image.src = this.src;
     image.alt = this.alt;
     image.loading = "lazy";
+    // Still held to the column by the stylesheet's `max-width`.
+    if (this.width) image.style.width = `${this.width}px`;
 
     // Faded in once the bytes are there, so a picture arriving mid-scroll does
     // not snap into place. One already in cache is marked loaded in the same

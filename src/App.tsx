@@ -25,6 +25,7 @@ import { useAppUpdater } from "./hooks/useAppUpdater";
 import { usePersistedState } from "./hooks/usePersistedState";
 import { useRecentFiles } from "./hooks/useRecentFiles";
 import { useOutline } from "./hooks/useOutline";
+import { hasEmbeds, refreshEmbeds, setVaultFiles } from "./lib/markdown/embedIndex";
 import { useResizableSidebar } from "./hooks/useResizableSidebar";
 import { report } from "./lib/notices";
 import { isMainWindow } from "./lib/windowLabel";
@@ -270,6 +271,25 @@ function App() {
         setHasBackdrop(false);
       });
   }, [wantsTransparency]);
+
+  // An embed names a file, and which file that is depends on what the vault
+  // holds. The editors are told when that changes, and when a note comes to
+  // the front that may have been drawn before the list was known - but only
+  // a note with an embed in it is put through being drawn again.
+  const vaultFileList = fileIndex.files;
+  useEffect(() => {
+    setVaultFiles(
+      rootPath ?? "",
+      vaultFileList.map((file) => file.path)
+    );
+    for (const view of [editorView, sideView]) {
+      if (view && hasEmbeds(view.state.doc)) view.dispatch({ effects: refreshEmbeds.of(null) });
+    }
+  }, [rootPath, vaultFileList, editorView, sideView, sideFile, viewGeneration]);
+
+  // The open note's file, for the footer's "edited a while ago". The scratch
+  // note has none.
+  const notePath = rootPath && isWithin(currentFile, rootPath) ? currentFile : null;
 
   const outline = useOutline(editorView);
   const onJumpToHeading = useCallback(
@@ -768,9 +788,19 @@ function App() {
           what a writer actually wants from it. */}
       <div className="contents print:hidden">
         {vimEnabled ? (
-          <StatusBar mode={mode} currentFile={currentFile} subscribeToStats={subscribeToStats} />
+          <StatusBar
+            mode={mode}
+            currentFile={currentFile}
+            subscribeToStats={subscribeToStats}
+            notePath={notePath}
+            saved={!dirtyPaths.has(currentFile)}
+          />
         ) : (
-          <WritingStats subscribeToStats={subscribeToStats} />
+          <WritingStats
+            subscribeToStats={subscribeToStats}
+            notePath={notePath}
+            saved={!dirtyPaths.has(currentFile)}
+          />
         )}
       </div>
 

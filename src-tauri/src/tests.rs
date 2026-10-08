@@ -1,7 +1,7 @@
 use crate::cli::OpenTarget;
 use crate::files::{
     already_exists, create_unused, duplicate_file, exact_file_name, move_destination,
-    opened_by_the_system, rename_no_replace, safe_file_name, write_atomically,
+    opened_by_the_system, rename_no_replace, safe_file_name, times_of, write_atomically,
 };
 // Only asked about where a file has a mode to ask about.
 #[cfg(unix)]
@@ -2279,4 +2279,23 @@ fn only_documents_and_media_are_handed_to_the_system() {
     ] {
         assert!(!opened_by_the_system(Path::new(name)), "{name}");
     }
+}
+
+/// A note has a time it was last changed, and it is a recent one for a note
+/// just written; a file that is not there has no times at all.
+#[test]
+fn reads_when_a_note_was_last_changed() {
+    let dir = tempfile::tempdir().unwrap();
+    let note = dir.path().join("note.md");
+    fs::write(&note, "hello").unwrap();
+
+    let times = times_of(&note).unwrap();
+    let now = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+    let modified = times.modified.expect("a modification time");
+    assert!(modified <= now + 2_000 && now.saturating_sub(modified) < 60_000);
+
+    assert!(times_of(&dir.path().join("missing.md")).is_err());
 }
