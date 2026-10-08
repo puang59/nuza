@@ -5,11 +5,10 @@ interface ZenBarProps {
 }
 
 /**
- * What stands in for the title bar in zen mode: nothing, until it is pointed
- * at.
+ * What is left of the title bar in zen mode: nothing to see.
  *
- * The strip is still there to drag the window by, and to leave room for the
- * window's own buttons where it draws them over the page. Pointing at it
+ * A strip across the top of the page that takes no room from it - the note
+ * runs underneath - and is still there to drag the window by. Pointing at it
  * brings up the one thing someone who has forgotten the shortcut needs: the
  * way out.
  */
@@ -17,7 +16,7 @@ export default function ZenBar({ keys, onExit }: ZenBarProps) {
   return (
     <div
       data-tauri-drag-region
-      className="group/zen flex h-9 shrink-0 items-center justify-end px-4 print:hidden"
+      className="group/zen absolute inset-x-0 top-0 z-30 flex h-8 items-center justify-end px-4 print:hidden"
     >
       <button
         type="button"

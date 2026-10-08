@@ -93,6 +93,13 @@ function App() {
   // no hint of how to get it would be a worse surprise than one that did not.
   const [zen, setZen] = useState(false);
   const [zenDimming, setZenDimming] = usePersistedState("zenDimming", true);
+
+  // Read by the stylesheet, which turns the page black and folds the bars
+  // away - see `[data-zen]` and `.zen-fold` in App.css.
+  useEffect(() => {
+    if (zen) document.documentElement.dataset.zen = "";
+    else delete document.documentElement.dataset.zen;
+  }, [zen]);
   const [compactMode, setCompactMode] = usePersistedState("compactMode", false);
   const [autoUpdateEnabled, setAutoUpdateEnabled] = usePersistedState("autoUpdateEnabled", true);
   const [editorFont, setEditorFont] = usePersistedState("editorFont", DEFAULT_EDITOR_FONT);
@@ -282,7 +289,10 @@ function App() {
   // Deliberately keyed on the switch rather than on the amount: applying it
   // hangs a fresh NSVisualEffectView off the window, so depending on the number
   // would rebuild the window's backing layer on every frame of a slider drag.
-  const wantsTransparency = appearance.transparency > 0;
+  //
+  // Zen mode is a solid black page whatever the setting says: nothing of the
+  // desktop behind the note, so the effect is taken off for as long as it is on.
+  const wantsTransparency = appearance.transparency > 0 && !zen;
   useEffect(() => {
     invoke<boolean>("set_transparency", { enabled: wantsTransparency })
       .then(setHasBackdrop)
@@ -688,28 +698,32 @@ function App() {
 
   return (
     <main
-      className="h-screen flex flex-col text-white overflow-hidden print:block print:h-auto print:overflow-visible"
+      className="relative h-screen flex flex-col text-white overflow-hidden transition-[background-color] duration-300 motion-reduce:transition-none print:block print:h-auto print:overflow-visible"
       style={{ backgroundColor: "var(--nuza-bg-alpha)" }}
     >
       {zen && <ZenBar keys={formatBinding(keymapBindings["toggle-zen-mode"])} onExit={() => setZen(false)} />}
-      <div className={zen ? "hidden" : "contents print:hidden"}>
-        <EditorHeader
-          updateStatus={updateStatus}
-          version={version}
-          openPaths={openPaths}
-          currentFile={currentFile}
-          dirtyPaths={dirtyPaths}
-          missingPaths={missing}
-          onSelectTab={selectFile}
-          onCloseTab={closeFile}
-          onReorderTabs={reorderTabs}
-          onTabMenu={openTabMenu}
-          onCheckUpdates={checkForUpdates}
-          onInstallUpdate={installUpdate}
-          onOpenSettings={openSettings}
-          onSave={save}
-          onToggleSidebar={toggleSidebar}
-        />
+      {/* Folded to nothing in zen mode rather than taken away, so it slides
+          shut and open again; `inert` keeps what is folded out of reach. */}
+      <div className="zen-fold print:hidden" data-folded={zen} inert={zen}>
+        <div className="min-h-0 overflow-hidden">
+          <EditorHeader
+            updateStatus={updateStatus}
+            version={version}
+            openPaths={openPaths}
+            currentFile={currentFile}
+            dirtyPaths={dirtyPaths}
+            missingPaths={missing}
+            onSelectTab={selectFile}
+            onCloseTab={closeFile}
+            onReorderTabs={reorderTabs}
+            onTabMenu={openTabMenu}
+            onCheckUpdates={checkForUpdates}
+            onInstallUpdate={installUpdate}
+            onOpenSettings={openSettings}
+            onSave={save}
+            onToggleSidebar={toggleSidebar}
+          />
+        </div>
       </div>
 
       <div className="flex-1 min-h-0 px-4 flex w-full relative z-20 print:block print:p-0">
@@ -717,7 +731,7 @@ function App() {
             surface reads as the deepest layer, with the sidebar and the bars
             above it. Tinted rather than filled so window vibrancy still shows
             through when transparency is on. */}
-        <div className="flex-1 min-w-0 h-full relative flex overflow-hidden rounded-t-lg bg-[var(--nuza-editor-tint)] print:block print:h-auto print:overflow-visible print:rounded-none print:bg-transparent">
+        <div className="flex-1 min-w-0 h-full relative flex overflow-hidden rounded-t-lg bg-[var(--nuza-editor-tint)] transition-[background-color] duration-300 motion-reduce:transition-none print:block print:h-auto print:overflow-visible print:rounded-none print:bg-transparent">
           <div className="relative flex min-w-0 flex-1 flex-col print:block">
             {/* Above the text rather than over it: the note underneath is what
               the choice is about, and covering it would be a poor way to ask. */}
@@ -848,22 +862,24 @@ function App() {
       {/* The Vim bar earns its place for someone who is tracking a mode;
           without Vim there is no mode to track, so the footer steps back to
           what a writer actually wants from it. */}
-      <div className={zen ? "hidden" : "contents print:hidden"}>
-        {vimEnabled ? (
-          <StatusBar
-            mode={mode}
-            currentFile={currentFile}
-            subscribeToStats={subscribeToStats}
-            notePath={notePath}
-            saved={!dirtyPaths.has(currentFile)}
-          />
-        ) : (
-          <WritingStats
-            subscribeToStats={subscribeToStats}
-            notePath={notePath}
-            saved={!dirtyPaths.has(currentFile)}
-          />
-        )}
+      <div className="zen-fold print:hidden" data-folded={zen} inert={zen}>
+        <div className="min-h-0 overflow-hidden">
+          {vimEnabled ? (
+            <StatusBar
+              mode={mode}
+              currentFile={currentFile}
+              subscribeToStats={subscribeToStats}
+              notePath={notePath}
+              saved={!dirtyPaths.has(currentFile)}
+            />
+          ) : (
+            <WritingStats
+              subscribeToStats={subscribeToStats}
+              notePath={notePath}
+              saved={!dirtyPaths.has(currentFile)}
+            />
+          )}
+        </div>
       </div>
 
       <FileSearchPalette
