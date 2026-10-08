@@ -10,8 +10,8 @@ use crate::fonts::system_font_families;
 use crate::index::VaultIndex;
 use crate::media::{body_bytes, header_text, media_body, media_body_in_chunks, requested_path};
 use crate::multiwindow::{
-    plan_restore, read_saved, route, usable_frame, Frame, Open, Quit, Quitting, Route, SavedWindow,
-    Screen,
+    folder_of, note_window_target, plan_restore, read_saved, route, usable_frame, Frame, Open,
+    Quit, Quitting, Route, SavedWindow, Screen,
 };
 use crate::recovery::{
     drop_kept, kept_for, legacy_recovery_file, move_kept, moved_path, prune_kept, recovery_file,
@@ -2018,6 +2018,7 @@ fn folder(path: &str) -> OpenTarget {
     OpenTarget {
         kind: "folder",
         path: path.to_string(),
+        vault: None,
     }
 }
 
@@ -2025,6 +2026,7 @@ fn note_at(path: &str) -> OpenTarget {
     OpenTarget {
         kind: "file",
         path: path.to_string(),
+        vault: None,
     }
 }
 
@@ -2298,4 +2300,46 @@ fn reads_when_a_note_was_last_changed() {
     assert!(modified <= now + 2_000 && now.saturating_sub(modified) < 60_000);
 
     assert!(times_of(&dir.path().join("missing.md")).is_err());
+}
+
+/// A note moved into its own window opens the vault it is in, not its own
+/// folder - and only when the folder named is the one the window really has.
+#[test]
+fn a_note_window_opens_the_vault_the_note_is_in() {
+    let dir = tempfile::tempdir().unwrap();
+    let elsewhere = tempfile::tempdir().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    fs::create_dir_all(root.join("sub")).unwrap();
+    let note = root.join("sub").join("note.md");
+    fs::write(&note, "hello").unwrap();
+    let text = |path: &Path| path.to_string_lossy().into_owned();
+
+    let target = note_window_target(&note, Some(&root), &text(&note), &text(dir.path())).unwrap();
+    assert_eq!(target.kind, "file");
+    assert_eq!(target.path, text(&note));
+    assert_eq!(target.vault, Some(text(dir.path())));
+
+    // Some other folder, a folder in place of a note, and no vault at all.
+    assert!(note_window_target(&note, Some(&root), &text(&note), &text(elsewhere.path())).is_err());
+    assert!(note_window_target(&root.join("sub"), Some(&root), "x", &text(dir.path())).is_err());
+    assert!(note_window_target(&note, None, &text(&note), &text(dir.path())).is_err());
+}
+
+/// A window on its way up for one note of a vault counts as holding that
+/// vault, not the note's own folder, when a path is being routed.
+#[test]
+fn a_note_window_counts_as_its_vault_while_it_opens() {
+    let pending = OpenTarget {
+        kind: "file",
+        path: "/vault/sub/note.md".to_string(),
+        vault: Some("/vault".to_string()),
+    };
+    let windows = vec![Open {
+        label: "w-1".to_string(),
+        root: Some(folder_of(&pending)),
+    }];
+    assert_eq!(
+        route(&windows, &note_at("/vault/other.md")),
+        Route::Existing("w-1".to_string())
+    );
 }

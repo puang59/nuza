@@ -164,6 +164,7 @@ pub fn run() {
             files::delete_entry,
             fonts::list_system_fonts,
             multiwindow::open_new_window,
+            multiwindow::open_note_in_new_window,
             multiwindow::window_ready_to_quit,
             window::set_transparency,
             window::print_page,
