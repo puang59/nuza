@@ -25,6 +25,9 @@ import { ClosedTab, placeAt, rememberClosed } from "@/lib/closedTabs";
 import { moveTab } from "@/lib/tabOrder";
 import { OpenTarget, planOpen } from "@/lib/launchTarget";
 import { jumpToHeading } from "@/lib/markdown/headings";
+import { showLightbox } from "@/lib/markdown/lightbox";
+import { mediaSource } from "@/lib/markdown/sources";
+import { isNotText, openerFor } from "@/lib/openers";
 import { WIKI_LINK_EVENT, WikiLinkRequest, resolveWikiLink } from "@/lib/markdown/wikiLinks";
 import { useDocuments } from "./useDocuments";
 import { useFileIndex } from "./useFileIndex";
@@ -749,6 +752,21 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
   const selectFile = useCallback(
     async (path: string) => {
       try {
+        // A picture or a document is not a note to put in a tab: one is shown
+        // where it is, the other handed to whatever the system opens it with.
+        // A file already open as text stays text, however it is named.
+        if (!isDocumentOpen(path)) {
+          const opener = openerFor(path);
+          if (opener === "image") {
+            showLightbox(mediaSource(path), fileNameOf(path));
+            return;
+          }
+          if (opener === "system") {
+            await invoke("open_with_system", { path });
+            return;
+          }
+        }
+
         // Taken before anything else, so that going back to the note already
         // on screen overtakes one that is still being read.
         const mine = ++selectionRef.current;
@@ -779,7 +797,10 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
         setOpenPaths((paths) => (paths.includes(path) ? paths : [...paths, path]));
         recentRef.current = [path, ...recentRef.current.filter((p) => p !== path)];
       } catch (error) {
-        report(`Couldn't open "${fileNameOf(path)}"`, error);
+        // Not a kind that is known, and not text either. Said plainly rather
+        // than as the decoder's complaint about its bytes.
+        if (isNotText(error)) report(`"${fileNameOf(path)}" isn't text, so it can't be opened here`);
+        else report(`Couldn't open "${fileNameOf(path)}"`, error);
       }
     },
     [isDocumentOpen, openDocument, offerRecovered]
@@ -796,6 +817,13 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
   const openToSide = useCallback(
     async (path: string) => {
       try {
+        // There is no putting a picture or a PDF in the split: it opens the
+        // way it would from anywhere else.
+        if (!isDocumentOpen(path) && openerFor(path) !== "editor") {
+          await selectFile(path);
+          return;
+        }
+
         const mine = ++sideSelectionRef.current;
         if (path === currentFileRef.current) return;
 
@@ -814,7 +842,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
         report(`Couldn't open "${fileNameOf(path)}"`, error);
       }
     },
-    [isDocumentOpen, openSideDocument, offerRecovered]
+    [isDocumentOpen, openSideDocument, offerRecovered, selectFile]
   );
 
   const closeSide = useCallback(() => {

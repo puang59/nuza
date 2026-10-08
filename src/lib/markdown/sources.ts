@@ -49,6 +49,11 @@ export function resolveRelativePath(directory: string, relative: string) {
  */
 const MEDIA_PROTOCOL = "nuza-media";
 
+/** The address a file in the vault is served at, for an `<img>` or a `<video>`. */
+export function mediaSource(path: string) {
+  return convertFileSrc(path, MEDIA_PROTOCOL);
+}
+
 /** URL schemes we are willing to hand to the OS or to an `<img>` element. */
 const WEB_URL = /^https?:\/\//i;
 const DATA_IMAGE = /^data:image\/[a-z0-9.+-]+;/i;
