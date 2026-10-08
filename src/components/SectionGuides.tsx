@@ -1,8 +1,12 @@
 import { memo } from "react";
 import { Outline, headingPath } from "@/lib/markdown/headings";
 
-/** The deepest heading that gets a mark on the rail. Below that it is noise. */
+/** The deepest heading that gets a line on the rail. Below that it is noise. */
 const RAIL_DEPTH = 3;
+/** How long a line is, by how far down the levels its heading sits. */
+const LINE_WIDTHS = ["w-4", "w-3", "w-2"];
+/** How far each level is set in, in the list of names. */
+const NAME_INDENTS = ["pl-2.5", "pl-5", "pl-[1.875rem]"];
 
 interface SectionGuidesProps {
   outline: Outline;
@@ -14,11 +18,15 @@ interface SectionGuidesProps {
  * Two quiet signs of where you are in a long note, for when the outline
  * panel is not open.
  *
- * Down the left edge, a short tick for each heading - set in a little for
- * each level - with the one for the section in view brightened; a tick goes
- * to its heading. And across the top, once a section's own heading has
- * scrolled away, the name of the section you are reading and the ones it sits
- * under.
+ * At the left edge, level with the middle of the pane, a short stack of
+ * lines - one to a heading, shorter for each level down - with the one for
+ * the section in view a shade brighter. It is a picture of the note's shape,
+ * not a set of buttons: lines that size are no target to aim at. Pointing at
+ * the stack opens the same headings as a list of names, and it is a name that
+ * is clicked.
+ *
+ * And across the top, once a section's own heading has scrolled away, the
+ * name of the section you are reading and the ones it sits under.
  *
  * Neither is there for a note with fewer than two headings: there is nothing
  * to find your place among.
@@ -30,34 +38,56 @@ function SectionGuides({ outline, onJump }: SectionGuidesProps) {
   const path = headingOffscreen ? headingPath(headings, active) : [];
   const top = headings.reduce((least, heading) => Math.min(least, heading.level), 6);
   const marks = headings
-    .map((heading, index) => ({ heading, index }))
-    .filter(({ heading }) => heading.level - top < RAIL_DEPTH);
+    .map((heading, index) => ({ heading, index, depth: heading.level - top }))
+    .filter(({ depth }) => depth < RAIL_DEPTH);
+  // The section in view may be deeper than the rail goes; the line that
+  // stands for it is then the nearest one above.
+  const lit = marks.reduce((found, mark) => (mark.index <= active ? mark.index : found), -1);
 
   return (
     <>
-      {/* Hairlines rather than marks: all one colour, the level told by
-          length alone, and nothing in the accent colour - only the section in
-          view a shade brighter. Faint until the edge is pointed at. */}
       <nav
         aria-label="Sections"
-        className="group/rail absolute inset-y-0 left-0 z-10 flex w-6 flex-col justify-center gap-[5px] pl-2 opacity-40 transition-opacity duration-200 hover:opacity-100 print:hidden"
+        className="group/rail absolute left-0 top-1/2 z-20 -translate-y-1/2 py-3 pl-2.5 pr-3 print:hidden"
       >
-        {marks.map(({ heading, index }) => (
-          <button
-            key={`${heading.from}:${heading.text}`}
-            type="button"
-            title={heading.text}
-            aria-label={heading.text}
-            aria-current={index === active ? "location" : undefined}
-            // Pressed without taking the keyboard: the jump puts it in the note.
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => onJump(heading.from)}
-            style={{ width: `${10 - (heading.level - top) * 3}px` }}
-            className={`h-px cursor-pointer rounded-full transition-colors duration-150 hover:bg-zinc-200 ${
-              index === active ? "bg-zinc-300" : "bg-zinc-600"
-            }`}
-          />
-        ))}
+        {/* The picture: all one colour and one weight, so it reads as a
+            single quiet shape rather than as a row of separate marks. */}
+        <div
+          aria-hidden
+          className="flex max-h-[50vh] flex-col gap-[7px] overflow-hidden transition-opacity duration-150 group-hover/rail:opacity-0 group-focus-within/rail:opacity-0"
+        >
+          {marks.map(({ heading, index, depth }) => (
+            <span
+              key={`${heading.from}:${heading.text}`}
+              className={`h-[2px] rounded-full transition-colors duration-200 ${LINE_WIDTHS[depth]} ${
+                index === lit ? "bg-zinc-300" : "bg-zinc-700"
+              }`}
+            />
+          ))}
+        </div>
+
+        {/* The same headings, by name. Laid over the lines where they were
+            rather than beside them, so the pointer is already on it. */}
+        <div className="pointer-events-none absolute left-1.5 top-1/2 w-56 -translate-y-1/2 scale-[0.98] rounded-lg border border-zinc-800 bg-[var(--nuza-bg)] p-1 opacity-0 shadow-xl shadow-black/30 transition-[opacity,transform] duration-150 group-hover/rail:pointer-events-auto group-hover/rail:scale-100 group-hover/rail:opacity-100 group-focus-within/rail:pointer-events-auto group-focus-within/rail:scale-100 group-focus-within/rail:opacity-100 motion-reduce:transition-none">
+          <ul className="max-h-[60vh] overflow-y-auto">
+            {marks.map(({ heading, index, depth }) => (
+              <li key={`${heading.from}:${heading.text}`}>
+                <button
+                  type="button"
+                  aria-current={index === lit ? "location" : undefined}
+                  // Pressed without taking the keyboard: the jump puts it in the note.
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => onJump(heading.from)}
+                  className={`block w-full cursor-pointer truncate rounded-md py-1 pr-2.5 text-left text-xs outline-none transition-colors hover:bg-zinc-800/60 focus-visible:bg-zinc-800/60 ${NAME_INDENTS[depth]} ${
+                    index === lit ? "text-zinc-100" : "text-zinc-500 hover:text-zinc-300"
+                  }`}
+                >
+                  {heading.text}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
       </nav>
 
       {path.length > 0 && (

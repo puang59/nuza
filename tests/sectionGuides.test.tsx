@@ -32,15 +32,27 @@ describe("headingPath", () => {
 });
 
 describe("SectionGuides", () => {
-  test("marks each heading down to the third level, and the one in view", () => {
+  test("draws a line and lists a name for each heading down to the third level", () => {
     const html = renderToStaticMarkup(
       <SectionGuides outline={{ headings, active: 2, headingOffscreen: false }} onJump={noop} />
     );
+    // Five of the six: the fifth-level aside is too deep for the rail.
     expect(html.match(/<button/g)).toHaveLength(5);
-    expect(html).not.toContain('aria-label="Aside"');
-    const current = html.split("<button").filter((mark) => mark.includes('aria-current="location"'));
+    expect(html.match(/h-\[2px\]/g)).toHaveLength(5);
+    expect(html).not.toContain(">Aside<");
+    const current = html.split("<button").filter((name) => name.includes('aria-current="location"'));
     expect(current).toHaveLength(1);
-    expect(current[0]).toContain('aria-label="Install"');
+    expect(current[0]).toContain(">Install<");
+  });
+
+  // The section in view can be deeper than the rail goes.
+  test("lights the nearest heading above when the one in view is too deep to show", () => {
+    const html = renderToStaticMarkup(
+      <SectionGuides outline={{ headings, active: 5, headingOffscreen: false }} onJump={noop} />
+    );
+    const current = html.split("<button").filter((name) => name.includes('aria-current="location"'));
+    expect(current).toHaveLength(1);
+    expect(current[0]).toContain(">Usage<");
   });
 
   test("names the section only once its heading has scrolled away", () => {
