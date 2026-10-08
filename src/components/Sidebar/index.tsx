@@ -23,6 +23,8 @@ import VaultSwitcher from "./VaultSwitcher";
 import Backlinks from "./Backlinks";
 import Tags from "./Tags";
 import { useBacklinks } from "@/hooks/useBacklinks";
+import { EMPTY_OUTLINE, Outline as OutlineData } from "@/lib/markdown/headings";
+import Outline from "./Outline";
 import { useTags } from "@/hooks/useTags";
 import { Vault } from "@/lib/vaults";
 
@@ -64,6 +66,10 @@ interface SidebarProps {
   onResizeStart: (event: React.PointerEvent) => void;
   onResizeReset: () => void;
   isResizing: boolean;
+  /** The open note's headings, and which section the editor is showing. */
+  outline?: OutlineData;
+  /** Goes to the heading whose line starts at `from` in the open note. */
+  onJumpToHeading?: (from: number) => void;
   /** Whether hjkl should move around the tree as well as the arrow keys. */
   vimEnabled?: boolean;
   /** Hands the keyboard back to the editor, for Escape. */
@@ -96,6 +102,8 @@ function Sidebar({
   onResizeStart,
   onResizeReset,
   isResizing,
+  outline = EMPTY_OUTLINE,
+  onJumpToHeading,
   vimEnabled = false,
   onReturnFocus,
   ref,
@@ -109,6 +117,7 @@ function Sidebar({
   // Folded to begin with, which is also when it costs nothing: the tags are
   // only read from the vault while the panel is open.
   const [tagsOpen, setTagsOpen] = usePersistedState("tagsOpen", false);
+  const [outlineOpen, setOutlineOpen] = usePersistedState("outlineOpen", false);
   // Only for a note in the vault: the scratch note has no name to link to.
   const inVault = !!rootPath && currentFile.startsWith(rootPath);
   // Fetched folded too: the count on the heading is worth having on its own.
@@ -716,6 +725,13 @@ function Sidebar({
 
       {rootPath && (
         <div className="shrink-0 border-t border-zinc-800/70 px-1.5 py-1">
+          <Outline
+            headings={outline.headings}
+            active={outline.active}
+            isOpen={outlineOpen}
+            onToggle={() => setOutlineOpen((open) => !open)}
+            onJump={(from) => onJumpToHeading?.(from)}
+          />
           <Tags
             index={tags}
             isOpen={tagsOpen}
