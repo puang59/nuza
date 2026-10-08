@@ -35,7 +35,8 @@ import { WIKI_LINK_EVENT, WikiLinkRequest, resolveWikiLink } from "@/lib/markdow
 import { useDocuments } from "./useDocuments";
 import { useFileIndex } from "./useFileIndex";
 
-const UNTITLED_FILE = "untitled.md";
+/** The scratch note: the one document with no file behind it. */
+export const UNTITLED_FILE = "untitled.md";
 
 /** Announced by the backend when a note changes underneath the app. */
 const FILE_CHANGED_EVENT = "file-changed";
