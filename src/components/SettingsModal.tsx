@@ -28,6 +28,8 @@ interface SettingsModalProps {
   setShowLineNumbers: (enabled: boolean) => void;
   typewriterScrolling: boolean;
   setTypewriterScrolling: (enabled: boolean) => void;
+  sectionGuides: boolean;
+  setSectionGuides: (enabled: boolean) => void;
   appearance: Appearance;
   setAppearance: (change: Partial<Appearance>) => void;
   resetAppearance: () => void;
@@ -63,6 +65,8 @@ export default function SettingsModal({
   setShowLineNumbers,
   typewriterScrolling,
   setTypewriterScrolling,
+  sectionGuides,
+  setSectionGuides,
   appearance,
   setAppearance,
   resetAppearance,
@@ -157,6 +161,8 @@ export default function SettingsModal({
                 setShowLineNumbers={setShowLineNumbers}
                 typewriterScrolling={typewriterScrolling}
                 setTypewriterScrolling={setTypewriterScrolling}
+                sectionGuides={sectionGuides}
+                setSectionGuides={setSectionGuides}
               />
             )}
 

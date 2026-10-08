@@ -9,6 +9,8 @@ interface GeneralSettingsProps {
   setShowLineNumbers: (enabled: boolean) => void;
   typewriterScrolling: boolean;
   setTypewriterScrolling: (enabled: boolean) => void;
+  sectionGuides: boolean;
+  setSectionGuides: (enabled: boolean) => void;
 }
 
 export default function GeneralSettings({
@@ -18,6 +20,8 @@ export default function GeneralSettings({
   setShowLineNumbers,
   typewriterScrolling,
   setTypewriterScrolling,
+  sectionGuides,
+  setSectionGuides,
 }: GeneralSettingsProps) {
   return (
     <div className="divide-y divide-zinc-800">
@@ -32,6 +36,12 @@ export default function GeneralSettings({
         description="Keep the line you are writing in the middle of the window"
       >
         <Switch checked={typewriterScrolling} onCheckedChange={setTypewriterScrolling} />
+      </SettingRow>
+      <SettingRow
+        title="Section Guides"
+        description="Marks for a note's headings down the edge, and the current section's name at the top"
+      >
+        <Switch checked={sectionGuides} onCheckedChange={setSectionGuides} />
       </SettingRow>
       <CommandLineSetting />
     </div>
