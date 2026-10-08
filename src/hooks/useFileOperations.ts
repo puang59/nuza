@@ -29,6 +29,7 @@ import { showLightbox } from "@/lib/markdown/lightbox";
 import { mediaSource } from "@/lib/markdown/sources";
 import { isNotText, openerFor } from "@/lib/openers";
 import { untitledName } from "@/lib/noteName";
+import { EMPTY_TRAIL, Trail, forgetPlaces, leave, renamePlaces, step } from "@/lib/navigation";
 import { directoryOf } from "@/lib/markdown/sources";
 import { WIKI_LINK_EVENT, WikiLinkRequest, resolveWikiLink } from "@/lib/markdown/wikiLinks";
 import { useDocuments } from "./useDocuments";
@@ -294,6 +295,24 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
    */
   const sessionVault = useRef<string | null>(null);
   const sessionReady = useRef(false);
+  /** The places left behind on the way here, and the ones gone back from. */
+  const trail = useRef<Trail>(EMPTY_TRAIL);
+  /** Set while going back or forward, so that move does not itself count as a place left. */
+  const retracing = useRef(false);
+
+  /**
+   * Notes that where the caret is now is about to be left - before following
+   * a link, opening a search hit or switching notes - so it can be come back
+   * to. The scratch note is not noted: it has no file to come back to once
+   * its tab has gone.
+   */
+  const leavePlace = useCallback(() => {
+    if (retracing.current) return;
+    const path = currentFileRef.current;
+    if (path === UNTITLED_FILE) return;
+    trail.current = leave(trail.current, { path, caret: caretOf(path) ?? 0 });
+  }, [caretOf]);
+
   /** Counts the restores started, so one overtaken by the next can tell. */
   const restoring = useRef(0);
   /**
@@ -384,6 +403,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
       // nor are the places its notes were left at.
       closedRef.current = [];
       savedCarets.current = {};
+      trail.current = EMPTY_TRAIL;
 
       sessionVault.current = folder.path;
       sessionReady.current = false;
@@ -785,6 +805,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
         // asking for any more.
         if (mine !== selectionRef.current) return;
 
+        leavePlace();
         openDocument(path, content, firstRead ? savedCarets.current[path] : undefined);
         // A note the split was showing has moved across to this pane.
         setSideFile((side) => (side === path ? null : side));
@@ -805,7 +826,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
         else report(`Couldn't open "${fileNameOf(path)}"`, error);
       }
     },
-    [isDocumentOpen, openDocument, offerRecovered]
+    [isDocumentOpen, openDocument, offerRecovered, leavePlace]
   );
 
   const sideSelectionRef = useRef(0);
@@ -919,6 +940,9 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
    */
   const openAt = useCallback(
     async (path: string, line: number, column: number) => {
+      // A hit further down the note already open is a place left as well;
+      // one in another note is noted by the switch itself.
+      if (path === currentFileRef.current) leavePlace();
       await selectFile(path);
       const view = editorView;
       if (!view || showingDocument() !== path) return;
@@ -930,7 +954,53 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
       view.dispatch({ selection: { anchor }, effects: EditorView.scrollIntoView(anchor, { y: "center" }) });
       view.focus();
     },
-    [selectFile, editorView, showingDocument]
+    [selectFile, editorView, showingDocument, leavePlace]
+  );
+
+  /**
+   * Goes back to the place left most recently, or forward again to the one
+   * gone back from: the note reopened if its tab has been closed, and the
+   * caret put where it was, in the middle of the pane. A place whose note
+   * can no longer be opened is passed over for the one before it.
+   */
+  const retrace = useCallback(
+    async (direction: "back" | "forward") => {
+      if (retracing.current) return;
+      retracing.current = true;
+      try {
+        for (;;) {
+          const here = currentFileRef.current;
+          const from = { path: showingDocument(), caret: caretOf(showingDocument()) ?? 0 };
+          const moved = step(trail.current, from, direction);
+          if (!moved) return;
+
+          // The scratch note is never a place to come back to, so it is not
+          // left on the other stack either.
+          trail.current =
+            here === UNTITLED_FILE
+              ? direction === "back"
+                ? { ...moved.trail, forward: moved.trail.forward.slice(0, -1) }
+                : { ...moved.trail, back: moved.trail.back.slice(0, -1) }
+              : moved.trail;
+
+          const { path, caret } = moved.to;
+          if (showingDocument() !== path) await selectFile(path);
+          const view = editorView;
+          if (!view || showingDocument() !== path) continue;
+
+          const anchor = Math.min(caret, view.state.doc.length);
+          view.dispatch({
+            selection: { anchor },
+            effects: EditorView.scrollIntoView(anchor, { y: "center" }),
+          });
+          view.focus();
+          return;
+        }
+      } finally {
+        retracing.current = false;
+      }
+    },
+    [selectFile, editorView, showingDocument, caretOf]
   );
 
   /**
@@ -1113,6 +1183,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
       setOpenPaths((paths) => paths.map(rename));
       recentRef.current = recentRef.current.map(rename);
       closedRef.current = closedRef.current.map((tab) => ({ ...tab, path: rename(tab.path) }));
+      trail.current = renamePlaces(trail.current, rename);
       savedCarets.current = Object.fromEntries(
         Object.entries(savedCarets.current).map(([kept, caret]) => [rename(kept), caret])
       );
@@ -1208,6 +1279,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
       // not always the one in the main pane. It needs no vault to work.
       if (!target) {
         const view = origin ?? editorView;
+        if (view === editorView) leavePlace();
         if (heading && view && !jumpToHeading(view, heading)) {
           report(`There's no heading "${heading}" in this note`);
         }
@@ -1257,7 +1329,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
 
     window.addEventListener(WIKI_LINK_EVENT, follow);
     return () => window.removeEventListener(WIKI_LINK_EVENT, follow);
-  }, [selectFile, createFile, showingDocument, editorView]);
+  }, [selectFile, createFile, showingDocument, editorView, leavePlace]);
 
   /**
    * Opens what `nuza <path>` asked for: a folder as the vault, or a note in
@@ -1337,6 +1409,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
       const remaining = openPathsRef.current.filter((p) => !isWithin(p, path));
       recentRef.current = recentRef.current.filter((p) => !isWithin(p, path));
       closedRef.current = closedRef.current.filter((tab) => !isWithin(tab.path, path));
+      trail.current = forgetPlaces(trail.current, (place) => isWithin(place, path));
 
       if (remaining.length === 0) {
         resetToScratch();
@@ -1383,6 +1456,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
     flush,
     selectFile,
     openAt,
+    retrace,
     reopenClosedTab,
     reorderTabs,
     closeFile,

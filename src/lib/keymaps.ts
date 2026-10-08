@@ -35,7 +35,9 @@ export type KeymapAction =
   | "heading-4"
   | "heading-5"
   | "heading-6"
-  | "heading-none";
+  | "heading-none"
+  | "go-back"
+  | "go-forward";
 
 export interface KeymapDefinition {
   id: KeymapAction;
@@ -274,6 +276,18 @@ export const KEYMAP_ACTIONS: KeymapDefinition[] = [
     label: "Plain Text",
     description: "Take the heading off the line",
     defaultBinding: "mod+alt+0",
+  },
+  {
+    id: "go-back",
+    label: "Go Back",
+    description: "Return to the place you were before the last jump",
+    defaultBinding: "mod+[",
+  },
+  {
+    id: "go-forward",
+    label: "Go Forward",
+    description: "Return to the place you went back from",
+    defaultBinding: "mod+]",
   },
 ];
 

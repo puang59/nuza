@@ -40,6 +40,7 @@ import { revealLabel } from "./lib/platform";
 import { tabsToClose } from "./lib/tabLabels";
 import { directoryOf } from "./lib/markdown";
 import { noteLineNumbers } from "./lib/markdown/lineGutter";
+import { typewriterScrolling } from "./lib/markdown/scrolling";
 import {
   insertLink,
   setHeading,
@@ -77,6 +78,7 @@ function App() {
   // taking app should assume about whoever just opened it.
   const [vimEnabled, setVimEnabled] = usePersistedState("vimEnabled", false);
   const [showLineNumbers, setShowLineNumbers] = usePersistedState("showLineNumbers", false);
+  const [typewriter, setTypewriter] = usePersistedState("typewriterScrolling", false);
   const [compactMode, setCompactMode] = usePersistedState("compactMode", false);
   const [autoUpdateEnabled, setAutoUpdateEnabled] = usePersistedState("autoUpdateEnabled", true);
   const [editorFont, setEditorFont] = usePersistedState("editorFont", DEFAULT_EDITOR_FONT);
@@ -130,8 +132,9 @@ function App() {
       ...(vimExtension ? [vimExtension] : []),
       editorFontTheme,
       ...(showLineNumbers ? [noteLineNumbers] : []),
+      ...(typewriter ? [typewriterScrolling] : []),
     ],
-    [vimExtension, editorFontTheme, showLineNumbers]
+    [vimExtension, editorFontTheme, showLineNumbers, typewriter]
   );
 
   const {
@@ -165,6 +168,7 @@ function App() {
     flush,
     selectFile,
     openAt,
+    retrace,
     closeFile,
     closeFiles,
     reopenClosedTab,
@@ -533,6 +537,8 @@ function App() {
       "recent-tab": switchToRecent,
       "close-tab": closeCurrentTab,
       "reopen-closed-tab": () => void reopenClosedTab(),
+      "go-back": () => void retrace("back"),
+      "go-forward": () => void retrace("forward"),
       "new-note": () => void createNote(),
       "reset-font-size": () => setEditorFontSize(DEFAULT_EDITOR_FONT_SIZE),
       "toggle-inline-code": () => format(toggleInlineCode),
@@ -570,10 +576,24 @@ function App() {
       printNote,
       moveByHeading,
       createNote,
+      retrace,
     ]
   );
 
   useKeymapListener(keymapBindings, keymapHandlers);
+
+  // The two extra buttons on the side of a mouse, which go back and forward
+  // everywhere else they are found.
+  useEffect(() => {
+    function onMouseUp(event: MouseEvent) {
+      if (event.button !== 3 && event.button !== 4) return;
+      event.preventDefault();
+      void retrace(event.button === 3 ? "back" : "forward");
+    }
+
+    window.addEventListener("mouseup", onMouseUp);
+    return () => window.removeEventListener("mouseup", onMouseUp);
+  }, [retrace]);
   useCloseTabMenu(keymapBindings["close-tab"], closeCurrentTab);
   useSaveOnExit(flush);
 
@@ -840,6 +860,8 @@ function App() {
         setVimEnabled={setVimEnabled}
         showLineNumbers={showLineNumbers}
         setShowLineNumbers={setShowLineNumbers}
+        typewriterScrolling={typewriter}
+        setTypewriterScrolling={setTypewriter}
         appearance={appearance}
         setAppearance={setAppearance}
         resetAppearance={resetAppearance}

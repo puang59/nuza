@@ -17,6 +17,7 @@ import { liveMarkdownPreview } from "./livePreview";
 import { MathSyntax } from "./math";
 import { findInNote } from "./searchPanel";
 import { scrollbarOnDemand } from "./scrollbar";
+import { scrollMargin } from "./scrolling";
 import { noteDirectory } from "./sources";
 import { headingFlash, jumpToHeading, outlineReporter } from "./headings";
 import { Tag } from "./tags";
@@ -112,6 +113,7 @@ export const liveMarkdown: Extension = [
   outlineReporter,
   findInNote,
   scrollbarOnDemand,
+  scrollMargin,
   listIndent,
   openLinkOnModClick,
   attachments,
