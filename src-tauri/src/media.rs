@@ -53,6 +53,25 @@ pub(crate) fn media_body(
     length: u64,
     range: Option<&str>,
 ) -> std::io::Result<(Vec<u8>, Option<String>, u16)> {
+    media_body_in_chunks(file, length, range, MEDIA_CHUNK)
+}
+
+/// The most of a file one ranged answer carries. A player asks for a video
+/// "from here to the end" and is content with less - it comes back for the
+/// next part - where taking it at its word meant holding the rest of the file
+/// in memory for every request, and again for every seek.
+pub(crate) const MEDIA_CHUNK: u64 = 1024 * 1024;
+
+/// `media_body`, with how much one ranged answer may carry said outright.
+///
+/// A request with no range still gets the whole file: that is an `<img>`,
+/// which has no use for part of a picture.
+pub(crate) fn media_body_in_chunks(
+    file: &mut fs::File,
+    length: u64,
+    range: Option<&str>,
+    chunk: u64,
+) -> std::io::Result<(Vec<u8>, Option<String>, u16)> {
     use std::io::{Read, Seek};
 
     let Some(range) = range.and_then(|value| {
@@ -65,10 +84,11 @@ pub(crate) fn media_body(
         return Ok((bytes, None, 200));
     };
 
-    let last = range.start + range.length - 1;
+    let carried = range.length.min(chunk.max(1));
+    let last = range.start + carried - 1;
     file.seek(std::io::SeekFrom::Start(range.start))?;
 
-    let mut bytes = vec![0; range.length as usize];
+    let mut bytes = vec![0; carried as usize];
     file.read_exact(&mut bytes)?;
 
     Ok((

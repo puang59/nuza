@@ -21,7 +21,14 @@ export function useKeymaps() {
   latest.current = overrides;
 
   useEffect(() => {
-    localStorage.setItem(KEYMAP_STORAGE_KEY, JSON.stringify(overrides));
+    // Storage that is full or switched off throws, and a throw in an effect
+    // takes the whole window down with it. The bindings still hold for as
+    // long as the app is open; they are only not there next time.
+    try {
+      localStorage.setItem(KEYMAP_STORAGE_KEY, JSON.stringify(overrides));
+    } catch (error) {
+      console.error("Failed to keep the keyboard shortcuts:", error);
+    }
   }, [overrides]);
 
   // A binding changed in another window applies here too.
