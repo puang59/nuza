@@ -156,7 +156,13 @@ describe("list toggles", () => {
   test("swap one kind of list for another instead of stacking markers", () => {
     expect(run(toggleNumberedList, "[- one\n- two]")).toBe("[1. one\n2. two]");
     expect(run(toggleTaskList, "1. on|e")).toBe("- [ ] on|e");
-    expect(run(toggleBulletList, "- [x] do|ne")).toBe("- do|ne");
+
+    // A task's brackets are also how `run` marks a selection, so this one is
+    // set up by hand.
+    let state = EditorState.create({ doc: "- [x] done", selection: EditorSelection.cursor(8) });
+    toggleBulletList({ state, dispatch: (transaction) => (state = transaction.state) });
+    expect(state.doc.toString()).toBe("- done");
+    expect(state.selection.main.head).toBe(4);
   });
 
   test("keep a nested line's indentation", () => {
