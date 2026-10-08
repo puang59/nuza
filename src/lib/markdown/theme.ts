@@ -479,6 +479,8 @@ const editorTheme = EditorView.theme(
       display: "inline-block",
       maxWidth: "100%",
       verticalAlign: "top",
+      // For the resize handle, which sits in its corner.
+      position: "relative",
     },
     ".cm-md-image img": {
       maxWidth: "100%",
@@ -489,6 +491,27 @@ const editorTheme = EditorView.theme(
       transition: "opacity 220ms ease",
     },
     ".cm-md-image-loaded img": { opacity: "1" },
+    /* The corner a picture is resized by: there when the picture is pointed
+       at, and for as long as it is being dragged. */
+    ".cm-md-image-handle": {
+      position: "absolute",
+      right: "4px",
+      bottom: "4px",
+      width: "14px",
+      height: "14px",
+      borderRadius: "4px",
+      backgroundColor: "var(--nuza-bg)",
+      boxShadow: `0 0 0 1px ${ink.hairline}`,
+      backgroundImage: `linear-gradient(135deg, transparent 0 45%, ${ink.muted} 45% 55%, transparent 55% 70%, ${ink.muted} 70% 80%, transparent 80%)`,
+      cursor: "nwse-resize",
+      opacity: "0",
+      transition: "opacity 120ms ease",
+    },
+    ".cm-md-image:hover .cm-md-image-handle, .cm-md-image-resizing .cm-md-image-handle": { opacity: "0.9" },
+    ".cm-md-image-broken .cm-md-image-handle": { display: "none" },
+    /* Nothing under the pointer is selected or dragged off while a picture
+       is being sized. */
+    ".cm-md-image-resizing img": { pointerEvents: "none", userSelect: "none" },
 
     /* The small picture after a link to an image: a line tall and a bit more,
        set on the text's own baseline so it does not push the line apart. */

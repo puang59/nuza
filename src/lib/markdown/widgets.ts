@@ -4,6 +4,7 @@ import type { SyntaxNode } from "@lezer/common";
 import { areaField, refresh, textField } from "./fields";
 import { Property, frontmatterRange, readFrontmatter } from "./frontmatter";
 import { DEFAULT_EDITOR_FONT_SIZE } from "../fonts";
+import { clampImageWidth, withImageWidth } from "./imageSize";
 import { renderHtml } from "./sanitize";
 import { showLightbox } from "./lightbox";
 import { safeExternalHref } from "./sources";
@@ -303,7 +304,7 @@ export class ImageWidget extends WidgetType {
     return other.src === this.src && other.alt === this.alt && other.width === this.width;
   }
 
-  toDOM() {
+  toDOM(view: EditorView) {
     const wrapper = document.createElement("span");
     wrapper.className = "cm-md-image";
 
@@ -335,8 +336,82 @@ export class ImageWidget extends WidgetType {
     });
 
     wrapper.appendChild(image);
+    wrapper.appendChild(this.resizeHandle(view, wrapper, image));
     if (image.complete) reveal();
     return wrapper;
+  }
+
+  /**
+   * The corner a picture is resized by. Dragging it sizes the picture as it
+   * goes, and letting go writes the width into the note - after a bar in the
+   * alt text or the embed, which is where other tools look for it. A double
+   * click takes the width off again.
+   */
+  private resizeHandle(view: EditorView, wrapper: HTMLElement, image: HTMLImageElement) {
+    const handle = document.createElement("span");
+    handle.className = "cm-md-image-handle";
+    handle.title = "Drag to resize, double-click to reset";
+    handle.setAttribute("aria-hidden", "true");
+
+    /** Rewrites the source behind this picture to carry `width`, or none. */
+    const write = (width: number | null) => {
+      const at = view.posAtDOM(wrapper);
+      let node: SyntaxNode | null = syntaxTree(view.state).resolveInner(at, 1);
+      while (node && node.name !== "Image" && node.name !== "WikiEmbed") node = node.parent;
+      if (!node) return;
+
+      const source = view.state.sliceDoc(node.from, node.to);
+      const insert = withImageWidth(source, width);
+      if (insert === null || insert === source) return;
+      view.dispatch({ changes: { from: node.from, to: node.to, insert }, userEvent: "input.resize" });
+    };
+
+    handle.addEventListener("pointerdown", (down) => {
+      if (down.button !== 0) return;
+      // The drag is the handle's: it must not put the caret in the line, which
+      // would swap the picture for its markdown under the pointer.
+      down.preventDefault();
+      down.stopPropagation();
+      handle.setPointerCapture(down.pointerId);
+      wrapper.classList.add("cm-md-image-resizing");
+
+      const startX = down.clientX;
+      const startWidth = image.getBoundingClientRect().width;
+      let width = startWidth;
+
+      const move = (event: PointerEvent) => {
+        width = clampImageWidth(startWidth + (event.clientX - startX));
+        image.style.width = `${width}px`;
+      };
+      const finish = (event: PointerEvent) => {
+        handle.releasePointerCapture(event.pointerId);
+        handle.removeEventListener("pointermove", move);
+        handle.removeEventListener("pointerup", finish);
+        handle.removeEventListener("pointercancel", finish);
+        wrapper.classList.remove("cm-md-image-resizing");
+        // Held to the column by the stylesheet, so what is written is the
+        // width it was actually drawn at.
+        const drawn = Math.round(image.getBoundingClientRect().width);
+        if (Math.abs(drawn - startWidth) >= 1) write(drawn);
+      };
+
+      handle.addEventListener("pointermove", move);
+      handle.addEventListener("pointerup", finish);
+      handle.addEventListener("pointercancel", finish);
+    });
+
+    // Kept from the editor, like the press that starts a drag.
+    handle.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    handle.addEventListener("dblclick", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      write(null);
+    });
+
+    return handle;
   }
 }
 

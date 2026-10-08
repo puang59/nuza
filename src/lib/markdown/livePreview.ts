@@ -14,6 +14,7 @@ import {
 } from "./sources";
 import { isImagePath } from "../media";
 import { refreshEmbeds, vaultFiles } from "./embedIndex";
+import { readAltSize } from "./imageSize";
 import { readEmbed, readWikiLink, resolveEmbed } from "./wikiLinks";
 import {
   BulletWidget,
@@ -567,9 +568,11 @@ function decorateNode(node: SyntaxNodeRef, build: Build): boolean | undefined {
     const urlNode = findChild(node.node, "URL");
     const source = urlNode && resolveImageSource(doc.sliceString(urlNode.from, urlNode.to), directory);
     if (!source) return;
+    // `![a dog|300](dog.png)`: the width rides on the end of the alt text.
+    const sized = readAltSize(imageAltText(doc, node.node));
     out.push(
       Decoration.replace({
-        widget: new ImageWidget(source, imageAltText(doc, node.node)),
+        widget: new ImageWidget(source, sized.alt, sized.width),
       }).range(from, to)
     );
     return false;
