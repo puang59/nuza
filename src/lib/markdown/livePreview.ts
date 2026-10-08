@@ -15,6 +15,7 @@ import {
 import { isImagePath } from "../media";
 import { refreshEmbeds, vaultFiles } from "./embedIndex";
 import { readAltSize } from "./imageSize";
+import { SCROLLING_CODE_LINE } from "./codeScroll";
 import { readEmbed, readWikiLink, resolveEmbed } from "./wikiLinks";
 import {
   BulletWidget,
@@ -579,8 +580,11 @@ function decorateNode(node: SyntaxNodeRef, build: Build): boolean | undefined {
   }
 
   if (name === "FencedCode" || name === "CodeBlock") {
+    // At the top level of the note a block scrolls sideways (codeScroll.ts);
+    // inside a list or a quote its lines are already set in, and wrap.
+    const scrolls = !hasAncestor(node.node, "Blockquote", "ListItem");
     eachLine(doc, from, to, (lineStart, isFirst, isLast) => {
-      const classes = ["cm-md-code-line"];
+      const classes = scrolls ? ["cm-md-code-line", SCROLLING_CODE_LINE] : ["cm-md-code-line"];
       if (isFirst) classes.push("cm-md-code-first");
       if (isLast) classes.push("cm-md-code-last");
       out.push(Decoration.line({ class: classes.join(" ") }).range(lineStart));
