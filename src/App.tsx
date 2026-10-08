@@ -32,6 +32,11 @@ import { addFrontmatter, addProperty, canAddFrontmatter } from "./lib/markdown/a
 import { OpenTarget } from "./lib/launchTarget";
 import { wikiLinkText, wikiTargetFor } from "./lib/markdown/wikiLinks";
 import { copyText } from "./lib/clipboard";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { relativePath } from "./lib/media";
+import { isWithin } from "./lib/path";
+import { revealLabel } from "./lib/platform";
+import { tabsToClose } from "./lib/tabLabels";
 import { directoryOf } from "./lib/markdown";
 import { noteLineNumbers } from "./lib/markdown/lineGutter";
 import {
@@ -160,6 +165,7 @@ function App() {
     selectFile,
     openAt,
     closeFile,
+    closeFiles,
     reopenClosedTab,
     reorderTabs,
     cycleFile,
@@ -365,6 +371,45 @@ function App() {
       view.focus();
     },
     [linkView, editorView, sideView, sideFile, rootPath, fileIndex.notes, currentFile]
+  );
+
+  /** Where a tab's own menu is open, and for which tab. */
+  const [tabMenu, setTabMenu] = useState<{ x: number; y: number; path: string } | null>(null);
+  const openTabMenu = useCallback((path: string, x: number, y: number) => setTabMenu({ x, y, path }), []);
+  const closeTabMenu = useCallback(() => setTabMenu(null), []);
+
+  const tabMenuItems = useCallback(
+    (path: string) => {
+      // The scratch note has no file: nothing to show in a folder, no path to copy.
+      const isFile = !!rootPath && isWithin(path, rootPath);
+      const copy = (text: string) =>
+        void copyText(text).catch((error) => report("Couldn't copy that", error));
+      const others = tabsToClose(openPaths, path, "others");
+      const toTheRight = tabsToClose(openPaths, path, "right");
+
+      return [
+        { label: "Close", onClick: () => closeFile(path) },
+        ...(others.length ? [{ label: "Close Others", onClick: () => closeFiles(others) }] : []),
+        ...(toTheRight.length
+          ? [{ label: "Close to the Right", onClick: () => closeFiles(toTheRight) }]
+          : []),
+        ...(isFile
+          ? [
+              ...(path !== currentFile
+                ? [{ label: "Open to the Side", onClick: () => void openToSide(path) }]
+                : []),
+              {
+                label: revealLabel(),
+                onClick: () =>
+                  void revealItemInDir(path).catch((error) => report("Couldn't show that file", error)),
+              },
+              { label: "Copy Path", onClick: () => copy(path) },
+              { label: "Copy Relative Path", onClick: () => copy(relativePath(rootPath ?? "", path)) },
+            ]
+          : []),
+      ];
+    },
+    [rootPath, openPaths, currentFile, closeFile, closeFiles, openToSide]
   );
 
   const editorMenuItems = useCallback(
@@ -585,6 +630,7 @@ function App() {
           onSelectTab={selectFile}
           onCloseTab={closeFile}
           onReorderTabs={reorderTabs}
+          onTabMenu={openTabMenu}
           onCheckUpdates={checkForUpdates}
           onInstallUpdate={installUpdate}
           onOpenSettings={openSettings}
@@ -648,6 +694,15 @@ function App() {
               onKeepMine={() => void keepMine(sideFile)}
               onRestore={() => void restoreRecovered(sideFile)}
               onDiscard={() => discardRecovered(sideFile)}
+            />
+          )}
+
+          {tabMenu && (
+            <ContextMenu
+              x={tabMenu.x}
+              y={tabMenu.y}
+              items={tabMenuItems(tabMenu.path)}
+              onClose={closeTabMenu}
             />
           )}
 

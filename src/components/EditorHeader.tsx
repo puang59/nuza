@@ -15,6 +15,7 @@ interface EditorHeaderProps {
   onSelectTab: (path: string) => void;
   onCloseTab: (path: string) => void;
   onReorderTabs: (path: string, before: number) => void;
+  onTabMenu: (path: string, x: number, y: number) => void;
   onCheckUpdates: () => void;
   onInstallUpdate: () => void;
   onOpenSettings: () => void;
@@ -132,6 +133,7 @@ function EditorHeader({
   onSelectTab,
   onCloseTab,
   onReorderTabs,
+  onTabMenu,
   onCheckUpdates,
   onInstallUpdate,
   onOpenSettings,
@@ -154,6 +156,7 @@ function EditorHeader({
         onSelect={onSelectTab}
         onClose={onCloseTab}
         onReorder={onReorderTabs}
+        onMenu={onTabMenu}
       />
 
       <div className="ml-auto flex shrink-0 items-center gap-3">
