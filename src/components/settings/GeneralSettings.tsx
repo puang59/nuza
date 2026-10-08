@@ -7,6 +7,8 @@ interface GeneralSettingsProps {
   setVimEnabled: (enabled: boolean) => void;
   showLineNumbers: boolean;
   setShowLineNumbers: (enabled: boolean) => void;
+  typewriterScrolling: boolean;
+  setTypewriterScrolling: (enabled: boolean) => void;
 }
 
 export default function GeneralSettings({
@@ -14,6 +16,8 @@ export default function GeneralSettings({
   setVimEnabled,
   showLineNumbers,
   setShowLineNumbers,
+  typewriterScrolling,
+  setTypewriterScrolling,
 }: GeneralSettingsProps) {
   return (
     <div className="divide-y divide-zinc-800">
@@ -22,6 +26,12 @@ export default function GeneralSettings({
       </SettingRow>
       <SettingRow title="Line Numbers" description="Show line numbers in the editor gutter">
         <Switch checked={showLineNumbers} onCheckedChange={setShowLineNumbers} />
+      </SettingRow>
+      <SettingRow
+        title="Typewriter Scrolling"
+        description="Keep the line you are writing in the middle of the window"
+      >
+        <Switch checked={typewriterScrolling} onCheckedChange={setTypewriterScrolling} />
       </SettingRow>
       <CommandLineSetting />
     </div>

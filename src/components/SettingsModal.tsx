@@ -26,6 +26,8 @@ interface SettingsModalProps {
   setVimEnabled: (enabled: boolean) => void;
   showLineNumbers: boolean;
   setShowLineNumbers: (enabled: boolean) => void;
+  typewriterScrolling: boolean;
+  setTypewriterScrolling: (enabled: boolean) => void;
   appearance: Appearance;
   setAppearance: (change: Partial<Appearance>) => void;
   resetAppearance: () => void;
@@ -59,6 +61,8 @@ export default function SettingsModal({
   setVimEnabled,
   showLineNumbers,
   setShowLineNumbers,
+  typewriterScrolling,
+  setTypewriterScrolling,
   appearance,
   setAppearance,
   resetAppearance,
@@ -151,6 +155,8 @@ export default function SettingsModal({
                 setVimEnabled={setVimEnabled}
                 showLineNumbers={showLineNumbers}
                 setShowLineNumbers={setShowLineNumbers}
+                typewriterScrolling={typewriterScrolling}
+                setTypewriterScrolling={setTypewriterScrolling}
               />
             )}
 
