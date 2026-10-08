@@ -237,7 +237,8 @@ export const outlineReporter = ViewPlugin.fromClass(
       if (update.docChanged) {
         if (this.timer) clearTimeout(this.timer);
         this.timer = setTimeout(() => this.read(), OUTLINE_DELAY);
-      } else if (update.geometryChanged) {
+      } else if (update.geometryChanged || update.selectionSet) {
+        // The caret moving to another section moves the mark with it.
         this.onScroll();
       }
     }
@@ -252,11 +253,23 @@ export const outlineReporter = ViewPlugin.fromClass(
 
     private sectionInView() {
       if (this.headings.length === 0) return -1;
-      const { scrollDOM, documentTop } = this.view;
-      // A little way into the pane, so a heading at its very top counts as
-      // the section being read rather than the one just left.
-      const height = scrollDOM.getBoundingClientRect().top - documentTop + 64;
-      return sectionAt(this.headings, this.view.lineBlockAtHeight(height).from);
+      const { scrollDOM, documentTop, state } = this.view;
+      const top = scrollDOM.getBoundingClientRect().top - documentTop;
+
+      // Where the caret is, while the caret is on screen: that is the section
+      // being worked in. Going by the top of the pane alone, a note short
+      // enough to fit in the window was always "in" its first section,
+      // however far down it the writing was.
+      const head = Math.min(state.selection.main.head, state.doc.length);
+      const caret = this.view.lineBlockAt(head);
+      if (caret.bottom > top && caret.top < top + scrollDOM.clientHeight) {
+        return sectionAt(this.headings, head);
+      }
+
+      // Scrolled away from the caret, it is the section being read: the one
+      // a little way into the pane, so a heading at its very top counts as
+      // that section rather than the one just left.
+      return sectionAt(this.headings, this.view.lineBlockAtHeight(top + 64).from);
     }
 
     /** Whether the heading at `index` is wholly above the top of the pane. */
