@@ -62,7 +62,8 @@ const focusTheme = EditorView.theme({
   /* Every block of the note, the drawn ones included - a table or a picture
      is as much "the rest of the note" as a line of text is. */
   ".cm-content > *": {
-    opacity: "0.32",
+    // Low, but not so low that it cannot be read against a black page.
+    opacity: "0.4",
     transition: "opacity 220ms ease",
   },
   ".cm-content > .cm-zen-here": { opacity: "1" },

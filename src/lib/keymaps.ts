@@ -294,7 +294,7 @@ export const KEYMAP_ACTIONS: KeymapDefinition[] = [
     id: "toggle-zen-mode",
     label: "Zen Mode",
     description: "Hide everything but the note, and dim all but the paragraph you are in",
-    defaultBinding: "mod+alt+z",
+    defaultBinding: "mod+.",
   },
 ];
 
