@@ -35,9 +35,12 @@ function SectionGuides({ outline, onJump }: SectionGuidesProps) {
 
   return (
     <>
+      {/* Hairlines rather than marks: all one colour, the level told by
+          length alone, and nothing in the accent colour - only the section in
+          view a shade brighter. Faint until the edge is pointed at. */}
       <nav
         aria-label="Sections"
-        className="group/rail absolute inset-y-0 left-0 z-10 flex w-5 flex-col justify-center gap-1.5 pl-1.5 print:hidden"
+        className="group/rail absolute inset-y-0 left-0 z-10 flex w-6 flex-col justify-center gap-[5px] pl-2 opacity-40 transition-opacity duration-200 hover:opacity-100 print:hidden"
       >
         {marks.map(({ heading, index }) => (
           <button
@@ -49,11 +52,9 @@ function SectionGuides({ outline, onJump }: SectionGuidesProps) {
             // Pressed without taking the keyboard: the jump puts it in the note.
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => onJump(heading.from)}
-            style={{ marginLeft: `${(heading.level - top) * 3}px` }}
-            className={`h-[3px] w-2 cursor-pointer rounded-full transition-[background-color,width,opacity] duration-150 hover:w-3 hover:bg-[var(--nuza-accent)] hover:opacity-100 ${
-              index === active
-                ? "bg-[var(--nuza-accent)] opacity-90"
-                : "bg-zinc-500 opacity-25 group-hover/rail:opacity-60"
+            style={{ width: `${10 - (heading.level - top) * 3}px` }}
+            className={`h-px cursor-pointer rounded-full transition-colors duration-150 hover:bg-zinc-200 ${
+              index === active ? "bg-zinc-300" : "bg-zinc-600"
             }`}
           />
         ))}
@@ -66,12 +67,12 @@ function SectionGuides({ outline, onJump }: SectionGuidesProps) {
             title="Back to this section's heading"
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => onJump(path[path.length - 1].from)}
-            className="pointer-events-auto max-w-full cursor-pointer truncate rounded-md border border-zinc-800/80 bg-[var(--nuza-bg)] px-2.5 py-0.5 text-[11px] text-zinc-500 shadow-sm transition-colors hover:text-zinc-200"
+            className="pointer-events-auto max-w-full cursor-pointer truncate rounded-md bg-[var(--nuza-bg)] px-2 py-0.5 text-[11px] text-zinc-600 transition-colors hover:text-zinc-300"
           >
             {path.map((heading, index) => (
               <span key={heading.from}>
                 {index > 0 && <span className="mx-1.5 opacity-50">›</span>}
-                <span className={index === path.length - 1 ? "text-zinc-300" : undefined}>
+                <span className={index === path.length - 1 ? "text-zinc-400" : undefined}>
                   {heading.text}
                 </span>
               </span>
