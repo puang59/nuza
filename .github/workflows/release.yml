@@ -6,7 +6,38 @@ on:
       - release
 
 jobs:
+  create-release:
+    # Every leg of the build matrix used to create the release itself if it
+    # found none. Two of them once looked in the same second, both found none,
+    # and made a release each for the same tag: the Intel Mac build landed on
+    # the one nothing reads, and publish-updater stopped for want of its
+    # signature. The release is made once here, and the builds are told which.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      release_id: ${{ steps.release.outputs.id }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create the release, or find it if a run before this one made it
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION=$(jq -r .version src-tauri/tauri.conf.json)
+          TAG_NAME="app-v$VERSION"
+          if ! gh release view "$TAG_NAME" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$TAG_NAME" -R "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "Nuza v$VERSION" \
+              --notes "See the assets to download this version and install."
+          fi
+          echo "id=$(gh release view "$TAG_NAME" -R "$GITHUB_REPOSITORY" --json databaseId -q .databaseId)" >> "$GITHUB_OUTPUT"
+
   publish-tauri:
+    needs: create-release
     permissions:
       contents: write
     strategy:
@@ -52,11 +83,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
         with:
-          tagName: app-v__VERSION__ # the action automatically replaces \_\_VERSION\_\_ with the app version.
-          releaseName: "Nuza v__VERSION__"
-          releaseBody: "See the assets to download this version and install."
-          releaseDraft: false
-          prerelease: false
+          releaseId: ${{ needs.create-release.outputs.release_id }}
           args: ${{ matrix.args }}
           # Every leg of this matrix runs at once, and each one would read, merge
           # and re-upload the same latest.json on the same release. That races:
