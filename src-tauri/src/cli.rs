@@ -57,10 +57,12 @@ pub fn target_from_args(args: &[String], cwd: &Path) -> Option<OpenTarget> {
         })
 }
 
-/// The first line the shim carries, which is how it is told apart from some
-/// other `nuza` that happens to be in the same place.
+/// The line the shim carries, which is how it is told apart from some other
+/// `nuza` that happens to be in the same place.
 #[cfg(unix)]
 const MARKER: &str = "# nuza command-line shim";
+#[cfg(windows)]
+const MARKER: &str = "rem nuza command-line shim";
 
 #[derive(serde::Serialize, Debug, PartialEq)]
 pub struct CliStatus {
@@ -73,19 +75,32 @@ pub struct CliStatus {
     pub path: String,
 }
 
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 mod shim {
     use super::*;
     use std::fs;
-    use std::os::unix::fs::PermissionsExt;
 
     /// `~/.local/bin`: on the PATH of most shells that have it set up, and
     /// somewhere that needs no administrator to write to.
+    #[cfg(unix)]
     fn shim_path(home: &Path) -> PathBuf {
         home.join(".local").join("bin").join("nuza")
     }
 
+    /// The folder Windows keeps on every account's PATH for commands like
+    /// this one, which needs no administrator to write to either. A `.cmd`
+    /// there answers to `nuza` in cmd, in PowerShell and in the Run box.
+    #[cfg(windows)]
+    fn shim_path(home: &Path) -> PathBuf {
+        home.join("AppData")
+            .join("Local")
+            .join("Microsoft")
+            .join("WindowsApps")
+            .join("nuza.cmd")
+    }
+
     /// `text` safe inside single quotes.
+    #[cfg(unix)]
     fn quoted(text: &str) -> String {
         format!("'{}'", text.replace('\'', r"'\''"))
     }
@@ -93,11 +108,48 @@ mod shim {
     /// Starts the app detached, so the terminal comes back at once. A path
     /// given relative is resolved by the app against the folder it was typed
     /// in, which the app inherits.
-    fn contents(exe: &Path) -> String {
+    #[cfg(unix)]
+    fn contents(_home: &Path, exe: &Path) -> String {
         format!(
             "#!/bin/sh\n{MARKER}. Installed by nuza; remove it from Settings.\nnohup {} \"$@\" >/dev/null 2>&1 &\n",
             quoted(&exe.to_string_lossy())
         )
+    }
+
+    /// `text` with nothing in it a batch file would take for a variable.
+    #[cfg(windows)]
+    fn escaped(path: &Path) -> String {
+        path.to_string_lossy().replace('%', "%%")
+    }
+
+    /// Starts the app through `start`, which does not wait for it, so the
+    /// terminal comes back at once here too.
+    ///
+    /// Under the home folder the program is written from `%USERPROFILE%`: cmd
+    /// reads a batch file in the console's code page, and an account name
+    /// from outside it would not survive being written down.
+    #[cfg(windows)]
+    fn contents(home: &Path, exe: &Path) -> String {
+        let program = match exe.strip_prefix(home) {
+            Ok(rest) => format!(r"%USERPROFILE%\{}", escaped(rest)),
+            Err(_) => escaped(exe),
+        };
+        format!(
+            "@echo off\r\n{MARKER}. Installed by nuza; remove it from Settings.\r\nstart \"\" \"{program}\" %*\r\n"
+        )
+    }
+
+    /// A script is only a command once it can be run. On Windows the `.cmd`
+    /// in its name is all that takes.
+    #[cfg(unix)]
+    fn make_runnable(path: &Path) -> std::io::Result<()> {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(path, fs::Permissions::from_mode(0o755))
+    }
+
+    #[cfg(windows)]
+    fn make_runnable(_path: &Path) -> std::io::Result<()> {
+        Ok(())
     }
 
     pub fn status(home: &Path, exe: &Path) -> CliStatus {
@@ -106,7 +158,7 @@ mod shim {
             Err(_) if path.symlink_metadata().is_err() => "none",
             Err(_) => "foreign",
             Ok(text) if !text.contains(MARKER) => "foreign",
-            Ok(text) if text == contents(exe) => "installed",
+            Ok(text) if text == contents(home, exe) => "installed",
             Ok(_) => "outdated",
         };
         CliStatus {
@@ -127,8 +179,8 @@ mod shim {
 
         let directory = path.parent().ok_or("No folder to put the command in")?;
         fs::create_dir_all(directory).map_err(|e| e.to_string())?;
-        fs::write(&path, contents(exe)).map_err(|e| e.to_string())?;
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).map_err(|e| e.to_string())?;
+        fs::write(&path, contents(home, exe)).map_err(|e| e.to_string())?;
+        make_runnable(&path).map_err(|e| e.to_string())?;
         Ok(status(home, exe))
     }
 
@@ -148,10 +200,10 @@ mod shim {
     }
 }
 
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 pub use shim::{install, status, uninstall};
 
-#[cfg(not(unix))]
+#[cfg(not(any(unix, windows)))]
 pub fn status(_home: &Path, _exe: &Path) -> CliStatus {
     CliStatus {
         supported: false,
@@ -160,12 +212,12 @@ pub fn status(_home: &Path, _exe: &Path) -> CliStatus {
     }
 }
 
-#[cfg(not(unix))]
+#[cfg(not(any(unix, windows)))]
 pub fn install(_home: &Path, _exe: &Path) -> Result<CliStatus, String> {
     Err("The command can't be installed on this platform yet".to_string())
 }
 
-#[cfg(not(unix))]
+#[cfg(not(any(unix, windows)))]
 pub fn uninstall(_home: &Path, _exe: &Path) -> Result<CliStatus, String> {
     Err("The command can't be installed on this platform yet".to_string())
 }
@@ -334,6 +386,77 @@ mod tests {
                 fs::read_to_string(bin.join("nuza")).unwrap(),
                 "#!/bin/sh\necho mine\n"
             );
+        }
+    }
+
+    #[cfg(windows)]
+    mod shim_tests {
+        use super::*;
+
+        #[test]
+        fn installs_a_cmd_where_windows_looks_for_commands() {
+            let home = tempfile::tempdir().unwrap();
+            let exe = PathBuf::from(r"C:\Program Files\nuza\nuza.exe");
+            assert_eq!(status(home.path(), &exe).state, "none");
+
+            let installed = install(home.path(), &exe).unwrap();
+            assert_eq!(installed.state, "installed");
+            assert!(installed.supported);
+
+            let path = PathBuf::from(&installed.path);
+            assert!(path.ends_with(r"AppData\Local\Microsoft\WindowsApps\nuza.cmd"));
+            let text = fs::read_to_string(&path).unwrap();
+            assert!(text.starts_with("@echo off\r\n"));
+            assert!(text.contains(MARKER));
+            assert!(text.contains("start \"\" \"C:\\Program Files\\nuza\\nuza.exe\" %*"));
+        }
+
+        #[test]
+        fn writes_a_program_under_the_home_folder_from_the_profile() {
+            let home = tempfile::tempdir().unwrap();
+            let exe = home
+                .path()
+                .join("AppData")
+                .join("Local")
+                .join("nuza")
+                .join("nuza.exe");
+            let installed = install(home.path(), &exe).unwrap();
+            let text = fs::read_to_string(&installed.path).unwrap();
+            assert!(text.contains(r#"start "" "%USERPROFILE%\AppData\Local\nuza\nuza.exe" %*"#));
+        }
+
+        #[test]
+        fn doubles_a_percent_sign_in_the_path() {
+            let home = tempfile::tempdir().unwrap();
+            let odd = PathBuf::from(r"D:\100% mine\nuza.exe");
+            let installed = install(home.path(), &odd).unwrap();
+            let text = fs::read_to_string(&installed.path).unwrap();
+            assert!(text.contains(r#""D:\100%% mine\nuza.exe""#));
+        }
+
+        #[test]
+        fn notices_an_app_that_has_moved_and_updates_the_shim() {
+            let home = tempfile::tempdir().unwrap();
+            install(home.path(), Path::new(r"C:\Program Files\nuza\nuza.exe")).unwrap();
+
+            let moved = PathBuf::from(r"D:\Apps\nuza\nuza.exe");
+            assert_eq!(status(home.path(), &moved).state, "outdated");
+            assert_eq!(install(home.path(), &moved).unwrap().state, "installed");
+        }
+
+        #[test]
+        fn removes_its_own_shim_and_leaves_a_different_nuza_alone() {
+            let home = tempfile::tempdir().unwrap();
+            let exe = PathBuf::from(r"C:\Program Files\nuza\nuza.exe");
+            let path = PathBuf::from(install(home.path(), &exe).unwrap().path);
+            assert_eq!(uninstall(home.path(), &exe).unwrap().state, "none");
+            assert!(!path.exists());
+
+            fs::write(&path, "@echo mine\r\n").unwrap();
+            assert_eq!(status(home.path(), &exe).state, "foreign");
+            assert!(install(home.path(), &exe).is_err());
+            assert!(uninstall(home.path(), &exe).is_err());
+            assert_eq!(fs::read_to_string(&path).unwrap(), "@echo mine\r\n");
         }
     }
 }

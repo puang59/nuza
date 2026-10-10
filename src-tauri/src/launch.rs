@@ -26,9 +26,16 @@ pub(crate) fn command_program() -> Result<PathBuf, String> {
     }
 }
 
+/// On Windows the profile comes first: `HOME` is only set there by a Unix-like
+/// shell the app happened to be started from, and need not be the same place.
 pub(crate) fn home_directory() -> Result<PathBuf, String> {
-    std::env::var_os("HOME")
-        .or_else(|| std::env::var_os("USERPROFILE"))
+    let (first, second) = if cfg!(windows) {
+        ("USERPROFILE", "HOME")
+    } else {
+        ("HOME", "USERPROFILE")
+    };
+    std::env::var_os(first)
+        .or_else(|| std::env::var_os(second))
         .map(PathBuf::from)
         .ok_or_else(|| "Can't tell where your home folder is".to_string())
 }
