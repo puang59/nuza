@@ -12,12 +12,13 @@ interface CliStatus {
 
 /** The path as it would be typed: under the home folder, it starts with `~`. */
 function tidy(path: string) {
-  return path.replace(/^\/(?:Users|home)\/[^/]+/, "~");
+  return path.replace(/^(?:\/(?:Users|home)\/|[A-Za-z]:\\Users\\)[^/\\]+/, "~");
 }
 
 /**
  * Putting a `nuza` command on the PATH, and taking it away again: a one-line
- * shim in `~/.local/bin` that starts the app on whatever it is given.
+ * shim that starts the app on whatever it is given, in `~/.local/bin`, or on
+ * Windows in the WindowsApps folder that is on every account's PATH.
  *
  * Left out where it is not available, which is anywhere there is no such
  * folder convention to follow.
