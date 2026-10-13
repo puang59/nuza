@@ -19,7 +19,7 @@ import { useKeymaps, useKeymapListener } from "./hooks/useKeymaps";
 import { useCloseTabMenu } from "./hooks/useCloseTabMenu";
 import { useSaveOnExit } from "./hooks/useSaveOnExit";
 import { useNotices } from "./hooks/useNotices";
-import { UNTITLED_FILE, useFileOperations } from "./hooks/useFileOperations";
+import { useFileOperations } from "./hooks/useFileOperations";
 import GettingStarted from "./components/GettingStarted";
 import SectionGuides from "./components/SectionGuides";
 import ZenBar from "./components/ZenBar";
@@ -175,6 +175,7 @@ function App() {
     subscribeToStats,
     currentFile,
     openPaths,
+    draftPaths,
     dirtyPaths,
     conflicts,
     missing,
@@ -875,7 +876,7 @@ function App() {
             />
             {sectionGuides && !zen && <SectionGuides outline={outline} onJump={onJumpToHeading} />}
             <GettingStarted
-              onScratch={currentFile === UNTITLED_FILE}
+              onScratch={draftPaths.has(currentFile)}
               hasVault={!!rootPath}
               subscribeToStats={subscribeToStats}
               bindings={keymapBindings}
