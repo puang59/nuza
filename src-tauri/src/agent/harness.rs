@@ -283,7 +283,9 @@ impl AgentHarness {
             .await;
         // The coalescer stops at the turn's last event, once it has passed
         // everything before it on.
+        eprintln!("DBG run_turn returned ok={}", outcome.is_ok());
         let _ = delivered.await;
+        eprintln!("DBG delivered");
         if let Ok((session, _)) | Err((Some(session), _)) = &outcome {
             locked(&self.turns).remove(session);
         }
@@ -662,11 +664,14 @@ impl AgentHarness {
             tokio::select! {
                 answer = &mut request => return answer,
                 () = tokio::time::sleep(IDLE_CHECK) => {
+                    eprintln!("DBG tick quiet={:?}", self.quiet_for(session));
                     if self.quiet_for(session) > self.idle_timeout {
+                        eprintln!("DBG timing out");
                         let _ = connection
                             .client
                             .notify("session/cancel", json!({ "sessionId": session }))
                             .await;
+                        eprintln!("DBG cancel sent");
                         return Err(format!(
                             "The agent stopped responding (nothing for {} seconds).",
                             self.idle_timeout.as_secs()
@@ -771,6 +776,7 @@ impl AgentHarness {
 fn route(mut queue: mpsc::UnboundedReceiver<Inbound>, turns: Arc<Mutex<HashMap<String, Turn>>>) {
     tokio::spawn(async move {
         while let Some(message) = queue.recv().await {
+            eprintln!("DBG route {}", message.method);
             let Some(session) = events::session_of(&message) else {
                 continue;
             };

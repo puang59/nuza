@@ -272,6 +272,7 @@ fn read_stdout(
             }
         }
 
+        eprintln!("DBG stdout EOF");
         // Stdout has closed, so the agent has exited or is about to. Nothing
         // that is waiting will ever be answered: fail it, with the reason.
         tokio::time::sleep(STDERR_GRACE).await;
