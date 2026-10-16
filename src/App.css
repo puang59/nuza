@@ -787,6 +787,10 @@ textarea,
     background: #ffffff;
   }
 
+  .cm-misspelled {
+    text-decoration: none !important;
+  }
+
   .cm-editor,
   .cm-scroller {
     height: auto !important;

@@ -15,7 +15,7 @@ import SidePane from "./components/SidePane";
 import SplitDropZone from "./components/SplitDropZone";
 import Notices from "./components/Notices";
 import AiPanel, { type AiPanelHandle, type NoteSnapshot } from "./components/AiPanel";
-import ContextMenu from "./components/Sidebar/ContextMenu";
+import ContextMenu, { ContextMenuItem } from "./components/Sidebar/ContextMenu";
 import { useKeymaps, useKeymapListener } from "./hooks/useKeymaps";
 import { useCloseTabMenu } from "./hooks/useCloseTabMenu";
 import { useSaveOnExit } from "./hooks/useSaveOnExit";
@@ -53,6 +53,8 @@ import { tabsToClose } from "./lib/tabLabels";
 import { directoryOf } from "./lib/markdown";
 import { noteLineNumbers } from "./lib/markdown/lineGutter";
 import { typewriterScrolling } from "./lib/markdown/scrolling";
+import { SpellingFix, spellcheck, spellingAt } from "./lib/markdown/spellcheck";
+import { DEFAULT_SPELL_LANGUAGE, SpellLanguage } from "./lib/spellDictionaries";
 import {
   insertLink,
   setHeading,
@@ -104,6 +106,12 @@ function App() {
   const [vimEnabled, setVimEnabled] = usePersistedState("vimEnabled", false);
   const [showLineNumbers, setShowLineNumbers] = usePersistedState("showLineNumbers", false);
   const [typewriter, setTypewriter] = usePersistedState("typewriterScrolling", false);
+  // On unless turned off: a misspelling is the one mark nobody minds being told about.
+  const [spellCheck, setSpellCheck] = usePersistedState("spellCheck", true);
+  const [spellLanguage, setSpellLanguage] = usePersistedState<SpellLanguage>(
+    "spellLanguage",
+    DEFAULT_SPELL_LANGUAGE
+  );
   // Off unless asked for: marks on the writing surface are not something to
   // put in front of everyone.
   const [sectionGuides, setSectionGuides] = usePersistedState("sectionGuides", false);
@@ -186,9 +194,10 @@ function App() {
       editorFontTheme,
       ...(showLineNumbers ? [noteLineNumbers] : []),
       ...(typewriter ? [typewriterScrolling] : []),
+      ...(spellCheck ? [spellcheck(spellLanguage)] : []),
       ...(zen && zenDimming ? [zenFocus] : []),
     ],
-    [vimExtension, editorFontTheme, showLineNumbers, typewriter, zen, zenDimming]
+    [vimExtension, editorFontTheme, showLineNumbers, typewriter, spellCheck, spellLanguage, zen, zenDimming]
   );
 
   const {
@@ -390,7 +399,13 @@ function App() {
    * what is nuza's own. A right-click inside a property's field still gets
    * the webview's - that is a text box, with a text box's menu.
    */
-  const [editorMenu, setEditorMenu] = useState<{ x: number; y: number; view: EditorView } | null>(null);
+  const [editorMenu, setEditorMenu] = useState<{
+    x: number;
+    y: number;
+    view: EditorView;
+    /** The misspelled word that was right-clicked, if it was one. */
+    spelling: SpellingFix | null;
+  } | null>(null);
   /** The editor the link picker was opened from, for the link to be written into. */
   const [linkView, setLinkView] = useState<EditorView | null>(null);
   const closeEditorMenu = useCallback(() => setEditorMenu(null), []);
@@ -401,7 +416,9 @@ function App() {
     if (!view) return;
     if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
     event.preventDefault();
-    setEditorMenu({ x: event.clientX, y: event.clientY, view });
+    const spelling = spellingAt(view, event.clientX, event.clientY);
+    spelling?.select();
+    setEditorMenu({ x: event.clientX, y: event.clientY, view, spelling });
   }, []);
 
   const selectedText = useCallback(
@@ -515,9 +532,21 @@ function App() {
   );
 
   const editorMenuItems = useCallback(
-    (view: EditorView) => {
+    (view: EditorView, spelling: SpellingFix | null): ContextMenuItem[] => {
       const hasSelection = view.state.selection.ranges.some((range) => !range.empty);
-      return [
+      // Spelling fixes lead, as they do in a native text field, with a line
+      // between them and the usual cut, copy and paste.
+      const fixes: ContextMenuItem[] = spelling
+        ? [
+            ...spelling.suggestions.map((suggestion) => ({
+              label: suggestion,
+              onClick: () => spelling.replaceWith(suggestion),
+            })),
+            { label: "Add to Dictionary", onClick: spelling.addToDictionary },
+            { label: "Ignore Spelling", onClick: spelling.ignore },
+          ]
+        : [];
+      const items: ContextMenuItem[] = [
         ...(hasSelection
           ? [
               { label: "Cut", onClick: () => void copySelection(view, true) },
@@ -540,6 +569,8 @@ function App() {
           ? { label: "Add Frontmatter", onClick: () => addFrontmatter(view) }
           : { label: "Add Property", onClick: () => addProperty(view) },
       ];
+      if (fixes.length > 0) items[0] = { ...items[0], divided: true };
+      return [...fixes, ...items];
     },
     [rootPath, copySelection, pasteClipboard]
   );
@@ -654,6 +685,13 @@ function App() {
         onToggle: setTypewriter,
       },
       {
+        id: "spell-check",
+        title: "Spell Check",
+        description: "Underline misspelled words as you write",
+        enabled: spellCheck,
+        onToggle: setSpellCheck,
+      },
+      {
         id: "section-guides",
         title: "Section Guides",
         description: "Marks for a note's headings down the edge",
@@ -721,6 +759,8 @@ function App() {
       setShowLineNumbers,
       typewriter,
       setTypewriter,
+      spellCheck,
+      setSpellCheck,
       sectionGuides,
       setSectionGuides,
       zen,
@@ -1089,7 +1129,7 @@ function App() {
             <ContextMenu
               x={editorMenu.x}
               y={editorMenu.y}
-              items={editorMenuItems(editorMenu.view)}
+              items={editorMenuItems(editorMenu.view, editorMenu.spelling)}
               onClose={closeEditorMenu}
             />
           )}
@@ -1210,6 +1250,10 @@ function App() {
         setShowLineNumbers={setShowLineNumbers}
         typewriterScrolling={typewriter}
         setTypewriterScrolling={setTypewriter}
+        spellCheck={spellCheck}
+        setSpellCheck={setSpellCheck}
+        spellLanguage={spellLanguage}
+        setSpellLanguage={setSpellLanguage}
         sectionGuides={sectionGuides}
         setSectionGuides={setSectionGuides}
         zenDimming={zenDimming}

@@ -7,6 +7,8 @@ export interface ContextMenuItem {
   danger?: boolean;
   /** For a choice among several: the one in force carries a tick. */
   checked?: boolean;
+  /** A line above it, setting it and what follows apart from what came before. */
+  divided?: boolean;
 }
 
 export default function ContextMenu({
@@ -61,7 +63,7 @@ export default function ContextMenu({
           }}
           className={`block w-full cursor-pointer px-3 py-1.5 text-left text-sm transition-colors hover:bg-zinc-700/60 ${
             item.danger ? "text-red-400 hover:text-red-300" : "text-zinc-200"
-          }`}
+          } ${item.divided ? "mt-1 border-t border-zinc-700/60 pt-2" : ""}`}
         >
           {item.checked === undefined ? (
             item.label

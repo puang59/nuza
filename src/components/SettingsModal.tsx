@@ -12,6 +12,7 @@ import InfoSettings from "./settings/InfoSettings";
 import AiSettings from "./settings/AiSettings";
 import type { ModelChoices } from "@/lib/ai/modelChoice";
 import type { MemoryStore } from "@/lib/ai/memory";
+import type { SpellLanguage } from "@/lib/spellDictionaries";
 
 type SettingsSection = "general" | "appearance" | "keymaps" | "ai" | "info";
 
@@ -34,6 +35,10 @@ interface SettingsModalProps {
   setShowLineNumbers: (enabled: boolean) => void;
   typewriterScrolling: boolean;
   setTypewriterScrolling: (enabled: boolean) => void;
+  spellCheck: boolean;
+  setSpellCheck: (enabled: boolean) => void;
+  spellLanguage: SpellLanguage;
+  setSpellLanguage: (language: SpellLanguage) => void;
   sectionGuides: boolean;
   setSectionGuides: (enabled: boolean) => void;
   zenDimming: boolean;
@@ -85,6 +90,10 @@ export default function SettingsModal({
   setShowLineNumbers,
   typewriterScrolling,
   setTypewriterScrolling,
+  spellCheck,
+  setSpellCheck,
+  spellLanguage,
+  setSpellLanguage,
   sectionGuides,
   setSectionGuides,
   zenDimming,
@@ -200,6 +209,10 @@ export default function SettingsModal({
                 setShowLineNumbers={setShowLineNumbers}
                 typewriterScrolling={typewriterScrolling}
                 setTypewriterScrolling={setTypewriterScrolling}
+                spellCheck={spellCheck}
+                setSpellCheck={setSpellCheck}
+                spellLanguage={spellLanguage}
+                setSpellLanguage={setSpellLanguage}
                 sectionGuides={sectionGuides}
                 setSectionGuides={setSectionGuides}
                 zenDimming={zenDimming}

@@ -1,4 +1,5 @@
 import { Switch } from "@/components/ui/switch";
+import { SPELL_LANGUAGES, SpellLanguage } from "@/lib/spellDictionaries";
 import CommandLineSetting from "./CommandLineSetting";
 import SettingRow from "./SettingRow";
 
@@ -9,6 +10,10 @@ interface GeneralSettingsProps {
   setShowLineNumbers: (enabled: boolean) => void;
   typewriterScrolling: boolean;
   setTypewriterScrolling: (enabled: boolean) => void;
+  spellCheck: boolean;
+  setSpellCheck: (enabled: boolean) => void;
+  spellLanguage: SpellLanguage;
+  setSpellLanguage: (language: SpellLanguage) => void;
   sectionGuides: boolean;
   setSectionGuides: (enabled: boolean) => void;
   zenDimming: boolean;
@@ -22,6 +27,10 @@ export default function GeneralSettings({
   setShowLineNumbers,
   typewriterScrolling,
   setTypewriterScrolling,
+  spellCheck,
+  setSpellCheck,
+  spellLanguage,
+  setSpellLanguage,
   sectionGuides,
   setSectionGuides,
   zenDimming,
@@ -41,6 +50,27 @@ export default function GeneralSettings({
       >
         <Switch checked={typewriterScrolling} onCheckedChange={setTypewriterScrolling} />
       </SettingRow>
+      <SettingRow
+        title="Spell Check"
+        description="Underline misspelled words as you write. Right-click one to fix it or add it to your dictionary"
+      >
+        <Switch checked={spellCheck} onCheckedChange={setSpellCheck} />
+      </SettingRow>
+      {spellCheck && (
+        <SettingRow title="Spelling Language" description="Which spelling the dictionary follows">
+          <select
+            className="cursor-pointer rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-white outline-none focus:border-[var(--nuza-accent)]"
+            value={spellLanguage}
+            onChange={(event) => setSpellLanguage(event.target.value as SpellLanguage)}
+          >
+            {SPELL_LANGUAGES.map((language) => (
+              <option key={language.id} value={language.id}>
+                {language.label}
+              </option>
+            ))}
+          </select>
+        </SettingRow>
+      )}
       <SettingRow
         title="Section Guides"
         description="Marks for a note's headings down the edge, and the current section's name at the top"
