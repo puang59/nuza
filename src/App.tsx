@@ -16,7 +16,7 @@ import SplitDropZone from "./components/SplitDropZone";
 import Notices from "./components/Notices";
 import AiPanel, { type AiPanelHandle, type NoteSnapshot } from "./components/AiPanel";
 import ContextMenu, { ContextMenuItem } from "./components/Sidebar/ContextMenu";
-import { useKeymaps, useKeymapListener } from "./hooks/useKeymaps";
+import { useKeymaps, useKeymapListener, VIM_OWNED_KEYS } from "./hooks/useKeymaps";
 import { useCloseTabMenu } from "./hooks/useCloseTabMenu";
 import { useSaveOnExit } from "./hooks/useSaveOnExit";
 import { useNotices } from "./hooks/useNotices";
@@ -1077,6 +1077,7 @@ function App() {
             {sideFile && <div className="h-8 shrink-0 print:hidden" aria-hidden />}
             <div
               ref={editorContainer}
+              data-own-keys={vimEnabled ? VIM_OWNED_KEYS : undefined}
               onContextMenu={(event) => openEditorMenu(event, editorView)}
               className="flex-1 min-h-0 print:h-auto"
             />
