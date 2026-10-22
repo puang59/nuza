@@ -114,7 +114,7 @@ function FileSearchPalette({
           // Frosted rather than tinted: the blur is what keeps a background
           // this transparent legible, and the shade above the window's own
           // makes it read as floating rather than cut into the surface.
-          "flex w-[460px] max-w-full flex-col overflow-hidden rounded-xl border border-white/10 bg-[#262628]/65 shadow-2xl backdrop-blur-2xl",
+          "flex w-[460px] max-w-full flex-col overflow-hidden nuza-palette rounded-xl border border-white/10 bg-[#262628]/65 shadow-2xl backdrop-blur-2xl",
           isClosing ? "animate-palette-out" : "animate-palette-in"
         )}
       >

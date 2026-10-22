@@ -6,6 +6,11 @@ export function isMacPlatform(): boolean {
   return /mac|iphone|ipad|ipod/i.test(platform);
 }
 
+/** True on desktop Linux (Android reports itself as Linux too, and is not it). */
+export function isLinuxPlatform(): boolean {
+  return /linux/i.test(platformName()) && !/android/i.test(platformName());
+}
+
 /** The platform's user-agent string, however it chooses to report it. */
 function platformName(): string {
   if (typeof navigator === "undefined") return "";

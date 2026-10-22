@@ -74,7 +74,7 @@ function SettingsPalette({ isOpen, onClose, settings }: SettingsPaletteProps) {
         onClick={(e) => e.stopPropagation()}
         onKeyDown={onKeyDown}
         className={cn(
-          "flex w-[460px] max-w-full flex-col overflow-hidden rounded-xl border border-white/10 bg-[#262628]/65 shadow-2xl backdrop-blur-2xl",
+          "flex w-[460px] max-w-full flex-col overflow-hidden nuza-palette rounded-xl border border-white/10 bg-[#262628]/65 shadow-2xl backdrop-blur-2xl",
           isClosing ? "animate-palette-out" : "animate-palette-in"
         )}
       >

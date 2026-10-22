@@ -824,3 +824,20 @@ textarea,
     break-inside: avoid;
   }
 }
+
+/*
+ * WebKitGTK, which is what draws the window on Linux, paints blurred
+ * backgrounds badly on a good many graphics setups: text under a palette
+ * comes out torn and garbled. So there the blur is left out, and the palettes
+ * are solid rather than see-through, which is what the blur was there to make
+ * legible. Everywhere else they stay frosted.
+ */
+html[data-platform="linux"] .backdrop-blur-sm,
+html[data-platform="linux"] .backdrop-blur-2xl {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+html[data-platform="linux"] .nuza-palette {
+  background-color: #262628;
+}

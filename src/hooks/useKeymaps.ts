@@ -85,6 +85,16 @@ function isTyping(target: EventTarget | null): boolean {
 }
 
 /**
+ * What the editor keeps for itself while Vim is on: Control and `[`, which Vim
+ * has always meant as Escape. Off macOS that is the same keystroke as "mod+[",
+ * Go Back, and the window's listener would take it before Vim ever saw it, so
+ * insert mode could not be left that way. "ctrl" is the physical key, so on a
+ * Mac, where Go Back is Command, nothing changes. (The editor's own "indent
+ * less" has the chord too; useVimMode puts Vim ahead of that.)
+ */
+export const VIM_OWNED_KEYS = "ctrl+[";
+
+/**
  * Whether the keystroke belongs to the part of the window it landed in.
  *
  * A region marks the chords it handles itself with `data-own-keys` - the AI
