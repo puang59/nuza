@@ -10,6 +10,7 @@ import {
   mediaSource,
   noteDirectory,
   resolveImageSource,
+  autolinkHref,
   safeExternalHref,
 } from "./sources";
 import { isImagePath } from "../media";
@@ -455,6 +456,12 @@ function decorateNode(node: SyntaxNodeRef, build: Build): boolean | undefined {
     const parent = node.node.parent?.name;
     if (parent === "Link" || parent === "Image") {
       out.push((isBeingEdited(state, from, to) ? DIMMED : HIDDEN).range(from, to));
+    } else if (parent !== "Autolink") {
+      // Typed straight into the text - `www.site.top`, `https://site.top`, an
+      // email address - which is a link all the same, and mod-click opens it.
+      const href = autolinkHref(doc.sliceString(from, to));
+      if (href)
+        out.push(Decoration.mark({ class: "cm-md-link", attributes: { "data-href": href } }).range(from, to));
     }
     return;
   }
@@ -540,7 +547,7 @@ function decorateNode(node: SyntaxNodeRef, build: Build): boolean | undefined {
     const target = urlNode
       ? doc.sliceString(urlNode.from, urlNode.to)
       : doc.sliceString(from, to).replace(/^<|>$/g, "");
-    const href = safeExternalHref(target);
+    const href = urlNode ? safeExternalHref(target) : autolinkHref(target);
     // `#heading` has no scheme to open, but it is a link to somewhere in this note.
     const anchor = target.startsWith("#") ? target.slice(1) : null;
     out.push(

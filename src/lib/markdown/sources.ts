@@ -72,6 +72,18 @@ export function safeExternalHref(url: string) {
   return null;
 }
 
+const EMAIL = /^[\w.+-]+@[\w-]+(\.[\w-]+)+$/;
+
+/**
+ * Like `safeExternalHref`, for a link written as it is in prose: a bare
+ * `www.site.top` or `https://...`, or an email address, which opens the mail
+ * app. An address that already says `mailto:` is left as it is.
+ */
+export function autolinkHref(text: string) {
+  const trimmed = text.trim();
+  return safeExternalHref(trimmed) ?? (EMAIL.test(trimmed) ? `mailto:${trimmed}` : null);
+}
+
 const IMAGE_EXTENSION = /\.(png|jpe?g|gif|webp|avif|bmp|svg)$/i;
 
 /**
