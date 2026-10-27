@@ -146,3 +146,31 @@ describe("liveMarkdownPreview under random edits", () => {
     });
   }
 });
+
+describe("links typed into the text", () => {
+  /** The `data-href` of every link the preview marks in `doc`, in order. */
+  function hrefs(doc: string) {
+    const found: string[] = [];
+    const cursor = create(doc, doc.length).field(liveMarkdownPreview).iter();
+    for (; cursor.value; cursor.next()) {
+      const href = (cursor.value.spec as { attributes?: Record<string, string> }).attributes?.["data-href"];
+      if (href) found.push(href);
+    }
+    return found;
+  }
+
+  test("a bare address, with or without a scheme, can be opened", () => {
+    expect(hrefs("see www.preetham.top\n\nand https://example.com/a?b=1\n\nend")).toEqual([
+      "https://www.preetham.top",
+      "https://example.com/a?b=1",
+    ]);
+  });
+
+  test("an email address opens the mail app", () => {
+    expect(hrefs("Contact\n\ncontact@preetham.top\n\nend")).toEqual(["mailto:contact@preetham.top"]);
+  });
+
+  test("a link to a file is not taken for an email address", () => {
+    expect(hrefs("[notes](notes@2024.md)\n\nend")).toEqual([]);
+  });
+});
