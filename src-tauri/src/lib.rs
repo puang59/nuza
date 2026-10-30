@@ -133,6 +133,7 @@ pub fn run() {
                 if let Err(error) = window::apply_transparency(&window, true) {
                     log::warn!("no window backdrop on this platform: {}", error);
                 }
+                window::pass_pinch_to_page(&window);
             }
 
             // The windows the last run ended with, brought back: the first on

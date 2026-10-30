@@ -2444,7 +2444,9 @@ dependencies = [
  "tokio",
  "trash",
  "ttf-parser",
+ "webview2-com",
  "window-vibrancy 0.8.0",
+ "windows 0.61.3",
  "windows-sys 0.61.2",
  "windows-version",
 ]

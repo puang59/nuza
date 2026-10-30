@@ -75,6 +75,11 @@ libc = "0.2"
 # windows-sys is for MoveFileExW, for the same reason libc is above.
 [target.'cfg(windows)'.dependencies]
 windows-version = "0.1"
+# WebView2's pinch zoom is switched off so a trackpad pinch reaches the page
+# (window::pass_pinch_to_page). Both are the versions tauri's webview already
+# compiles in.
+webview2-com = "0.38"
+windows = "0.61"
 windows-sys = { version = "0.61", features = [
   "Win32_Foundation",
   "Win32_Storage_FileSystem",
