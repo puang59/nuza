@@ -19,6 +19,7 @@ import ContextMenu, { ContextMenuItem } from "./components/Sidebar/ContextMenu";
 import { useKeymaps, useKeymapListener, VIM_OWNED_KEYS } from "./hooks/useKeymaps";
 import { useCloseTabMenu } from "./hooks/useCloseTabMenu";
 import { useSaveOnExit } from "./hooks/useSaveOnExit";
+import { usePinchZoom } from "./hooks/usePinchZoom";
 import { useNotices } from "./hooks/useNotices";
 import { useFileOperations } from "./hooks/useFileOperations";
 import GettingStarted from "./components/GettingStarted";
@@ -915,6 +916,9 @@ function App() {
   }, [retrace]);
   useCloseTabMenu(keymapBindings["close-tab"], closeCurrentTab);
   useSaveOnExit(flush);
+  usePinchZoom((steps) =>
+    setEditorFontSize((size) => clampEditorFontSize(size + steps * EDITOR_FONT_SIZE_STEP))
+  );
 
   // mod+1..8 jump to that tab and mod+9 to the last, matching what browsers and
   // editors do. These stay fixed rather than joining the rebindable keymap list,

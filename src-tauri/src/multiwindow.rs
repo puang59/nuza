@@ -305,6 +305,7 @@ pub(crate) fn open_window(
             log::warn!("no window backdrop on this platform: {}", error);
         }
     });
+    crate::window::pass_pinch_to_page(&window);
     raise(&window);
     changed(app);
     Ok(window)
