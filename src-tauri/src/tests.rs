@@ -1,8 +1,8 @@
 use crate::cli::OpenTarget;
 use crate::files::{
     already_exists, create_unused, create_unused_with, duplicate_file, exact_file_name,
-    move_destination, opened_by_the_system, rename_no_replace, safe_file_name, times_of,
-    write_atomically,
+    move_destination, opened_by_the_system, rename_no_replace, safe_file_name, store_note,
+    times_of, write_atomically, write_atomically_noting,
 };
 // Only asked about where a file has a mode to ask about.
 #[cfg(unix)]
@@ -58,6 +58,55 @@ fn replaces_an_existing_note() {
     write_atomically(&note, b"short").unwrap();
 
     assert_eq!(contents(&note), "short");
+}
+
+/// The watcher asks about a note the moment it is renamed into place, so what
+/// the app means to record for it has to be known by then - not after the
+/// write has returned.
+#[test]
+fn says_when_a_note_will_be_before_it_lands() {
+    let vault = tempfile::tempdir().unwrap();
+    let note = vault.path().join("note.md");
+    fs::write(&note, "one").unwrap();
+
+    let mut told = None;
+    write_atomically_noting(&note, b"two", |at| {
+        assert_eq!(contents(&note), "one");
+        told = Some(at);
+    })
+    .unwrap();
+
+    assert_eq!(contents(&note), "two");
+    assert_eq!(told, crate::state::modified_at(&note));
+}
+
+/// A write that fails has not touched the note, and must not leave the app
+/// believing it has: the next save would be refused over a change that never
+/// happened.
+#[cfg(unix)]
+#[test]
+fn a_failed_save_leaves_the_recorded_time_alone() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let dir = tempfile::tempdir().unwrap();
+    let note = dir.path().join("note.md");
+    fs::write(&note, "one").unwrap();
+    let held = Vault::default();
+    remember(&held, &note);
+    let recorded = locked(&held.known).get(&note).copied();
+
+    // A folder nothing can be created in: the temporary file cannot be made.
+    fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o555)).unwrap();
+    let result = store_note(&held, &note, b"two", false);
+    fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o755)).unwrap();
+
+    // Running as root, a read-only folder is no obstacle and the save lands.
+    if result.is_ok() {
+        return;
+    }
+    assert_eq!(contents(&note), "one");
+    assert_eq!(locked(&held.known).get(&note).copied(), recorded);
+    assert!(!changed_since_read(&held, &note));
 }
 
 /// The temporary file is an implementation detail; a vault that collects
@@ -1523,6 +1572,34 @@ mod windows {
         assert!(second_hears
             .recv_timeout(Duration::from_millis(500))
             .is_err());
+    }
+
+    /// The app's own saves are not news. The watcher reports a rename as soon
+    /// as it happens, and a save that only recorded its time afterwards was
+    /// reported back to the window that made it - as a note that had changed
+    /// on disk under whoever was typing in it.
+    #[test]
+    fn the_apps_own_saves_are_not_announced_back() {
+        let (_app, first, _second) = two_windows();
+        let dir = tempfile::tempdir().unwrap();
+        let note = dir.path().join("note.md");
+        fs::write(&note, "start").unwrap();
+        adopt_folder(&first, dir.path().to_string_lossy().into_owned()).unwrap();
+
+        let (heard, hears) = mpsc::channel();
+        first.listen(FILE_CHANGED_EVENT, move |_| {
+            let _ = heard.send(());
+        });
+
+        let vault = vault_of(&first);
+        let note = note.canonicalize().unwrap();
+        remember(&vault, &note);
+        for round in 0..150 {
+            store_note(&vault, &note, format!("save {round}").as_bytes(), false).unwrap();
+            std::thread::sleep(Duration::from_millis(20));
+        }
+
+        assert!(hears.recv_timeout(Duration::from_secs(1)).is_err());
     }
 
     /// A note the AI panel makes: inside the vault, folders and all, never

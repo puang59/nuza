@@ -17,6 +17,7 @@ import {
 } from "@/lib/fileTree";
 import { report } from "@/lib/notices";
 import { listenHere } from "@/lib/windowEvents";
+import { dropOwnWrites, isOwnWrite, noteOwnWrite, type OwnWrites } from "@/lib/ownWrites";
 import { readScratch, writeScratch } from "@/lib/scratch";
 import { EMPTY_SESSION, readSession, tabsToRestore, writeSession } from "@/lib/session";
 import { ATTACHMENT_EVENT, announceAttachment, fileNameOf, writeMedia } from "@/lib/media";
@@ -586,13 +587,21 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
    */
   const saveAgain = useRef<number | null>(null);
 
+  /** What this window has written to each note lately, to know its own saves by. */
+  const ownWrites = useRef<OwnWrites>(new Map());
+
   const writeDocument = useCallback(
     async (path: string, force = false) => {
       const before = documentRevision(path);
+      const content = readDocument(path);
 
+      // Before the write, not after: the watcher can report it while it is
+      // still on its way, and the report is read before `write_file` returns.
+      noteOwnWrite(ownWrites.current, path, content);
       try {
-        await invoke("write_file", { path, content: readDocument(path), force });
+        await invoke("write_file", { path, content, force });
       } catch (error) {
+        dropOwnWrites(ownWrites.current, path);
         // The note moved on disk while this one was being edited. Flagged
         // rather than retried: the next autosave would only be refused again,
         // and someone has to say which of the two copies to keep.
@@ -825,6 +834,12 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
       // The app's own save, arriving back as news. Cheap to rule out, and
       // worth ruling out: replacing a document resets its undo history.
       if (content === readDocument(path)) return;
+
+      // The same, when the writer has typed on since: the file holds the save
+      // that was just made, which is behind the buffer but not a change from
+      // outside - and asking which copy to keep would be asking about nothing.
+      if (isOwnWrite(ownWrites.current, path, content)) return;
+      dropOwnWrites(ownWrites.current, path);
 
       if (dirtyPathsRef.current.has(path)) flagConflict(path);
       else replaceDocument(path, content);

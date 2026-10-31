@@ -752,13 +752,30 @@ pub(crate) async fn read_file(
 /// renamed over it - a rename within one filesystem is atomic, so a reader sees
 /// either the note as it was or the note as it now is, never the gap.
 pub(crate) fn write_atomically(path: &Path, bytes: &[u8]) -> Result<(), String> {
-    write_through_a_temporary(path, bytes, false)
+    write_through_a_temporary(path, bytes, false, |_| {})
+}
+
+/// The same write, telling `staged` when the note will have once it lands - and
+/// doing so *before* it lands.
+///
+/// The watcher reports a rename the moment it happens, and it asks whether the
+/// note is still as the app last saw it. If the app only learns the new time
+/// after the write has returned, that question is answered in the gap - with
+/// the directory flush in it - and the app's own save comes back as somebody
+/// else's edit. A rename keeps the modification time of the file it moves, so
+/// the time is known ahead of it.
+pub(crate) fn write_atomically_noting(
+    path: &Path,
+    bytes: &[u8],
+    staged: impl FnOnce(std::time::SystemTime),
+) -> Result<(), String> {
+    write_through_a_temporary(path, bytes, false, staged)
 }
 
 /// The same write, for a file that is nobody's business but its owner's: the
 /// edits kept outside the vault. A new one stays readable by them alone.
 pub(crate) fn write_privately(path: &Path, bytes: &[u8]) -> Result<(), String> {
-    write_through_a_temporary(path, bytes, true)
+    write_through_a_temporary(path, bytes, true, |_| {})
 }
 
 /// A temporary file in `directory`, with the permissions a new file there
@@ -781,7 +798,12 @@ fn temporary_in(directory: &Path, private: bool) -> std::io::Result<tempfile::Na
     tempfile::NamedTempFile::new_in(directory)
 }
 
-fn write_through_a_temporary(path: &Path, bytes: &[u8], private: bool) -> Result<(), String> {
+fn write_through_a_temporary(
+    path: &Path,
+    bytes: &[u8],
+    private: bool,
+    staged: impl FnOnce(std::time::SystemTime),
+) -> Result<(), String> {
     use std::io::Write;
 
     /// A failure in its own words, without the name of the temporary file it
@@ -822,6 +844,12 @@ fn write_through_a_temporary(path: &Path, bytes: &[u8], private: bool) -> Result
     // Ordering the write before the rename, rather than trusting that a rename
     // recorded after it means the contents reached the disk as well.
     file.as_file().sync_all().map_err(plainly)?;
+    // Said before the rename, not after: from the rename on, the watcher may
+    // be asking. A platform that cannot say has nothing to give early, and the
+    // caller's own record after the write is still what settles it.
+    if let Ok(at) = file.as_file().metadata().and_then(|data| data.modified()) {
+        staged(at);
+    }
     file.persist(path).map_err(plainly)?;
 
     // The bytes are on the disk and the rename has happened - but a rename is
@@ -858,17 +886,51 @@ pub(crate) async fn write_file(
     off_thread(move || {
         let vault = vault_of(&window);
         let path = within_vault_to_write(&vault, Path::new(&path))?;
-
-        if !force.unwrap_or(false) && changed_since_read(&vault, &path) {
-            return Err(CHANGED_ON_DISK.to_string());
-        }
-
-        write_atomically(&path, content.as_bytes())?;
-        remember(&vault, &path);
+        store_note(&vault, &path, content.as_bytes(), force.unwrap_or(false))?;
         note_changes(&window, &[&path]);
         Ok(())
     })
     .await
+}
+
+/// Writes a note on behalf of the app, unless it has moved on since it was read
+/// and `force` has not said to write over it.
+///
+/// Where the note will stand is recorded before the write lands rather than
+/// after (see `write_atomically_noting`): otherwise the watcher can see the
+/// rename first, find the note different from what the app last recorded, and
+/// announce the app's own save as an edit from outside - which, with the writer
+/// still typing, is a conflict they are asked to settle for nothing.
+pub(crate) fn store_note(
+    vault: &Vault,
+    path: &Path,
+    bytes: &[u8],
+    force: bool,
+) -> Result<(), String> {
+    if !force && changed_since_read(vault, path) {
+        return Err(CHANGED_ON_DISK.to_string());
+    }
+
+    let before = locked(&vault.known).get(path).copied();
+    let written = write_atomically_noting(path, bytes, |at| {
+        locked(&vault.known).insert(path.to_path_buf(), at);
+    });
+
+    if let Err(error) = written {
+        // Nothing landed, so the note is as it was: what was recorded for it
+        // has to be too, or the next save is refused for a change that never
+        // happened.
+        match before {
+            Some(at) => locked(&vault.known).insert(path.to_path_buf(), at),
+            None => locked(&vault.known).remove(path),
+        };
+        return Err(error);
+    }
+
+    // Settled from the file itself, for a filesystem whose rename does not
+    // keep the time it was given.
+    remember(vault, path);
+    Ok(())
 }
 
 /// A new note at `path` - relative to the vault, with `/` between folders -
