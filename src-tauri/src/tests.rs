@@ -1,8 +1,8 @@
 use crate::cli::OpenTarget;
 use crate::files::{
     already_exists, create_unused, create_unused_with, duplicate_file, exact_file_name,
-    move_destination, opened_by_the_system, rename_no_replace, safe_file_name, store_note,
-    times_of, write_atomically, write_atomically_noting,
+    move_destination, opened_by_the_system, rename_no_replace, safe_file_name, times_of,
+    write_atomically, write_atomically_noting,
 };
 // Only asked about where a file has a mode to ask about.
 #[cfg(unix)]
@@ -86,6 +86,7 @@ fn says_when_a_note_will_be_before_it_lands() {
 #[cfg(unix)]
 #[test]
 fn a_failed_save_leaves_the_recorded_time_alone() {
+    use crate::files::store_note;
     use std::os::unix::fs::PermissionsExt;
 
     let dir = tempfile::tempdir().unwrap();
@@ -1489,6 +1490,7 @@ fn lists_the_tags_in_the_notes_a_vault_shows() {
 #[cfg(not(windows))]
 mod windows {
     use super::*;
+    use crate::files::store_note;
     use crate::folder::adopt_folder;
     use crate::launch::FILE_CHANGED_EVENT;
     use crate::state::vault_of;
