@@ -58,7 +58,7 @@ export default function InfoSettings({
         <span className="font-mono text-xs text-gray-400">{appVersion ? `v${appVersion}` : "unknown"}</span>
       </SettingRow>
 
-      <SettingRow title="Changelog" description="What changed in this release, and the ones before it">
+      <SettingRow title="Changelog" description="What changed in the version you're running">
         <button
           onClick={onOpenChangelog}
           className="cursor-pointer rounded-md border border-zinc-700 bg-zinc-800 px-3 py-1 text-xs text-white transition-colors hover:border-[var(--nuza-accent)]"
