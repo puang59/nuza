@@ -100,8 +100,8 @@ export const KEYMAP_ACTIONS: KeymapDefinition[] = [
   },
   {
     id: "quick-settings",
-    label: "Quick Settings",
-    description: "Flip the on/off settings from a floating search",
+    label: "Commands and Settings",
+    description: "Run any command, or flip an on/off setting, from a floating search",
     defaultBinding: "mod+k",
   },
   {
