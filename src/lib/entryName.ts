@@ -77,3 +77,12 @@ export function nameProblem(name: string): string | null {
 
   return null;
 }
+
+/**
+ * `name` as a note's file name: given `.md` unless it already ends in an
+ * extension. An extension has a letter in it, so `v1.2` and `Dr. Who` become
+ * notes, and `data.csv` is left as it was asked for.
+ */
+export function withNoteExtension(name: string): string {
+  return /\.(?=[a-z0-9]*[a-z])[a-z0-9]{1,6}$/i.test(name) ? name : `${name}.md`;
+}
