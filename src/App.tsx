@@ -80,6 +80,8 @@ import {
   applyTypography,
   clampEditorFontSize,
   editorFontFamily,
+  uiFontFamily,
+  codeFontFamily,
 } from "./lib/fonts";
 
 /** Space between the editor and the sidebar, collapsed with the panel itself. */
@@ -136,6 +138,17 @@ function App() {
   const [compactMode, setCompactMode] = usePersistedState("compactMode", false);
   const [autoUpdateEnabled, setAutoUpdateEnabled] = usePersistedState("autoUpdateEnabled", true);
   const [editorFont, setEditorFont] = usePersistedState("editorFont", DEFAULT_EDITOR_FONT);
+  const [uiFont, setUiFont] = usePersistedState("uiFont", "");
+  const [codeFont, setCodeFont] = usePersistedState("codeFont", "");
+  // The interface and code fonts reach the whole page through two properties
+  // on the root, which App.css and the editor's theme read.
+  useEffect(() => {
+    const root = document.documentElement.style;
+    if (uiFont) root.setProperty("--nuza-ui-font", uiFontFamily(uiFont));
+    else root.removeProperty("--nuza-ui-font");
+    if (codeFont) root.setProperty("--nuza-code-font", codeFontFamily(codeFont));
+    else root.removeProperty("--nuza-code-font");
+  }, [uiFont, codeFont]);
   const [editorFontSize, setEditorFontSize] = usePersistedState("editorFontSize", DEFAULT_EDITOR_FONT_SIZE);
   const [contentWidth, setContentWidth] = usePersistedState("editorContentWidth", DEFAULT_CONTENT_WIDTH);
   const [lineHeight, setLineHeight] = usePersistedState("editorLineHeight", DEFAULT_LINE_HEIGHT);
@@ -1401,6 +1414,10 @@ function App() {
         setAutoUpdateEnabled={setAutoUpdateEnabled}
         editorFont={editorFont}
         setEditorFont={setEditorFont}
+        uiFont={uiFont}
+        setUiFont={setUiFont}
+        codeFont={codeFont}
+        setCodeFont={setCodeFont}
         editorFontSize={editorFontSize}
         setEditorFontSize={(size) => setEditorFontSize(clampEditorFontSize(size))}
         contentWidth={contentWidth}
