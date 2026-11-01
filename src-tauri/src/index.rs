@@ -279,7 +279,7 @@ impl VaultIndex {
     /// of files changed - a note being edited does not change it, only the text
     /// it holds - which is what is worth telling the window about.
     pub(crate) fn refresh(&self, path: &Path) -> bool {
-        let (generation, display) = {
+        let (generation, display, display_root, resolved_root) = {
             let mut inner = lock(&self.inner);
             let display = if let Ok(inside) = path.strip_prefix(&inner.resolved_root) {
                 inner.display_root.join(inside)
@@ -304,8 +304,22 @@ impl VaultIndex {
                 inner.pending.push(path.to_path_buf());
                 return false;
             }
-            (inner.generation, display)
+            (
+                inner.generation,
+                display,
+                inner.display_root.clone(),
+                inner.resolved_root.clone(),
+            )
         };
+
+        // Nor is anything inside what the vault's .gitignore files leave out:
+        // a build folder reports a great deal, and none of it is listed. Asked
+        // outside the lock, since it may read those files.
+        if let Ok(inside) = display.strip_prefix(&display_root) {
+            if crate::gitignore::ignores_within(&resolved_root, &resolved_root.join(inside)) {
+                return false;
+            }
+        }
 
         // A stat on a share that has gone quiet is waited on like any other.
         let owned = display.clone();

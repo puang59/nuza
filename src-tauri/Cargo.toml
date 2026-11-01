@@ -18,6 +18,8 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+# The vault's .gitignore files, read the way git reads them - see gitignore.rs.
+ignore = "0.4"
 # No "protocol-asset": a note's media goes over nuza-media:// instead, which
 # is scoped to the open folder rather than to every folder ever opened.
 tauri = { version = "2", features = ["macos-private-api"] }

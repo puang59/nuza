@@ -2642,3 +2642,24 @@ fn a_note_window_counts_as_its_vault_while_it_opens() {
         Route::Existing("w-1".to_string())
     );
 }
+
+#[test]
+fn the_vaults_gitignore_files_leave_entries_out() {
+    use crate::gitignore::{ignores, ignores_within};
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    fs::write(root.join(".gitignore"), "build/\n*.log\n").unwrap();
+    fs::create_dir_all(root.join("notes")).unwrap();
+    fs::write(root.join("notes").join(".gitignore"), "!keep.log\n").unwrap();
+
+    assert!(ignores(&root, &root.join("build"), true));
+    assert!(!ignores(&root, &root.join("build"), false));
+    assert!(ignores(&root, &root.join("debug.log"), false));
+    assert!(!ignores(&root, &root.join("notes").join("keep.log"), false));
+    assert!(!ignores(&root, &root.join("notes").join("a.md"), false));
+    assert!(ignores_within(
+        &root,
+        &root.join("build").join("out").join("x.js")
+    ));
+    assert!(!ignores_within(&root, &root.join("notes").join("a.md")));
+}
