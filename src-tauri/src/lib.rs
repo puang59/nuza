@@ -210,6 +210,7 @@ pub fn run() {
             files::copy_entry,
             multiwindow::open_single_note_window,
             dock::set_dock_vaults,
+            multiwindow::close_or_hide_window,
             terminal::open_in_terminal,
             files::write_file,
             media::write_media,
@@ -248,12 +249,20 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
-        .run(|app, event| {
+        .run(|app, event| match event {
             // A nuza that has quit must not leave an agent running.
-            if let tauri::RunEvent::Exit = event {
+            tauri::RunEvent::Exit => {
                 if let Some(harness) = app.try_state::<Arc<agent::AgentHarness>>() {
                     harness.shutdown_now();
                 }
             }
+            // The Dock icon clicked with every window hidden - the main one
+            // put away by mod+W - brings the last one used back.
+            #[cfg(target_os = "macos")]
+            tauri::RunEvent::Reopen {
+                has_visible_windows: false,
+                ..
+            } => multiwindow::raise_recent(app),
+            _ => {}
         });
 }
