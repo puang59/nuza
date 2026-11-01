@@ -615,6 +615,50 @@ const editorTheme = EditorView.theme(
        from every element on the page. */
     ".cm-md-math": { whiteSpace: "normal" },
     ".cm-md-math-block": { display: "block", padding: "0.5em 0", textAlign: "center", overflowX: "auto" },
+    /* A Mermaid diagram: fitted to the column, centred, with the button that
+       opens it full size in its corner. The source shows, set as code, while
+       it draws, and the error in place of it when it does not parse. */
+    ".cm-md-mermaid": {
+      position: "relative",
+      margin: "0.6em 0",
+      padding: "0.75em",
+      borderRadius: "8px",
+      border: `1px solid ${ink.hairline}`,
+    },
+    ".cm-md-mermaid-stage": {
+      display: "flex",
+      justifyContent: "center",
+      overflowX: "auto",
+    },
+    /* Before it is drawn, or when it cannot be: the source, set as code. */
+    ".cm-md-mermaid-source": {
+      fontFamily: CODE_FONT_FAMILY,
+      fontSize: "0.85em",
+      whiteSpace: "pre-wrap",
+      color: ink.muted,
+      justifyContent: "flex-start",
+    },
+    ".cm-md-mermaid-stage svg": {
+      maxWidth: "100%",
+      height: "auto",
+    },
+    ".cm-md-mermaid-error": {
+      color: "#f87171",
+      justifyContent: "flex-start",
+    },
+    ".cm-md-mermaid-expand": {
+      position: "absolute",
+      top: "6px",
+      right: "8px",
+      opacity: "0",
+      cursor: "pointer",
+      color: ink.muted,
+      background: "transparent",
+      border: "none",
+      fontSize: "15px",
+      transition: "opacity 120ms",
+    },
+    ".cm-md-mermaid:hover .cm-md-mermaid-expand": { opacity: "1" },
     ".cm-md-math-source": { fontFamily: CODE_FONT_FAMILY, color: ink.code },
     ".cm-md-html": { whiteSpace: "normal" },
     ".cm-md-html-block": { display: "block", padding: "0.3em 0", overflowX: "auto" },

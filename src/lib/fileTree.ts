@@ -240,6 +240,8 @@ export interface SortOptions {
   reversed?: boolean;
   /** Folders above files, on by default; off, the two are sorted together. */
   foldersFirst?: boolean;
+  /** What an entry is shown as, when that is not its name: name order follows it. */
+  labelOf?: (entry: FileEntry) => string;
 }
 
 export const SORT_ORDERS: { id: SortOrder; label: string }[] = [
@@ -273,14 +275,15 @@ function byName(a: FileEntry, b: FileEntry) {
 export function sortTree(
   tree: FileEntry[],
   order: SortOrder,
-  { reversed = false, foldersFirst = true }: SortOptions = {}
+  { reversed = false, foldersFirst = true, labelOf }: SortOptions = {}
 ): FileEntry[] {
-  if (order === "name" && !reversed && foldersFirst) return tree;
+  if (order === "name" && !reversed && foldersFirst && !labelOf) return tree;
 
+  const shown = (entry: FileEntry) => (labelOf ? { ...entry, name: labelOf(entry) } : entry);
   const compare = (a: FileEntry, b: FileEntry) => {
-    if (order === "name") return byName(a, b);
+    if (order === "name") return byName(shown(a), shown(b));
     const newer = timeOf(b, order) - timeOf(a, order);
-    return (Number.isNaN(newer) ? 0 : newer) || byName(a, b);
+    return (Number.isNaN(newer) ? 0 : newer) || byName(shown(a), shown(b));
   };
   const sort = (entries: FileEntry[]): FileEntry[] =>
     entries
