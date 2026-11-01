@@ -51,6 +51,8 @@ const CODE_INFO = Decoration.mark({ class: "cm-md-code-info" });
 const ORDERED_MARK = Decoration.mark({ class: "cm-md-ordered-mark" });
 
 const QUOTE_LINE = Decoration.line({ class: "cm-md-quote" });
+/** A list item's first line, a little apart from the item above it. */
+const ITEM_GAP = Decoration.line({ class: "cm-md-item-gap" });
 const TASK_DONE = Decoration.mark({ class: "cm-md-task-done" });
 const RULE_LINE = Decoration.line({ class: "cm-md-mark" });
 /** Math with the caret in it: the TeX as written, in the code face. */
@@ -107,6 +109,20 @@ function isBeingEdited(state: EditorState, from: number, to: number) {
  */
 function isInLink(state: EditorState, link: SyntaxNode) {
   return state.selection.ranges.some((range) => range.from <= link.to && range.to >= link.from);
+}
+
+/**
+ * Whether a list item gets a little room above it: every item that follows
+ * another straight on, and the first item of a list nested in one, so a list
+ * reads as points rather than as one paragraph broken over lines. The first
+ * point of a list at the top level is spaced like the paragraph it is, and a
+ * loose list already has a blank line between its points.
+ */
+function spacedFromAbove(doc: Text, item: SyntaxNode) {
+  const line = doc.lineAt(item.from).number;
+  const previous = item.prevSibling;
+  if (previous?.name === "ListItem") return doc.lineAt(previous.to).number === line - 1;
+  return item.parent?.parent?.name === "ListItem";
 }
 
 /** Runs `visit` for every line a node covers, flagging the first and last. */
@@ -427,6 +443,11 @@ function decorateNode(node: SyntaxNodeRef, build: Build): boolean | undefined {
     const line = doc.lineAt(from);
     const end = to < line.to && doc.sliceString(to, to + 1) === " " ? to + 1 : to;
     out.push(HIDDEN.range(from, end));
+    return;
+  }
+
+  if (name === "ListItem") {
+    if (spacedFromAbove(doc, node.node)) out.push(ITEM_GAP.range(doc.lineAt(from).from));
     return;
   }
 
