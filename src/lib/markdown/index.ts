@@ -2,6 +2,7 @@ import {
   deleteMarkupBackward,
   insertNewlineContinueMarkupCommand,
   markdown,
+  markdownLanguage,
 } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
 import { Extension, Prec } from "@codemirror/state";
@@ -98,6 +99,15 @@ const markdownEditingKeymap = Prec.high(
 );
 
 /**
+ * Brackets close themselves in prose, quotes do not. A quote typed mid-sentence
+ * left a stray `"` or `'` behind whenever the sentence was not finished at
+ * once, and the closing one is typed by hand anyway. Brackets still pair -
+ * `[[` is how a link to a note starts. Fenced code is left to its own
+ * language, where quotes pair as in any code editor.
+ */
+const proseBrackets = markdownLanguage.data.of({ closeBrackets: { brackets: ["(", "[", "{"] } });
+
+/**
  * The whole writing surface: GFM parsing, the rendered-as-you-type decorations
  * and the theme that sizes them. Built once at module scope so reconfiguring
  * the editor (font changes, switching Vim on) reuses the same state field
@@ -113,6 +123,7 @@ export const liveMarkdown: Extension = [
     addKeymap: false,
   }),
   markdownEditingKeymap,
+  proseBrackets,
   htmlKeepsIndentation,
   EditorView.lineWrapping,
   nuzaEditorTheme,
