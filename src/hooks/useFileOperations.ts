@@ -101,6 +101,10 @@ interface UseFileOperationsOptions {
   preferences: Extension;
   /** Called after a folder is successfully opened, with the folder's path. */
   onFolderOpened?: (path: string) => void;
+  /** Called when a file or folder is renamed or moved, for lists of paths kept elsewhere. */
+  onPathMoved?: (from: string, to: string) => void;
+  /** Called when a file or folder is deleted, likewise. */
+  onPathDeleted?: (path: string) => void;
 }
 
 interface OpenedFolder {
@@ -109,7 +113,16 @@ interface OpenedFolder {
 }
 
 /** Owns the editor's open documents and every Tauri file-system round trip. */
-export function useFileOperations({ preferences, onFolderOpened }: UseFileOperationsOptions) {
+export function useFileOperations({
+  preferences,
+  onFolderOpened,
+  onPathMoved,
+  onPathDeleted,
+}: UseFileOperationsOptions) {
+  // Read when a path changes rather than taken as dependencies, so a caller
+  // passing fresh functions does not rebuild every file operation.
+  const pathListeners = useRef({ onPathMoved, onPathDeleted });
+  pathListeners.current = { onPathMoved, onPathDeleted };
   // Read once, on the way up: the editor is built around this, and a later
   // read would be of whatever the app has since written back.
   const [firstDraftContent] = useState(() => readScratch()[UNTITLED_FILE] ?? "");
@@ -1386,6 +1399,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
       if (isWithin(currentFileRef.current, from)) setCurrentFile(rename(currentFileRef.current));
       setSideFile((side) => (side && isWithin(side, from) ? rename(side) : side));
       setMissing((paths) => (paths.size === 0 ? paths : new Set(Array.from(paths, rename))));
+      pathListeners.current.onPathMoved?.(from, to);
     },
     [rewriteDocuments]
   );
@@ -1637,6 +1651,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
       }
 
       forgetDocuments((open) => isWithin(open, path));
+      pathListeners.current.onPathDeleted?.(path);
       setSideFile((side) => (side && isWithin(side, path) ? null : side));
       setMissing((paths) =>
         paths.size === 0 ? paths : new Set(Array.from(paths).filter((gone) => !isWithin(gone, path)))

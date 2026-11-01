@@ -9,7 +9,17 @@ import {
   useRef,
   useState,
 } from "react";
-import { ArrowUpDown, ChevronsDownUp, FilePlus, FolderPlus, Regex, Search, X } from "lucide-react";
+import {
+  ArrowUpDown,
+  ChevronRight,
+  ChevronsDownUp,
+  FilePlus,
+  FolderPlus,
+  Regex,
+  Search,
+  X,
+} from "lucide-react";
+import { FileIcon } from "@/lib/utils";
 import { cn } from "cn";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { draggedPaths, endDrag } from "@/lib/dragSource";
@@ -54,6 +64,90 @@ import { Vault } from "@/lib/vaults";
 
 /** What the rest of the app can ask the sidebar to do. */
 /** The tree row `row` is, as a selection: a folder's row is its `<summary>`. */
+/** How many notes a vault has before it gets a Recents section. */
+const RECENTS_FROM = 10;
+/** How many recent notes the section shows. */
+const RECENTS_SHOWN = 5;
+const NO_PATHS: readonly string[] = [];
+
+/**
+ * A short list of notes above the tree - the pinned ones, or the recent ones -
+ * with a heading that folds it away. Not part of the tree: the rows carry no
+ * `data-path`, so the tree's keys and its reveal never land on them instead of
+ * the note's own row.
+ */
+function Shortcuts({
+  title,
+  paths,
+  open,
+  onToggle,
+  currentFile,
+  rootPath,
+  onOpen,
+  onContextMenu,
+}: {
+  title: string;
+  paths: readonly string[];
+  open: boolean;
+  onToggle: () => void;
+  currentFile: string;
+  rootPath: string;
+  onOpen: (path: string) => void;
+  onContextMenu: (e: React.MouseEvent, path: string) => void;
+}) {
+  if (!paths.length) return null;
+  return (
+    <div className="mb-2" data-shortcuts>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggle();
+        }}
+        aria-expanded={open}
+        className="flex w-full cursor-pointer items-center gap-1 px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-zinc-500 hover:text-zinc-300"
+      >
+        <ChevronRight className={cn("h-3 w-3 transition-transform", open && "rotate-90")} />
+        {title}
+      </button>
+      {open && (
+        <ul className="space-y-0.5">
+          {paths.map((path) => {
+            const folder = relativePath(rootPath, parentOf(path));
+            return (
+              <li key={path}>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpen(path);
+                  }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onContextMenu(e, path);
+                  }}
+                  title={relativePath(rootPath, path)}
+                  className={cn(
+                    "flex w-full cursor-pointer items-center gap-1.5 rounded-md py-1 pl-7 pr-2 text-left text-sm transition-colors compact:py-0.5",
+                    path === currentFile
+                      ? "bg-white/5 text-zinc-200"
+                      : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-100"
+                  )}
+                >
+                  <FileIcon name={fileNameOf(path)} />
+                  <span className="truncate">{fileNameOf(path).replace(/\.md$/i, "")}</span>
+                  {folder && folder !== "." && (
+                    <span className="ml-auto shrink-0 truncate pl-2 text-xs text-zinc-600">{folder}</span>
+                  )}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 /** Nothing picked: one set for it, so the rows can tell at a glance that nothing changed. */
 const NONE_PICKED: ReadonlySet<string> = new Set();
 
@@ -100,6 +194,12 @@ interface SidebarProps {
   onDuplicate: (path: string) => Promise<void> | void;
   /** Copies a file into a folder, for one copied in the tree and pasted elsewhere. */
   onCopy: (path: string, targetDir: string) => Promise<void> | void;
+  /** The open vault's pinned notes, in the order they were pinned. */
+  pinned?: readonly string[];
+  /** Pins a note to the top of the sidebar, or unpins it. */
+  onTogglePin?: (path: string) => void;
+  /** Notes opened most recently, newest first, from any vault. */
+  recentPaths?: readonly string[];
   onDelete: (path: string) => Promise<void> | void;
   onMove: (path: string, targetDir: string) => Promise<void> | void;
   onAttachFiles: (directory: string, files: File[]) => Promise<void> | void;
@@ -138,6 +238,9 @@ function Sidebar({
   onRename,
   onDuplicate,
   onCopy,
+  pinned = NO_PATHS,
+  onTogglePin,
+  recentPaths = NO_PATHS,
   onDelete,
   onMove,
   onAttachFiles,
@@ -174,6 +277,8 @@ function Sidebar({
    * it, for a file - so a folder just made is where the next note goes.
    */
   const [selected, setSelected] = useState<TreeSelection | null>(null);
+  const [pinnedOpen, setPinnedOpen] = usePersistedState("sidebarPinnedOpen", true);
+  const [recentsOpen, setRecentsOpen] = usePersistedState("sidebarRecentsOpen", true);
   /**
    * Rows picked together, as in VS Code: mod-click adds or takes away a row,
    * shift-click or shift and an arrow takes in every row from the anchor.
@@ -205,6 +310,22 @@ function Sidebar({
   const order = SORT_ORDERS.some((option) => option.id === sortOrder) ? sortOrder : "name";
   /** The tree in the order it is shown in. For name order it is the tree itself. */
   const shownData = useMemo(() => sortTree(data, order), [data, order]);
+  /**
+   * The notes of this vault opened most recently, leaving out the one on
+   * screen and any that are pinned. Not shown in a vault small enough to see
+   * whole, where it would only repeat the tree.
+   */
+  const recents = useMemo(() => {
+    if (!rootPath || notes.length < RECENTS_FROM) return NO_PATHS;
+    const here = new Set(notes);
+    return recentPaths
+      .filter((path) => path !== currentFile && here.has(path) && !pinned.includes(path))
+      .slice(0, RECENTS_SHOWN);
+  }, [rootPath, notes, recentPaths, currentFile, pinned]);
+  const shownPins = useMemo(() => {
+    const here = new Set(notes);
+    return pinned.filter((path) => here.has(path));
+  }, [pinned, notes]);
   /** What the delete dialog is asking about: one row, or every picked one. */
   const [deleteTarget, setDeleteTarget] = useState<FileEntry[] | null>(null);
   const [isSearching, setIsSearching] = useState(false);
@@ -535,6 +656,11 @@ function Sidebar({
     }
   }
 
+  /** The tree's entry for a note, or one made up for a note in a folder not yet read. */
+  function entryFor(path: string): FileEntry {
+    return findEntry(data, path) ?? { name: fileNameOf(path), path, isDirectory: false };
+  }
+
   /** The tree's entries for `paths`, leaving out any inside another of them. */
   function entriesOf(paths: Iterable<string>) {
     return outermost(paths).flatMap((path) => findEntry(data, path) ?? []);
@@ -692,6 +818,10 @@ function Sidebar({
     // A note only: a picture or a PDF has nothing to show in an editor's window.
     if (!entry.isDirectory && onOpenInWindow && /\.md$/i.test(entry.name)) {
       items.push({ label: "Open in New Window", onClick: () => onOpenInWindow(entry.path) });
+    }
+    if (!entry.isDirectory && onTogglePin) {
+      const isPinned = pinned.includes(entry.path);
+      items.push({ label: isPinned ? "Unpin" : "Pin", onClick: () => onTogglePin(entry.path) });
     }
     items.push({ label: "Rename", onClick: () => setRenamingPath(entry.path) });
     if (!entry.isDirectory) items.push({ label: "Duplicate", onClick: () => duplicateEntry(entry.path) });
@@ -986,6 +1116,26 @@ function Sidebar({
           </div>
         ) : (
           <TreeContext.Provider value={treeActions}>
+            <Shortcuts
+              title="Pinned"
+              paths={shownPins}
+              open={pinnedOpen}
+              onToggle={() => setPinnedOpen((open) => !open)}
+              currentFile={currentFile}
+              rootPath={rootPath ?? ""}
+              onOpen={(path) => onFileSelect?.(path)}
+              onContextMenu={(e, path) => openContextMenu(e, entryFor(path))}
+            />
+            <Shortcuts
+              title="Recents"
+              paths={recents}
+              open={recentsOpen}
+              onToggle={() => setRecentsOpen((open) => !open)}
+              currentFile={currentFile}
+              rootPath={rootPath ?? ""}
+              onOpen={(path) => onFileSelect?.(path)}
+              onContextMenu={(e, path) => openContextMenu(e, entryFor(path))}
+            />
             <ul className="space-y-0.5">
               {pendingCreate?.parentPath === rootPath && (
                 <NewEntryRow type={pendingCreate.type} onSubmit={submitCreate} onCancel={cancelCreate} />

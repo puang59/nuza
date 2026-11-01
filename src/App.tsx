@@ -36,6 +36,7 @@ import { usePersistedState } from "./hooks/usePersistedState";
 import { NO_MODEL_CHOICES, type ModelChoices } from "./lib/ai/modelChoice";
 import { NO_MEMORY, memoryFor, remember, type MemoryStore } from "./lib/ai/memory";
 import { useRecentFiles } from "./hooks/useRecentFiles";
+import { PinStore, forgetPins, movePins, readPins, togglePin } from "./lib/pins";
 import { useOutline } from "./hooks/useOutline";
 import { hasEmbeds, refreshEmbeds, setVaultFiles } from "./lib/markdown/embedIndex";
 import { useResizableAiPanel, useResizableSidebar } from "./hooks/useResizableSidebar";
@@ -83,6 +84,8 @@ import {
 
 /** Space between the editor and the sidebar, collapsed with the panel itself. */
 const SIDEBAR_GAP = 12;
+/** No notes pinned: one list for it, so the sidebar can tell nothing changed. */
+const NO_PINS: string[] = [];
 
 /**
  * Below this window width there is not room for the AI panel, the note and
@@ -170,6 +173,31 @@ function App() {
   /** Which pane the AI panel was opened from: its note is the one asked about. */
   const aiFromSide = useRef(false);
 
+  const {
+    recent: recentFiles,
+    record: recordRecentFile,
+    move: moveRecentFile,
+    forget: forgetRecentFile,
+  } = useRecentFiles();
+  /** Notes pinned to the top of the sidebar, per vault. */
+  const [storedPins, setStoredPins] = usePersistedState<PinStore>("pinnedNotes", {});
+  const pins = useMemo(() => readPins(storedPins), [storedPins]);
+  // Both lists follow a note that is renamed, moved or deleted.
+  const onPathMoved = useCallback(
+    (from: string, to: string) => {
+      moveRecentFile(from, to);
+      setStoredPins((stored) => movePins(readPins(stored), from, to));
+    },
+    [moveRecentFile, setStoredPins]
+  );
+  const onPathDeleted = useCallback(
+    (path: string) => {
+      forgetRecentFile(path);
+      setStoredPins((stored) => forgetPins(readPins(stored), path));
+    },
+    [forgetRecentFile, setStoredPins]
+  );
+
   const onFolderOpened = useCallback(
     (path: string) => {
       rememberVault(path);
@@ -256,6 +284,8 @@ function App() {
   } = useFileOperations({
     preferences: editorPreferences,
     onFolderOpened,
+    onPathMoved,
+    onPathDeleted,
   });
   const {
     status: updateStatus,
@@ -288,8 +318,17 @@ function App() {
     (aiEnabled && isAiOpen && !zen ? aiPanelWidth + SIDEBAR_GAP : 0) +
     (isSidebarOpen && !zen ? sidebarWidth + SIDEBAR_GAP : 0);
   useSteadyColumn(editorArea, panelSpace, !isResizing && !isResizingAiPanel);
+
+  // The open vault's pins, as one list per vault so the sidebar is only
+  // handed a new one when they change.
+  const vaultPins = useMemo(() => (rootPath ? (pins[rootPath] ?? NO_PINS) : NO_PINS), [pins, rootPath]);
+  const togglePinned = useCallback(
+    (path: string) => {
+      if (rootPath) setStoredPins((stored) => togglePin(readPins(stored), rootPath, path));
+    },
+    [rootPath, setStoredPins]
+  );
   const { notices, dismiss: dismissNotice, hold: noticeHold } = useNotices();
-  const { recent: recentFiles, record: recordRecentFile } = useRecentFiles();
 
   // Whatever comes to the front is what was most recently worked in. The
   // scratch note has no path, and is not a file to come back to.
@@ -1179,6 +1218,9 @@ function App() {
               onRename={renameEntry}
               onDuplicate={duplicateEntry}
               onCopy={copyEntry}
+              pinned={vaultPins}
+              onTogglePin={togglePinned}
+              recentPaths={recentFiles}
               onDelete={deleteEntry}
               onMove={moveEntry}
               onAttachFiles={attachFiles}
