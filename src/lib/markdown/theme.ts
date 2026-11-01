@@ -92,18 +92,18 @@ const editorTheme = EditorView.theme(
     "&.cm-focused > .cm-scroller > .cm-cursorLayer .cm-cursor, .cm-cursor, .cm-dropCursor": {
       borderLeft: `2px solid ${ink.caret}`,
     },
-    /* Vim's block cursor draws itself as a background, not a border. Every
-       property here is `!important`: Vim's own theme names the same selectors
-       at the highest precedence, so a plain rule loses the tie and the cursor
-       keeps Vim's built-in pink whatever accent has been picked. */
+    /* Vim's block cursor draws itself as a background, not a border. These
+       are `!important`: Vim's own theme names the same selectors at the
+       highest precedence, so a plain rule loses the tie to its built-in pink. */
     ".cm-fat-cursor": {
       background: `${ink.caret} !important`,
       color: "var(--nuza-bg) !important",
     },
+    /* Out of focus - another app in front, or the sidebar being used - Vim
+       leaves an empty box where the cursor was. A caret goes away when its
+       editor is not being typed into, and so does this one. */
     "&:not(.cm-focused) .cm-fat-cursor": {
-      background: "none !important",
-      outline: `1px solid ${ink.caret} !important`,
-      color: "transparent !important",
+      display: "none !important",
     },
     /* Spelled out through the scroller and the selection layer, rather than as
        a flat `.cm-selectionBackground`: CodeMirror's own dark base theme sets
@@ -116,6 +116,43 @@ const editorTheme = EditorView.theme(
       background: ink.selection,
     },
     ".cm-activeLine": { backgroundColor: "transparent" },
+
+    /* The note list `[[` opens: the window's own surface and ink rather than
+       CodeMirror's stock grey box, with the chosen row in the accent. The
+       colours are `!important` because the stock ones are set per light and
+       dark theme, through a longer selector. */
+    ".cm-tooltip.cm-tooltip-autocomplete": {
+      background: "var(--nuza-bg)",
+      border: `1px solid ${ink.hairline}`,
+      borderRadius: "8px",
+      boxShadow: "0 8px 24px rgba(0, 0, 0, 0.35)",
+      padding: "4px",
+      overflow: "hidden",
+    },
+    ".cm-tooltip-autocomplete > ul": {
+      fontFamily: "inherit !important",
+      fontSize: "0.9em",
+      maxHeight: "15em",
+      minWidth: "14em",
+    },
+    ".cm-tooltip-autocomplete > ul > li": {
+      padding: "3px 10px !important",
+      borderRadius: "5px",
+      color: `${ink.text} !important`,
+      lineHeight: "1.6",
+    },
+    ".cm-tooltip-autocomplete > ul > li[aria-selected]": {
+      background: `${ink.selection} !important`,
+      color: `${ink.heading} !important`,
+    },
+    ".cm-completionIcon": { display: "none" },
+    ".cm-completionMatchedText": { textDecoration: "none", color: ink.accent },
+    ".cm-completionDetail": {
+      color: ink.muted,
+      fontStyle: "normal",
+      fontSize: "0.85em",
+      marginLeft: "0.75em",
+    },
 
     /* Other copies of what you have selected, in the second accent so they
        read as related to the selection without being mistaken for it.
