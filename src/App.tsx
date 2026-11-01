@@ -119,6 +119,7 @@ function App() {
   // Off unless asked for: marks on the writing surface are not something to
   // put in front of everyone.
   const [sectionGuides, setSectionGuides] = usePersistedState("sectionGuides", false);
+  const [terminalApp, setTerminalApp] = usePersistedState("terminalApp", "", { debounceMs: 400 });
   // Zen mode: the note and nothing else. Not kept between launches - it is a
   // way of working for a while, and an app that came back with no chrome and
   // no hint of how to get it would be a worse surprise than one that did not.
@@ -322,6 +323,14 @@ function App() {
   // The open vault's pins, as one list per vault so the sidebar is only
   // handed a new one when they change.
   const vaultPins = useMemo(() => (rootPath ? (pins[rootPath] ?? NO_PINS) : NO_PINS), [pins, rootPath]);
+  const openInTerminal = useCallback(
+    (path: string) => {
+      invoke("open_in_terminal", { path, app: terminalApp || null }).catch((error) =>
+        report("Couldn't open a terminal there", error)
+      );
+    },
+    [terminalApp]
+  );
   const togglePinned = useCallback(
     (path: string) => {
       if (rootPath) setStoredPins((stored) => togglePin(readPins(stored), rootPath, path));
@@ -1221,6 +1230,7 @@ function App() {
               pinned={vaultPins}
               onTogglePin={togglePinned}
               recentPaths={recentFiles}
+              onOpenInTerminal={openInTerminal}
               onDelete={deleteEntry}
               onMove={moveEntry}
               onAttachFiles={attachFiles}
@@ -1313,6 +1323,8 @@ function App() {
         setSpellLanguage={setSpellLanguage}
         sectionGuides={sectionGuides}
         setSectionGuides={setSectionGuides}
+        terminalApp={terminalApp}
+        setTerminalApp={setTerminalApp}
         zenDimming={zenDimming}
         setZenDimming={setZenDimming}
         appearance={appearance}
