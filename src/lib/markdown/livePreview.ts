@@ -45,6 +45,8 @@ const HIDDEN = Decoration.replace({});
 /** Markup on the line being edited: still there, just stepped back. */
 const DIMMED = Decoration.mark({ class: "cm-md-mark" });
 const SETEXT_MARK = Decoration.mark({ class: "cm-md-setext-mark" });
+/** A heading's leading `#`s on the line being edited: shown, but out in the margin. */
+const HEADING_MARK = Decoration.mark({ class: "cm-md-mark cm-md-heading-mark" });
 const CODE_INFO = Decoration.mark({ class: "cm-md-code-info" });
 const ORDERED_MARK = Decoration.mark({ class: "cm-md-ordered-mark" });
 
@@ -380,13 +382,13 @@ function decorateNode(node: SyntaxNodeRef, build: Build): boolean | undefined {
       if (!isBeingEdited(state, from, to)) out.push(SETEXT_MARK.range(from, to));
       return;
     }
-    if (isBeingEdited(state, from, to)) {
+    const line = doc.lineAt(from);
+    const leading = doc.sliceString(line.from, from).trim() === "";
+    const editing = isBeingEdited(state, from, to);
+    if (editing && !leading) {
       out.push(DIMMED.range(from, to));
       return;
     }
-
-    const line = doc.lineAt(from);
-    const leading = doc.sliceString(line.from, from).trim() === "";
     let start = from;
     let end = to;
 
@@ -400,7 +402,11 @@ function decorateNode(node: SyntaxNodeRef, build: Build): boolean | undefined {
       while (start > line.from && doc.sliceString(start - 1, start) === " ") start--;
     }
 
-    if (start < end) out.push(HIDDEN.range(start, end));
+    // Opened up for editing, the leading `## ` hangs in the margin instead
+    // of taking room in the line: the heading's text starts at the column
+    // whether the marks are showing or not, rather than jumping right as the
+    // caret arrives and back as it leaves.
+    if (start < end) out.push((editing ? HEADING_MARK : HIDDEN).range(start, end));
     return;
   }
 
