@@ -121,6 +121,7 @@ function App() {
   // Off unless asked for: marks on the writing surface are not something to
   // put in front of everyone.
   const [sectionGuides, setSectionGuides] = usePersistedState("sectionGuides", false);
+  const [noteTitles, setNoteTitles] = usePersistedState("sidebarNoteTitles", false);
   const [terminalApp, setTerminalApp] = usePersistedState("terminalApp", "", { debounceMs: 400 });
   // Zen mode: the note and nothing else. Not kept between launches - it is a
   // way of working for a while, and an app that came back with no chrome and
@@ -778,6 +779,13 @@ function App() {
         onToggle: setSectionGuides,
       },
       {
+        id: "note-titles",
+        title: "Note Titles in Sidebar",
+        description: "Show notes by their title instead of their file name",
+        enabled: noteTitles,
+        onToggle: setNoteTitles,
+      },
+      {
         id: "zen-mode",
         title: "Zen Mode",
         description: "Hide everything but the note",
@@ -842,6 +850,8 @@ function App() {
       setSpellCheck,
       sectionGuides,
       setSectionGuides,
+      noteTitles,
+      setNoteTitles,
       zen,
       zenDimming,
       setZenDimming,
@@ -1272,6 +1282,7 @@ function App() {
               pinned={vaultPins}
               onTogglePin={togglePinned}
               recentPaths={recentFiles}
+              showTitles={noteTitles}
               onOpenInTerminal={openInTerminal}
               onDelete={deleteEntry}
               onMove={moveEntry}
@@ -1370,6 +1381,8 @@ function App() {
         setSpellLanguage={setSpellLanguage}
         sectionGuides={sectionGuides}
         setSectionGuides={setSectionGuides}
+        noteTitles={noteTitles}
+        setNoteTitles={setNoteTitles}
         terminalApp={terminalApp}
         setTerminalApp={setTerminalApp}
         zenDimming={zenDimming}

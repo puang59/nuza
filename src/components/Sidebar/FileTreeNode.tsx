@@ -91,6 +91,8 @@ function FileTreeNode({ entry }: { entry: FileEntry }) {
   const isCurrent = useTreeMark((marks) => marks.currentFile === entry.path);
   const isSelected = useTreeMark((marks) => marks.selectedPath === entry.path);
   const isPicked = useTreeMark((marks) => marks.picked.has(entry.path));
+  /** The note's own title, when the tree is showing titles and it has one. */
+  const title = useTreeMark((marks) => (entry.isDirectory ? undefined : marks.titles.get(entry.path)));
   /** What is being named inside this folder, if anything is. */
   const creating = useTreeMark((marks) =>
     marks.pendingCreate?.parentPath === entry.path ? marks.pendingCreate.type : null
@@ -333,7 +335,12 @@ function FileTreeNode({ entry }: { entry: FileEntry }) {
             className="min-w-0 flex-1 rounded bg-zinc-900 px-1 py-0.5 text-sm text-white outline outline-1 outline-blue-500"
           />
         ) : (
-          <span className={`truncate ${entry.unavailable ? "text-zinc-600" : ""}`}>{entry.name}</span>
+          <span
+            className={`truncate ${entry.unavailable ? "text-zinc-600" : ""}`}
+            title={title ? entry.name : undefined}
+          >
+            {title ?? entry.name}
+          </span>
         )}
         {entry.unavailable && <Unavailable />}
       </button>
