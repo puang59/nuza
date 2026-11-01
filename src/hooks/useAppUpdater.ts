@@ -15,8 +15,13 @@ const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const RESULT_VISIBLE_MS = 3_000;
 /** Where mac users are sent to grab a build manually, since self-install isn't available there. */
 const RELEASES_URL = "https://github.com/puang59/nuza/releases/latest";
-/** Every release and its notes - the changelog, without one living in the app. */
+/** Every release and its notes, for when the running version is not known. */
 const CHANGELOG_URL = "https://github.com/puang59/nuza/releases";
+
+/** The notes of the release this build is, rather than every release's. */
+export function changelogUrl(version: string | null): string {
+  return version ? `${CHANGELOG_URL}/tag/app-v${version}` : CHANGELOG_URL;
+}
 
 export type UpdateStatus =
   | { state: "idle" }
@@ -158,10 +163,10 @@ export function useAppUpdater({ autoUpdate }: UseAppUpdaterOptions) {
     openUrl(RELEASES_URL).catch((error) => console.error("Failed to open releases page:", error));
   }, []);
 
-  /** Opens the release notes in a browser. */
+  /** Opens the notes of the release being run in a browser. */
   const openChangelog = useCallback(() => {
-    openUrl(CHANGELOG_URL).catch((error) => console.error("Failed to open changelog:", error));
-  }, []);
+    openUrl(changelogUrl(version)).catch((error) => console.error("Failed to open changelog:", error));
+  }, [version]);
 
   useEffect(() => {
     // Dev builds share the release version, so auto-checking would just nag.
