@@ -609,15 +609,44 @@ pub(crate) async fn duplicate_entry(
     .await
 }
 
-pub(crate) fn duplicate_file(source: &Path) -> Result<PathBuf, String> {
-    let metadata = fs::metadata(source).map_err(|e| e.to_string())?;
-    if metadata.is_dir() {
-        return Err("Folders can't be duplicated yet".to_string());
-    }
+/// Copies the file at `path` into the folder `target_dir`, for pasting a copied
+/// note somewhere else in the vault. Under its own name where that is free and
+/// numbered where it is not - pasted back into its own folder, it is a
+/// duplicate. Returns where the copy landed. Folders are not copied.
+#[tauri::command]
+pub(crate) async fn copy_entry(
+    window: tauri::WebviewWindow,
+    path: String,
+    target_dir: String,
+) -> Result<String, String> {
+    off_thread(move || {
+        let vault = vault_of(&window);
+        let source = within_vault(&vault, Path::new(&path))?;
+        let target = within_vault(&vault, Path::new(&target_dir))?;
+        if !target.is_dir() {
+            return Err("Copies can only be put in a folder".to_string());
+        }
+        let copy = copy_file_into(&source, &target)?;
+        note_changes(&window, &[&copy]);
+        Ok(copy.to_string_lossy().into_owned())
+    })
+    .await
+}
 
+pub(crate) fn duplicate_file(source: &Path) -> Result<PathBuf, String> {
     let directory = source
         .parent()
         .ok_or_else(|| "The file has no folder to put a copy in".to_string())?;
+    copy_file_into(source, directory)
+}
+
+/// Copies `source` into `directory` under the first name there that is free.
+pub(crate) fn copy_file_into(source: &Path, directory: &Path) -> Result<PathBuf, String> {
+    let metadata = fs::metadata(source).map_err(|e| e.to_string())?;
+    if metadata.is_dir() {
+        return Err("Folders can't be copied yet".to_string());
+    }
+
     let name = source
         .file_name()
         .ok_or_else(|| "The file has no name".to_string())?

@@ -1,7 +1,7 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { ChevronRight, CloudOff, File, Folder, FolderOpen } from "lucide-react";
 import {
-  draggedPath,
+  draggedPaths,
   endDrag,
   setDragOver,
   setDraggedEntry,
@@ -10,7 +10,7 @@ import {
 } from "@/lib/dragSource";
 import { nameProblem } from "@/lib/entryName";
 import { hasUnavailable, parentOf } from "@/lib/fileTree";
-import { isWithin, samePath } from "@/lib/path";
+import { movableInto } from "@/lib/treeSelection";
 import { FileIcon } from "@/lib/utils";
 import { FileEntry } from "@/lib/types";
 import { useTreeContext, useTreeMark } from "./TreeContext";
@@ -43,6 +43,11 @@ export function NewEntryRow({
   );
 }
 
+/** A click that picks a row, along with the ones already picked, rather than opening it. */
+function isPicking(e: React.MouseEvent) {
+  return e.metaKey || e.ctrlKey || e.shiftKey;
+}
+
 /** How long a closed folder has to be held under a drag before it opens. */
 const SPRING_OPEN_DELAY = 600;
 
@@ -65,6 +70,7 @@ function FileTreeNode({ entry }: { entry: FileEntry }) {
     moveEntry,
     attachFiles,
     loadFolder,
+    marks,
   } = useTreeContext();
 
   const detailsRef = useRef<HTMLDetailsElement>(null);
@@ -84,6 +90,7 @@ function FileTreeNode({ entry }: { entry: FileEntry }) {
   const isRenaming = useTreeMark((marks) => marks.renamingPath === entry.path);
   const isCurrent = useTreeMark((marks) => marks.currentFile === entry.path);
   const isSelected = useTreeMark((marks) => marks.selectedPath === entry.path);
+  const isPicked = useTreeMark((marks) => marks.picked.has(entry.path));
   /** What is being named inside this folder, if anything is. */
   const creating = useTreeMark((marks) =>
     marks.pendingCreate?.parentPath === entry.path ? marks.pendingCreate.type : null
@@ -102,7 +109,12 @@ function FileTreeNode({ entry }: { entry: FileEntry }) {
     e.stopPropagation();
     e.dataTransfer.setData("text/plain", entry.path);
     e.dataTransfer.effectAllowed = "all";
-    setDraggedEntry({ path: entry.path, isDirectory: entry.isDirectory });
+    // A picked row carries every picked row with it.
+    const { picked } = marks.get();
+    setDraggedEntry(
+      { path: entry.path, isDirectory: entry.isDirectory },
+      picked.has(entry.path) ? Array.from(picked) : undefined
+    );
   }
 
   function handleDragEnd(e: React.DragEvent) {
@@ -129,9 +141,7 @@ function FileTreeNode({ entry }: { entry: FileEntry }) {
    */
   function wouldTake(e: React.DragEvent) {
     if (carriesFiles(e)) return true;
-    const dragging = draggedPath();
-    if (!dragging || isWithin(dropTarget, dragging)) return false;
-    return !samePath(parentOf(dragging), dropTarget);
+    return movableInto(draggedPaths(), dropTarget).length > 0;
   }
 
   /**
@@ -175,14 +185,11 @@ function FileTreeNode({ entry }: { entry: FileEntry }) {
     stopSpring();
 
     const files = Array.from(e.dataTransfer.files);
-    const dragging = draggedPath();
+    const dragging = movableInto(draggedPaths(), dropTarget);
     endDrag();
 
-    if (files.length) {
-      attachFiles(dropTarget, files);
-    } else if (dragging && !isWithin(dropTarget, dragging)) {
-      moveEntry(dragging, dropTarget);
-    }
+    if (files.length) attachFiles(dropTarget, files);
+    else for (const path of dragging) moveEntry(path, dropTarget);
   }
 
   if (entry.isDirectory) {
@@ -230,6 +237,11 @@ function FileTreeNode({ entry }: { entry: FileEntry }) {
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
+            // A mod- or shift-click picks the folder, which the tree sees; it
+            // does not also open or shut it.
+            onClick={(e) => {
+              if (isPicking(e)) e.preventDefault();
+            }}
             onContextMenu={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -237,7 +249,7 @@ function FileTreeNode({ entry }: { entry: FileEntry }) {
             }}
             className={`flex cursor-pointer list-none items-center gap-1.5 rounded-md px-2 py-1.5 text-sm transition-colors compact:py-0.5 hover:bg-zinc-800/25 hover:text-white focus:outline-none focus:ring-1 focus:ring-inset focus:ring-zinc-500 [-webkit-user-drag:element] [&::-webkit-details-marker]:hidden ${
               // Selected, so where the header's New File and New Folder go.
-              isSelected ? "bg-white/5 text-zinc-100 group-focus-within/tree:bg-white/10" : ""
+              isSelected || isPicked ? "bg-white/5 text-zinc-100 group-focus-within/tree:bg-white/10" : ""
             } ${isDraggedOver ? "bg-zinc-700/50 outline outline-1 outline-zinc-500" : ""} ${isBeingDragged ? "opacity-40" : ""}`}
           >
             <ChevronRight className="cm-tree-chevron h-3.5 w-3.5 shrink-0 text-zinc-500 transition-transform" />
@@ -292,21 +304,23 @@ function FileTreeNode({ entry }: { entry: FileEntry }) {
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        onClick={() => !isRenaming && onFileSelect && onFileSelect(entry.path)}
+        onClick={(e) => !isRenaming && !isPicking(e) && onFileSelect && onFileSelect(entry.path)}
         onContextMenu={(e) => {
           e.preventDefault();
           e.stopPropagation();
           openContextMenu(e, entry);
         }}
         className={`flex w-full cursor-pointer items-center gap-1.5 rounded-md py-1.5 pl-7 pr-2 text-left text-sm transition-colors compact:py-0.5 focus:outline-none focus:ring-1 focus:ring-inset focus:ring-zinc-500 [-webkit-user-drag:element] ${
-          isCurrent
-            ? // The note the editor is actually showing. It lifts when the
-              // panel has the keyboard and settles back when the editor takes
-              // it, which is the only thing either pane does to say which one
-              // is listening - no badge, no border, just the row you are on
-              // being easier to find while you are the one moving around it.
-              "bg-white/5 text-zinc-300 group-focus-within/tree:bg-white/15 group-focus-within/tree:text-white"
-            : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-100"
+          isPicked
+            ? "bg-white/10 text-zinc-100"
+            : isCurrent
+              ? // The note the editor is actually showing. It lifts when the
+                // panel has the keyboard and settles back when the editor takes
+                // it, which is the only thing either pane does to say which one
+                // is listening - no badge, no border, just the row you are on
+                // being easier to find while you are the one moving around it.
+                "bg-white/5 text-zinc-300 group-focus-within/tree:bg-white/15 group-focus-within/tree:text-white"
+              : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-100"
         } ${isDraggedOver ? "bg-zinc-700/50 outline outline-1 outline-zinc-500" : ""} ${isBeingDragged ? "opacity-40" : ""}`}
       >
         <FileIcon name={entry.name} />

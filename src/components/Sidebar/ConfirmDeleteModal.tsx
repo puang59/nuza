@@ -5,7 +5,7 @@ import { trashName } from "@/lib/platform";
 
 interface ConfirmDeleteModalProps {
   /** What is being deleted, or null when nothing is. */
-  target: { name: string; isDirectory: boolean } | null;
+  target: { name: string; isDirectory: boolean; count?: number } | null;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -35,7 +35,7 @@ export default function ConfirmDeleteModal({ target, onConfirm, onCancel }: Conf
 
   if (!isMounted || !asking.current) return null;
 
-  const { name, isDirectory } = asking.current;
+  const { name, isDirectory, count = 1 } = asking.current;
 
   return (
     <div
@@ -52,11 +52,20 @@ export default function ConfirmDeleteModal({ target, onConfirm, onCancel }: Conf
           isClosing ? "animate-panel-out" : "animate-panel-in"
         )}
       >
-        <h2 className="text-sm font-semibold text-white">Delete {isDirectory ? "folder" : "file"}</h2>
+        <h2 className="text-sm font-semibold text-white">
+          {count > 1 ? `Delete ${count} items` : `Delete ${isDirectory ? "folder" : "file"}`}
+        </h2>
         <p className="mt-2 text-sm text-zinc-400">
-          Are you sure you want to delete <span className="text-zinc-200">"{name}"</span>?
-          {isDirectory && " Everything in it goes too."} It moves to the {trashName()}, where you can get it
-          back.
+          {count > 1 ? (
+            <>Are you sure you want to delete these {count} items?</>
+          ) : (
+            <>
+              Are you sure you want to delete <span className="text-zinc-200">"{name}"</span>?
+            </>
+          )}
+          {isDirectory &&
+            (count > 1 ? " Everything in the folders goes too." : " Everything in it goes too.")}{" "}
+          It moves to the {trashName()}, where you can get {count > 1 ? "them" : "it"} back.
         </p>
         <div className="mt-4 flex justify-end gap-2">
           <button
