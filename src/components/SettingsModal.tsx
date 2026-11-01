@@ -40,6 +40,8 @@ interface SettingsModalProps {
   spellLanguage: SpellLanguage;
   setSpellLanguage: (language: SpellLanguage) => void;
   sectionGuides: boolean;
+  terminalApp: string;
+  setTerminalApp: (app: string) => void;
   setSectionGuides: (enabled: boolean) => void;
   zenDimming: boolean;
   setZenDimming: (enabled: boolean) => void;
@@ -96,6 +98,8 @@ export default function SettingsModal({
   setSpellLanguage,
   sectionGuides,
   setSectionGuides,
+  terminalApp,
+  setTerminalApp,
   zenDimming,
   setZenDimming,
   appearance,
@@ -215,6 +219,8 @@ export default function SettingsModal({
                 setSpellLanguage={setSpellLanguage}
                 sectionGuides={sectionGuides}
                 setSectionGuides={setSectionGuides}
+                terminalApp={terminalApp}
+                setTerminalApp={setTerminalApp}
                 zenDimming={zenDimming}
                 setZenDimming={setZenDimming}
               />
