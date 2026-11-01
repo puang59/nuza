@@ -1,5 +1,13 @@
 import { syntaxTree } from "@codemirror/language";
-import { ChangeSet, EditorSelection, EditorState, Range, StateEffect, StateField, Text } from "@codemirror/state";
+import {
+  ChangeSet,
+  EditorSelection,
+  EditorState,
+  Range,
+  StateEffect,
+  StateField,
+  Text,
+} from "@codemirror/state";
 import { Decoration, DecorationSet, EditorView } from "@codemirror/view";
 import type { SyntaxNode, SyntaxNodeRef, Tree } from "@lezer/common";
 import { FrontmatterRange, frontmatterRange, readFrontmatter } from "./frontmatter";
@@ -1019,4 +1027,3 @@ export const liveMarkdownPreview = StateField.define<DecorationSet>({
 
   provide: (field) => EditorView.decorations.from(field),
 });
-
