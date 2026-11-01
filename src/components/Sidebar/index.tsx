@@ -60,6 +60,7 @@ import { EMPTY_OUTLINE, Outline as OutlineData } from "@/lib/markdown/headings";
 import Outline from "./Outline";
 import ViewSwitcher, { SidebarView, readView } from "./ViewSwitcher";
 import { useTags } from "@/hooks/useTags";
+import { useVaultScan } from "@/hooks/useVaultScan";
 import { Vault } from "@/lib/vaults";
 
 /** What the rest of the app can ask the sidebar to do. */
@@ -69,6 +70,7 @@ const RECENTS_FROM = 10;
 /** How many recent notes the section shows. */
 const RECENTS_SHOWN = 5;
 const NO_PATHS: readonly string[] = [];
+const NO_TITLES: ReadonlyMap<string, string> = new Map();
 
 /**
  * A short list of notes above the tree - the pinned ones, or the recent ones -
@@ -85,6 +87,7 @@ function Shortcuts({
   rootPath,
   onOpen,
   onContextMenu,
+  titles,
 }: {
   title: string;
   paths: readonly string[];
@@ -94,6 +97,7 @@ function Shortcuts({
   rootPath: string;
   onOpen: (path: string) => void;
   onContextMenu: (e: React.MouseEvent, path: string) => void;
+  titles: ReadonlyMap<string, string>;
 }) {
   if (!paths.length) return null;
   return (
@@ -134,7 +138,9 @@ function Shortcuts({
                   )}
                 >
                   <FileIcon name={fileNameOf(path)} />
-                  <span className="truncate">{fileNameOf(path).replace(/\.md$/i, "")}</span>
+                  <span className="truncate">
+                    {titles.get(path) ?? fileNameOf(path).replace(/\.md$/i, "")}
+                  </span>
                   {folder && folder !== "." && (
                     <span className="ml-auto shrink-0 truncate pl-2 text-xs text-zinc-600">{folder}</span>
                   )}
@@ -202,6 +208,8 @@ interface SidebarProps {
   onTogglePin?: (path: string) => void;
   /** Notes opened most recently, newest first, from any vault. */
   recentPaths?: readonly string[];
+  /** Notes shown by their own title rather than their file name. */
+  showTitles?: boolean;
   /** Opens a folder of the vault in the terminal chosen in Settings. */
   onOpenInTerminal?: (path: string) => void;
   onDelete: (path: string) => Promise<void> | void;
@@ -245,6 +253,7 @@ function Sidebar({
   pinned = NO_PATHS,
   onTogglePin,
   recentPaths = NO_PATHS,
+  showTitles = false,
   onOpenInTerminal,
   onDelete,
   onMove,
@@ -316,9 +325,28 @@ function Sidebar({
   // Storage can hold anything; an order that is not one falls back to name.
   const order = SORT_ORDERS.some((option) => option.id === sortOrder) ? sortOrder : "name";
   /** The tree in the order it is shown in. For name order it is the tree itself. */
+  // Each note's own title, read from the vault while titles are wanted.
+  const { found: titleRefs } = useVaultScan<{ path: string; title: string }>(
+    "list_titles",
+    currentFile,
+    rootPath ?? null,
+    notes,
+    showTitles && !!rootPath
+  );
+  const titles = useMemo<ReadonlyMap<string, string>>(
+    () => (showTitles ? new Map(titleRefs.map(({ path, title }) => [path, title])) : NO_TITLES),
+    [showTitles, titleRefs]
+  );
   const shownData = useMemo(
-    () => sortTree(data, order, { reversed: sortReversed === true, foldersFirst: foldersFirst !== false }),
-    [data, order, sortReversed, foldersFirst]
+    () =>
+      sortTree(data, order, {
+        reversed: sortReversed === true,
+        foldersFirst: foldersFirst !== false,
+        labelOf: titles.size
+          ? (entry) => (entry.isDirectory ? entry.name : (titles.get(entry.path) ?? entry.name))
+          : undefined,
+      }),
+    [data, order, sortReversed, foldersFirst, titles]
   );
   /**
    * The notes of this vault opened most recently, leaving out the one on
@@ -884,6 +912,7 @@ function Sidebar({
     renamingPath,
     pendingCreate,
     picked,
+    titles,
   };
   const [marks] = useState(() => createTreeMarks(markValues));
   useLayoutEffect(() => marks.set(markValues));
@@ -1160,6 +1189,7 @@ function Sidebar({
               rootPath={rootPath ?? ""}
               onOpen={(path) => onFileSelect?.(path)}
               onContextMenu={(e, path) => openContextMenu(e, entryFor(path))}
+              titles={titles}
             />
             <Shortcuts
               title="Recents"
@@ -1170,6 +1200,7 @@ function Sidebar({
               rootPath={rootPath ?? ""}
               onOpen={(path) => onFileSelect?.(path)}
               onContextMenu={(e, path) => openContextMenu(e, entryFor(path))}
+              titles={titles}
             />
             <ul className="space-y-0.5">
               {pendingCreate?.parentPath === rootPath && (

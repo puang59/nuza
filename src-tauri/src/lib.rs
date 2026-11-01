@@ -19,6 +19,7 @@ mod state;
 mod tags;
 mod tasks;
 mod terminal;
+mod titles;
 mod tree;
 mod vaultserver;
 mod watcher;
@@ -195,6 +196,7 @@ pub fn run() {
             search::list_files,
             wiki::list_wiki_links,
             search::list_tags,
+            search::list_titles,
             launch::take_launch_target,
             launch::cli_status,
             launch::install_cli,
