@@ -18,21 +18,23 @@ describe("planOpen", () => {
     expect(planOpen(file("/notes/a/b.md"), "/notes")).toEqual({ select: "/notes/a/b.md" });
   });
 
-  test("a note elsewhere brings its own folder", () => {
-    expect(planOpen(file("/other/b.md"), "/notes")).toEqual({ folder: "/other", focus: "/other/b.md" });
-    expect(planOpen(file("/other/b.md"), null)).toEqual({ folder: "/other", focus: "/other/b.md" });
+  test("a note from elsewhere gets a window of its own, rather than taking the vault's place", () => {
+    expect(planOpen(file("/other/b.md"), "/notes")).toEqual({ window: "/other/b.md" });
+  });
+
+  test("in a window with nothing open, a note on its own opens there, with its folder", () => {
+    const single = { folder: "/other", focus: "/other/b.md", alone: true, single: true };
+    expect(planOpen(file("/other/b.md"), null)).toEqual(single);
+    expect(planOpen({ ...file("/other/b.md"), single: true }, "/somewhere")).toEqual(single);
   });
 
   test("a folder whose name only starts like the vault's is not inside it", () => {
-    expect(planOpen(file("/notes-old/b.md"), "/notes")).toEqual({
-      folder: "/notes-old",
-      focus: "/notes-old/b.md",
-    });
+    expect(planOpen(file("/notes-old/b.md"), "/notes")).toEqual({ window: "/notes-old/b.md" });
   });
 
   test("reads a Windows path", () => {
     expect(planOpen(file("C:\\notes\\a.md"), "C:\\notes")).toEqual({ select: "C:\\notes\\a.md" });
-    expect(planOpen(file("D:\\x\\a.md"), "C:\\notes")).toEqual({ folder: "D:\\x", focus: "D:\\x\\a.md" });
+    expect(planOpen(file("D:\\x\\a.md"), "C:\\notes")).toEqual({ window: "D:\\x\\a.md" });
   });
 
   // A note moved into a window of its own: that window has nothing open yet,
@@ -59,10 +61,7 @@ describe("a vault at a drive or filesystem root", () => {
     expect(planOpen({ kind: "file", path: "/notes/a.md" }, "/")).toEqual({ select: "/notes/a.md" });
   });
 
-  test("a note on another drive still brings its own folder", () => {
-    expect(planOpen({ kind: "file", path: "D:\\a.md" }, "C:\\")).toEqual({
-      folder: "D:",
-      focus: "D:\\a.md",
-    });
+  test("a note on another drive gets a window of its own", () => {
+    expect(planOpen({ kind: "file", path: "D:\\a.md" }, "C:\\")).toEqual({ window: "D:\\a.md" });
   });
 });

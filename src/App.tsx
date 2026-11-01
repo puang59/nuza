@@ -276,6 +276,8 @@ function App() {
     openFolder,
     openVault,
     openTarget,
+    singleNote,
+    setSingleNote,
     save,
     saveDirty,
     flush,
@@ -335,8 +337,8 @@ function App() {
   // while one of them slides in or out.
   const editorArea = useRef<HTMLDivElement>(null);
   const panelSpace =
-    (aiEnabled && isAiOpen && !zen ? aiPanelWidth + SIDEBAR_GAP : 0) +
-    (isSidebarOpen && !zen ? sidebarWidth + SIDEBAR_GAP : 0);
+    (aiEnabled && isAiOpen && !zen && !singleNote ? aiPanelWidth + SIDEBAR_GAP : 0) +
+    (isSidebarOpen && !zen && !singleNote ? sidebarWidth + SIDEBAR_GAP : 0);
   useSteadyColumn(editorArea, panelSpace, !isResizing && !isResizingAiPanel);
 
   // The open vault's pins, as one list per vault so the sidebar is only
@@ -667,13 +669,25 @@ function App() {
    * window rather than to the note.
    */
   const toggleSidebar = useCallback(() => {
+    // A note on its own has no sidebar; asking for one opens its folder up.
+    if (singleNote) {
+      setSingleNote(false);
+      setIsSidebarOpen(true);
+      sidebarRef.current?.focusTree();
+      return;
+    }
     setIsSidebarOpen((open) => {
       if (open) returnFocusToEditor();
       else sidebarRef.current?.focusTree();
       return !open;
     });
-  }, [returnFocusToEditor]);
+  }, [returnFocusToEditor, singleNote, setSingleNote]);
   const openSettings = useCallback(() => setIsSettingsOpen(true), []);
+  /** A note chosen from the single-note window's picker: opened there, in place. */
+  const openNoteHere = useCallback(
+    (path: string) => void openTarget({ kind: "file", path, single: true }),
+    [openTarget]
+  );
   const openAiSettings = useCallback(() => {
     setSettingsSection("ai");
     setIsSettingsOpen(true);
@@ -1127,6 +1141,9 @@ function App() {
             onOpenSettings={openSettings}
             onSave={save}
             onToggleSidebar={toggleSidebar}
+            single={singleNote}
+            recentPaths={recentFiles}
+            onOpenRecent={openNoteHere}
           />
         </div>
       </div>
@@ -1141,13 +1158,13 @@ function App() {
         {aiEnabled && (
           <div
             className={`h-full shrink-0 overflow-hidden print:hidden ${isResizingAiPanel ? "" : "sidebar-transition"}`}
-            style={{ width: isAiOpen && !zen ? aiPanelWidth + SIDEBAR_GAP : 0 }}
-            inert={!isAiOpen || zen}
+            style={{ width: isAiOpen && !zen && !singleNote ? aiPanelWidth + SIDEBAR_GAP : 0 }}
+            inert={!isAiOpen || zen || singleNote}
           >
             <div className="h-full" style={{ width: aiPanelWidth + SIDEBAR_GAP, paddingRight: SIDEBAR_GAP }}>
               <AiPanel
                 ref={aiPanelRef}
-                isOpen={isAiOpen && !zen}
+                isOpen={isAiOpen && !zen && !singleNote}
                 width={aiPanelWidth}
                 isResizing={isResizingAiPanel}
                 onResizeStart={startAiPanelResize}
@@ -1274,8 +1291,8 @@ function App() {
         */}
         <div
           className={`h-full shrink-0 overflow-hidden print:hidden ${isResizing ? "" : "sidebar-transition"}`}
-          style={{ width: isSidebarOpen && !zen ? sidebarWidth + SIDEBAR_GAP : 0 }}
-          inert={!isSidebarOpen || zen}
+          style={{ width: isSidebarOpen && !zen && !singleNote ? sidebarWidth + SIDEBAR_GAP : 0 }}
+          inert={!isSidebarOpen || zen || singleNote}
         >
           <div className="h-full" style={{ width: sidebarWidth + SIDEBAR_GAP, paddingLeft: SIDEBAR_GAP }}>
             <Sidebar
