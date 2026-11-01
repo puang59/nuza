@@ -846,3 +846,48 @@ html[data-platform="linux"] .backdrop-blur-2xl {
 html[data-platform="linux"] .nuza-palette {
   background-color: #262628;
 }
+
+/*
+ * A Mermaid diagram opened full size: the diagram at its own size over the
+ * window, scrolled to move around it, zoomed with the buttons or mod and the
+ * wheel.
+ */
+.nuza-diagram-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.nuza-diagram-frame {
+  max-width: 100%;
+  max-height: 100%;
+  overflow: auto;
+  border-radius: 12px;
+  border: 1px solid var(--nuza-hairline);
+  background: var(--nuza-bg);
+  padding: 1.5rem;
+}
+
+.nuza-diagram-controls {
+  position: fixed;
+  right: 1.5rem;
+  bottom: 1.5rem;
+  display: flex;
+  gap: 4px;
+}
+
+.nuza-diagram-controls button {
+  min-width: 2rem;
+  cursor: pointer;
+  border-radius: 6px;
+  border: 1px solid var(--nuza-hairline);
+  background: var(--nuza-bg);
+  padding: 0.25rem 0.5rem;
+  color: var(--nuza-fg);
+  font-size: 12px;
+}

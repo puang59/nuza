@@ -915,3 +915,165 @@ export class PropertiesWidget extends WidgetType {
     return true;
   }
 }
+
+/**
+ * Mermaid, loaded the first time a note has a diagram in it - like KaTeX, it
+ * is a large library most notes never need.
+ */
+let mermaid: Promise<typeof import("mermaid").default> | null = null;
+
+function loadMermaid() {
+  mermaid ??= import("mermaid").then((module) => module.default);
+  return mermaid;
+}
+
+/** Distinct ids for each render, which Mermaid needs for the SVG it builds. */
+let diagrams = 0;
+
+/** A colour from the app's palette, as Mermaid wants it: a value, not a variable. */
+function themeColour(name: string, fallback: string) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+}
+
+/**
+ * A ```mermaid block drawn as the diagram it describes, in the window's own
+ * colours. Fitted to the column; the button in its corner opens it full size,
+ * to scroll around and zoom. A diagram that does not parse shows why.
+ */
+export class MermaidWidget extends WidgetType {
+  constructor(readonly source: string) {
+    super();
+  }
+
+  eq(other: MermaidWidget) {
+    return other.source === this.source;
+  }
+
+  toDOM(view: EditorView) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "cm-md-mermaid";
+    const stage = document.createElement("div");
+    stage.className = "cm-md-mermaid-stage cm-md-mermaid-source";
+    // The source stands in while the library loads and draws.
+    stage.textContent = this.source;
+    wrapper.append(stage);
+
+    const expand = document.createElement("button");
+    expand.className = "cm-md-mermaid-expand";
+    expand.type = "button";
+    expand.title = "Open full size";
+    expand.textContent = "⤢";
+    expand.addEventListener("mousedown", (event) => event.preventDefault());
+    expand.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const svg = stage.querySelector("svg");
+      if (svg) openDiagram(svg);
+    });
+
+    loadMermaid().then(
+      async (renderer) => {
+        const dark = document.documentElement.dataset.theme !== "light";
+        renderer.initialize({
+          startOnLoad: false,
+          securityLevel: "strict",
+          theme: "base",
+          // Measured and drawn in the note's own font: the boxes are sized to
+          // the labels in it, and a font of their own would spill out of them.
+          fontFamily: getComputedStyle(view.contentDOM).fontFamily,
+          themeVariables: {
+            darkMode: dark,
+            background: themeColour("--nuza-bg", dark ? "#1e1e1e" : "#fbfbfa"),
+            primaryColor: themeColour("--nuza-bg", dark ? "#1e1e1e" : "#fbfbfa"),
+            primaryTextColor: themeColour("--nuza-fg", dark ? "#d4d4d8" : "#3f3f46"),
+            primaryBorderColor: themeColour("--nuza-accent", "#ff9696"),
+            lineColor: themeColour("--nuza-muted", "#8b8b92"),
+            textColor: themeColour("--nuza-fg", dark ? "#d4d4d8" : "#3f3f46"),
+          },
+        });
+        try {
+          const { svg } = await renderer.render(`nuza-mermaid-${++diagrams}`, this.source);
+          stage.innerHTML = svg;
+          stage.classList.remove("cm-md-mermaid-source", "cm-md-mermaid-error");
+          wrapper.append(expand);
+        } catch (error) {
+          stage.textContent = error instanceof Error ? error.message : String(error);
+          stage.classList.add("cm-md-mermaid-error");
+        }
+        // A block changes height when it is drawn; the editor has to hear it.
+        view.requestMeasure();
+      },
+      () => {
+        // The chunk did not load: the source it already shows is the fallback.
+      }
+    );
+    return wrapper;
+  }
+
+  /** Clicking the diagram puts the caret in the source behind it, as math does. */
+  ignoreEvent(event: Event) {
+    return (event.target as Element | null)?.closest?.(".cm-md-mermaid-expand") != null;
+  }
+}
+
+/**
+ * A diagram at full size over the window: scroll to move around it, the
+ * buttons (or mod and the wheel) to zoom, and Escape or a click outside to
+ * close.
+ */
+function openDiagram(svg: SVGSVGElement) {
+  const overlay = document.createElement("div");
+  overlay.className = "nuza-diagram-overlay";
+  const frame = document.createElement("div");
+  frame.className = "nuza-diagram-frame";
+  const copy = svg.cloneNode(true) as SVGSVGElement;
+  copy.style.maxWidth = "none";
+  frame.append(copy);
+
+  let zoom = 1;
+  const apply = () => {
+    copy.style.transform = `scale(${zoom})`;
+    copy.style.transformOrigin = "0 0";
+  };
+  const controls = document.createElement("div");
+  controls.className = "nuza-diagram-controls";
+  for (const [label, step] of [
+    ["−", 1 / 1.25],
+    ["+", 1.25],
+    ["1:1", 0],
+  ] as const) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = label;
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      zoom = step === 0 ? 1 : Math.min(4, Math.max(0.25, zoom * step));
+      apply();
+    });
+    controls.append(button);
+  }
+
+  const close = () => {
+    overlay.remove();
+    window.removeEventListener("keydown", onKey, true);
+  };
+  const onKey = (event: KeyboardEvent) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      close();
+    }
+  };
+  frame.addEventListener("wheel", (event) => {
+    if (!(event.metaKey || event.ctrlKey)) return;
+    event.preventDefault();
+    zoom = Math.min(4, Math.max(0.25, zoom * (event.deltaY < 0 ? 1.1 : 1 / 1.1)));
+    apply();
+  });
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) close();
+  });
+  window.addEventListener("keydown", onKey, true);
+  overlay.append(frame, controls);
+  document.body.append(overlay);
+}
