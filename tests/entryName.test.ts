@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { nameProblem, withNoteExtension } from "../src/lib/entryName";
+import { nameProblem, newEntryProblem, withNoteExtension } from "../src/lib/entryName";
 
 /** The problem, or "" when there is none, so a test can read as one line. */
 function problem(name: string) {
@@ -116,5 +116,24 @@ describe("withNoteExtension", () => {
     expect(withNoteExtension("ideas.md")).toBe("ideas.md");
     expect(withNoteExtension("data.csv")).toBe("data.csv");
     expect(withNoteExtension("README.MD")).toBe("README.MD");
+  });
+});
+
+describe("newEntryProblem", () => {
+  test("a plain name, or a path of them, is fine", () => {
+    expect(newEntryProblem("ideas")).toBeNull();
+    expect(newEntryProblem("journal/2026/today")).toBeNull();
+  });
+
+  test("an empty folder in the path is not", () => {
+    expect(newEntryProblem("journal//today")).toBe("A path cannot have an empty folder in it");
+    expect(newEntryProblem("/today")).toBe("A path cannot have an empty folder in it");
+    expect(newEntryProblem("journal/")).toBe("A path cannot have an empty folder in it");
+  });
+
+  test("each part is held to the rules for a name", () => {
+    expect(newEntryProblem("journal/../x")).toBe("That is not a name");
+    expect(newEntryProblem("journal/.hidden")).toBe("A name cannot start with a dot");
+    expect(newEntryProblem("a\\b")).toBe("Use / between folders");
   });
 });
