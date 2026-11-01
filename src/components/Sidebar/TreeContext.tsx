@@ -58,6 +58,8 @@ export interface TreeMarks {
   selectedPath: string | null;
   renamingPath: string | null;
   pendingCreate: PendingCreate;
+  /** Rows picked together with mod- or shift-click; empty when only one is selected. */
+  picked: ReadonlySet<string>;
 }
 
 export interface TreeMarkStore {
@@ -76,7 +78,8 @@ export function createTreeMarks(marks: TreeMarks): TreeMarkStore {
         next.currentFile === current.currentFile &&
         next.selectedPath === current.selectedPath &&
         next.renamingPath === current.renamingPath &&
-        next.pendingCreate === current.pendingCreate
+        next.pendingCreate === current.pendingCreate &&
+        next.picked === current.picked
       )
         return;
       current = next;

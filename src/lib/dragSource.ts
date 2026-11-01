@@ -25,6 +25,8 @@ export interface DraggedEntry {
 }
 
 let dragged: DraggedEntry | null = null;
+/** Everything being dragged: the row taken hold of, or every row picked with it. */
+let group: readonly string[] = [];
 let over: string | null = null;
 
 const listeners = new Set<() => void>();
@@ -45,10 +47,17 @@ export function subscribe(listener: () => void) {
   };
 }
 
-export function setDraggedEntry(entry: DraggedEntry | null) {
-  if (dragged?.path === entry?.path) return;
+export function setDraggedEntry(entry: DraggedEntry | null, picked?: readonly string[]) {
+  const next = entry ? (picked && picked.length > 1 ? picked : [entry.path]) : [];
+  if (dragged?.path === entry?.path && next.length === group.length) return;
   dragged = entry;
+  group = next;
   announce();
+}
+
+/** Every path being dragged - more than one when picked rows are dragged together. */
+export function draggedPaths(): readonly string[] {
+  return group;
 }
 
 /** The row being dragged, or null if the drag came from outside the app. */
@@ -71,6 +80,7 @@ export function setDragOver(path: string | null) {
 export function endDrag() {
   if (!dragged && over === null) return;
   dragged = null;
+  group = [];
   over = null;
   announce();
 }
@@ -79,7 +89,7 @@ export function endDrag() {
 export function useIsDragged(path: string) {
   return useSyncExternalStore(
     subscribe,
-    () => dragged?.path === path,
+    () => group.includes(path),
     () => false
   );
 }

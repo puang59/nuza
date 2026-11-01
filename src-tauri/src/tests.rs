@@ -1,8 +1,8 @@
 use crate::cli::OpenTarget;
 use crate::files::{
-    already_exists, create_unused, create_unused_with, duplicate_file, exact_file_name,
-    move_destination, opened_by_the_system, rename_no_replace, safe_file_name, times_of,
-    write_atomically, write_atomically_noting,
+    already_exists, copy_file_into, create_unused, create_unused_with, duplicate_file,
+    exact_file_name, move_destination, opened_by_the_system, rename_no_replace, safe_file_name,
+    times_of, write_atomically, write_atomically_noting,
 };
 // Only asked about where a file has a mode to ask about.
 #[cfg(unix)]
@@ -1408,6 +1408,31 @@ fn duplicates_a_note_beside_itself_numbered() {
     assert_eq!(second, dir.path().join("note 2.md"));
     assert_eq!(contents(&first), "hello");
     assert_eq!(contents(&note), "hello");
+}
+
+#[test]
+fn copies_a_note_into_another_folder_under_its_own_name() {
+    let dir = tempfile::tempdir().unwrap();
+    let note = dir.path().join("note.md");
+    fs::write(&note, "hello").unwrap();
+    let elsewhere = dir.path().join("elsewhere");
+    fs::create_dir(&elsewhere).unwrap();
+
+    let first = copy_file_into(&note, &elsewhere).unwrap();
+    let second = copy_file_into(&note, &elsewhere).unwrap();
+
+    assert_eq!(first, elsewhere.join("note.md"));
+    assert_eq!(second, elsewhere.join("note 1.md"));
+    assert_eq!(contents(&first), "hello");
+    assert_eq!(contents(&note), "hello");
+}
+
+#[test]
+fn refuses_to_copy_a_folder() {
+    let dir = tempfile::tempdir().unwrap();
+    let folder = dir.path().join("folder");
+    fs::create_dir(&folder).unwrap();
+    assert!(copy_file_into(&folder, dir.path()).is_err());
 }
 
 #[test]

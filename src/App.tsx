@@ -249,6 +249,7 @@ function App() {
     createFolder,
     renameEntry,
     duplicateEntry,
+    copyEntry,
     moveEntry,
     deleteEntry,
     attachFiles,
@@ -1177,6 +1178,7 @@ function App() {
               onCreateFolder={createFolder}
               onRename={renameEntry}
               onDuplicate={duplicateEntry}
+              onCopy={copyEntry}
               onDelete={deleteEntry}
               onMove={moveEntry}
               onAttachFiles={attachFiles}

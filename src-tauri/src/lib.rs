@@ -198,6 +198,7 @@ pub fn run() {
             launch::install_cli,
             launch::uninstall_cli,
             files::duplicate_entry,
+            files::copy_entry,
             files::write_file,
             media::write_media,
             recovery::keep_recovery,

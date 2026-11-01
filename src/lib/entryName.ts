@@ -86,3 +86,20 @@ export function nameProblem(name: string): string | null {
 export function withNoteExtension(name: string): string {
   return /\.(?=[a-z0-9]*[a-z])[a-z0-9]{1,6}$/i.test(name) ? name : `${name}.md`;
 }
+
+/**
+ * Why `path` cannot be what a new file or folder is called, or `null`. A `/`
+ * in it makes the folders on the way - `journal/2026/today` - so each part is
+ * held to the rules for a name on its own.
+ */
+export function newEntryProblem(path: string): string | null {
+  if (!path.trim()) return "A name is needed";
+  if (path.includes("\\")) return "Use / between folders";
+  const parts = path.split("/");
+  if (parts.some((part) => !part.trim())) return "A path cannot have an empty folder in it";
+  for (const part of parts) {
+    const problem = nameProblem(part);
+    if (problem) return problem;
+  }
+  return null;
+}
