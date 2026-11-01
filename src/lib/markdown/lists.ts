@@ -2,6 +2,7 @@ import { syntaxTree } from "@codemirror/language";
 import { ChangeSpec, EditorSelection, EditorState, Line, Text } from "@codemirror/state";
 import { Command } from "@codemirror/view";
 import type { SyntaxNode } from "@lezer/common";
+import { frontmatterRange } from "./frontmatter";
 
 /** The first child of `node` with the given name, or null. */
 export function firstChild(node: SyntaxNode, name: string) {
@@ -351,3 +352,39 @@ export function insertNewLine(continueMarkup: Command): Command {
     openPointUnderParagraph(view) ||
     continueMarkup(view);
 }
+
+/** Blocks with a Tab of their own: indenting a point, code, a table, HTML. */
+const TAB_OWNERS = new Set(["ListItem", "FencedCode", "CodeBlock", "Table", "HTMLBlock"]);
+
+/**
+ * Tab in a paragraph. Left to the stock command it indented the whole line,
+ * wherever the caret was, and a second press made four spaces - which is an
+ * indented code block, so the paragraph turned into code.
+ *
+ * In the middle of a line it types a tab, as Obsidian does. At the start of a
+ * line, where any indent at all is on its way to making code, it does nothing.
+ * Points, code, tables, HTML and the frontmatter keep the indenting Tab they
+ * had; a selection does too, since indenting a run of lines is asked for.
+ */
+export const tabInProse: Command = (view) => {
+  const { state } = view;
+  const { ranges } = state.selection;
+  if (ranges.some((range) => !range.empty)) return false;
+
+  const front = frontmatterRange(state.doc);
+  for (const range of ranges) {
+    if (front && range.head <= front.to) return false;
+    for (let node: SyntaxNode | null = syntaxTree(state).resolve(range.head, -1); node; node = node.parent) {
+      if (TAB_OWNERS.has(node.name)) return false;
+    }
+  }
+
+  const change = state.changeByRange((range) => {
+    const line = state.doc.lineAt(range.head);
+    // Nothing but indentation, or a quote's `>`, before the caret.
+    if (/^[\s>]*$/.test(line.text.slice(0, range.head - line.from))) return { range };
+    return { changes: { from: range.head, insert: "\t" }, range: EditorSelection.cursor(range.head + 1) };
+  });
+  view.dispatch(state.update(change, { scrollIntoView: true, userEvent: "input" }));
+  return true;
+};
