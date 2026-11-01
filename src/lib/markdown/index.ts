@@ -14,7 +14,7 @@ import { attachments } from "./attachments";
 import { htmlKeepsIndentation } from "./htmlIndent";
 import { noteLinkCompletion } from "./linkCompletion";
 import { listIndent } from "./listIndent";
-import { continueListItem, insertNewLine } from "./lists";
+import { continueListItem, insertNewLine, tabInProse } from "./lists";
 import { liveMarkdownPreview } from "./livePreview";
 import { MathSyntax } from "./math";
 import { pasteUrlAsLink, wrapSelectionInMarks } from "./formatting";
@@ -94,6 +94,7 @@ const markdownEditingKeymap = Prec.high(
       shift: continueListItem,
     },
     { key: "Backspace", run: deleteMarkupBackward },
+    { key: "Tab", run: tabInProse },
   ])
 );
 
