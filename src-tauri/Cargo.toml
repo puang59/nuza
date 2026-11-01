@@ -67,6 +67,14 @@ tauri-plugin-single-instance = "2"
 
 # A rename that refuses to replace what is already there. Every platform has
 # one and none of them is `fs::rename`, which is why these are here.
+# The webview's configuration, so it can be told to draw at the display's
+# refresh rate - see `window::full_rate_configuration`. The same versions
+# Tauri itself builds against.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSArray", "NSString"] }
+objc2-web-kit = { version = "0.3", features = ["WKWebViewConfiguration", "WKPreferences"] }
+
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
