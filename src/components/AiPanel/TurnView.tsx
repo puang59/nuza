@@ -235,7 +235,7 @@ interface TurnViewProps {
 /** The writer's message: what it is about, the action if it was one, and their words. */
 function Message({ turn }: { turn: ChatTurn }) {
   return (
-    <div className="rounded-xl border border-zinc-700/60 bg-zinc-800/50 px-3 py-2 text-[13px] leading-relaxed text-gray-200">
+    <div className="rounded-lg border border-zinc-700/60 bg-zinc-800/50 px-3 py-2 text-[13px] leading-relaxed text-gray-200">
       {turn.about && (
         <span className="mr-1.5 inline-flex items-center gap-1 align-baseline text-gray-300">
           <FileText size={12} className="self-center text-[var(--nuza-accent)]" aria-hidden />

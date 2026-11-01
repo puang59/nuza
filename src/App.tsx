@@ -1172,6 +1172,7 @@ function App() {
             <div className="h-full" style={{ width: aiPanelWidth + SIDEBAR_GAP, paddingRight: SIDEBAR_GAP }}>
               <AiPanel
                 ref={aiPanelRef}
+                notes={fileIndex.notes}
                 isOpen={isAiOpen && !zen && !singleNote}
                 width={aiPanelWidth}
                 isResizing={isResizingAiPanel}

@@ -128,7 +128,7 @@ const Composer = forwardRef<ComposerHandle, ComposerProps>(function Composer(
         <ul
           role="listbox"
           aria-label="Writing actions"
-          className="animate-ai-in absolute inset-x-0 bottom-full mb-1.5 overflow-hidden rounded-xl border border-zinc-700 bg-[var(--nuza-bg)] py-1 shadow-xl"
+          className="animate-ai-in absolute inset-x-0 bottom-full mb-1.5 overflow-hidden rounded-lg border border-zinc-700 bg-[var(--nuza-bg)] py-1 shadow-xl"
         >
           {menu.map((action, index) => {
             const runs = index < usable.length;
@@ -161,7 +161,7 @@ const Composer = forwardRef<ComposerHandle, ComposerProps>(function Composer(
           })}
         </ul>
       )}
-      <div className="rounded-2xl border border-zinc-700/80 bg-zinc-900/70 transition-colors focus-within:border-[var(--nuza-accent)]">
+      <div className="rounded-lg border border-zinc-700/80 bg-zinc-900/70 transition-colors focus-within:border-zinc-600">
         <textarea
           ref={box}
           value={value}
@@ -185,7 +185,7 @@ const Composer = forwardRef<ComposerHandle, ComposerProps>(function Composer(
               onChange("/");
               box.current?.focus();
             }}
-            className="flex size-6 cursor-pointer items-center justify-center rounded-full text-gray-500 hover:bg-zinc-800 hover:text-gray-200"
+            className="flex size-6 cursor-pointer items-center justify-center rounded-md text-gray-500 hover:bg-zinc-800 hover:text-gray-200"
           >
             <Plus size={14} />
           </button>
@@ -228,7 +228,7 @@ const Composer = forwardRef<ComposerHandle, ComposerProps>(function Composer(
             title={running ? "Stop" : "Send"}
             aria-label={running ? "Stop the answer" : "Send"}
             className={cn(
-              "flex size-7 cursor-pointer items-center justify-center rounded-full transition-colors disabled:cursor-default disabled:bg-zinc-800 disabled:text-gray-600",
+              "flex size-7 cursor-pointer items-center justify-center rounded-md transition-colors disabled:cursor-default disabled:bg-zinc-800 disabled:text-gray-600",
               running
                 ? "bg-zinc-700 text-white hover:bg-zinc-600"
                 : "bg-[var(--nuza-accent)] text-black hover:bg-[var(--nuza-accent-strong)]"
