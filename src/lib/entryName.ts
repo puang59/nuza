@@ -103,3 +103,25 @@ export function newEntryProblem(path: string): string | null {
   }
   return null;
 }
+
+/**
+ * A file name to offer for a note, from its first heading: the words of it,
+ * with what a file name cannot hold taken out. Empty when there is no heading
+ * worth using.
+ */
+export function nameFromHeading(text: string): string {
+  const heading = text
+    .split("\n", 200)
+    .map((line) => /^#{1,6}\s+(.*?)\s*#*\s*$/.exec(line.trim())?.[1] ?? "")
+    .find((title) => title.length > 0);
+  if (!heading) return "";
+  return Array.from(heading)
+    .filter((character) => !isControl(character))
+    .join("")
+    .replace(/[[\]*_`~]/g, "")
+    .replace(/[/\\:*?"<>|]/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/^[.\s]+|[.\s]+$/g, "")
+    .slice(0, 100)
+    .trim();
+}
