@@ -32,6 +32,7 @@ import {
   ImageWidget,
   LinkThumbnailWidget,
   MathWidget,
+  MermaidWidget,
   PropertiesWidget,
   RuleWidget,
   TableAlignment,
@@ -637,6 +638,22 @@ function decorateNode(node: SyntaxNodeRef, build: Build): boolean | undefined {
       }).range(from, to)
     );
     return false;
+  }
+
+  // A ```mermaid block, drawn as its diagram unless it is being edited.
+  if (name === "FencedCode" && !isBeingEdited(state, from, to)) {
+    const info = findChild(node.node, "CodeInfo");
+    if (info && doc.sliceString(info.from, info.to).trim().toLowerCase() === "mermaid") {
+      const code = findChild(node.node, "CodeText");
+      const source = code ? doc.sliceString(code.from, code.to) : "";
+      out.push(
+        Decoration.replace({ widget: new MermaidWidget(source), block: true }).range(
+          doc.lineAt(from).from,
+          doc.lineAt(to).to
+        )
+      );
+      return false;
+    }
   }
 
   if (name === "FencedCode" || name === "CodeBlock") {

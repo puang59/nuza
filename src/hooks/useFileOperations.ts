@@ -19,6 +19,8 @@ import { report } from "@/lib/notices";
 import { listenHere } from "@/lib/windowEvents";
 import { dropOwnWrites, isOwnWrite, noteOwnWrite, type OwnWrites } from "@/lib/ownWrites";
 import { readScratch, writeScratch } from "@/lib/scratch";
+import { TITLE_PROMPT, withoutUntouchedPrompt } from "@/lib/titlePrompt";
+import { NOTE_PATTERN } from "@/lib/fileIndex";
 import { EMPTY_SESSION, readSession, tabsToRestore, writeSession } from "@/lib/session";
 import { ATTACHMENT_EVENT, announceAttachment, fileNameOf, writeMedia } from "@/lib/media";
 import { isWithin, rewritePath } from "@/lib/path";
@@ -613,7 +615,7 @@ export function useFileOperations({
   const writeDocument = useCallback(
     async (path: string, force = false) => {
       const before = documentRevision(path);
-      const content = readDocument(path);
+      const content = withoutUntouchedPrompt(readDocument(path));
 
       // Before the write, not after: the watcher can report it while it is
       // still on its way, and the report is read before `write_file` returns.
@@ -1422,8 +1424,23 @@ export function useFileOperations({
       const entry = { name, path: joinPath(parentPath, name), isDirectory: false };
       setFolderData((tree) => addEntry(tree, rootPathRef.current ?? "", entry));
       await selectFile(entry.path);
+      // A new note opens ready for its title. The file stays empty on disk
+      // until something is typed after the `# `.
+      const view = editorView;
+      if (
+        view &&
+        NOTE_PATTERN.test(name) &&
+        currentFileRef.current === entry.path &&
+        view.state.doc.length === 0
+      ) {
+        view.dispatch({
+          changes: { from: 0, insert: TITLE_PROMPT },
+          selection: { anchor: TITLE_PROMPT.length },
+        });
+        view.focus();
+      }
     },
-    [selectFile]
+    [selectFile, editorView]
   );
 
   /**
@@ -1471,7 +1488,8 @@ export function useFileOperations({
 
       leavePlace();
       setDraftPaths((paths) => new Set(paths).add(path));
-      openDocument(path, "");
+      // Ready for its title, with the caret after the `# `.
+      openDocument(path, TITLE_PROMPT, TITLE_PROMPT.length);
       setOpenPaths((paths) => [...paths, path]);
       setCurrentFile(path);
       recentRef.current = [path, ...recentRef.current.filter((p) => p !== path)];

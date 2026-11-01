@@ -20,7 +20,7 @@ import { useKeymaps, useKeymapListener, VIM_OWNED_KEYS } from "./hooks/useKeymap
 import { useCloseTabMenu } from "./hooks/useCloseTabMenu";
 import { useSaveOnExit } from "./hooks/useSaveOnExit";
 import { useNotices } from "./hooks/useNotices";
-import { useFileOperations } from "./hooks/useFileOperations";
+import { UNTITLED_FILE, useFileOperations } from "./hooks/useFileOperations";
 import GettingStarted from "./components/GettingStarted";
 import SectionGuides from "./components/SectionGuides";
 import ZenBar from "./components/ZenBar";
@@ -119,6 +119,7 @@ function App() {
   // Off unless asked for: marks on the writing surface are not something to
   // put in front of everyone.
   const [sectionGuides, setSectionGuides] = usePersistedState("sectionGuides", false);
+  const [noteTitles, setNoteTitles] = usePersistedState("sidebarNoteTitles", false);
   const [terminalApp, setTerminalApp] = usePersistedState("terminalApp", "", { debounceMs: 400 });
   // Zen mode: the note and nothing else. Not kept between launches - it is a
   // way of working for a while, and an app that came back with no chrome and
@@ -160,7 +161,12 @@ function App() {
   // Assumed until the window has answered, so the app does not flash opaque on
   // the way up on the platforms that do have a backdrop.
   const [hasBackdrop, setHasBackdrop] = useState(true);
-  const { appearance, update: setAppearance, reset: resetAppearance } = useAppearance(hasBackdrop);
+  const {
+    appearance,
+    theme: windowTheme,
+    update: setAppearance,
+    reset: resetAppearance,
+  } = useAppearance(hasBackdrop);
 
   // Read by the `compact:` variant in App.css, so flipping it retightens the
   // sidebar and chrome without a single component re-rendering.
@@ -578,6 +584,14 @@ function App() {
                 : []),
               { label: "Move to New Window", onClick: () => void openInNewWindow(path, true) },
               {
+                label: "Reveal in Sidebar",
+                onClick: () => {
+                  setZen(false);
+                  setIsSidebarOpen(true);
+                  sidebarRef.current?.revealPath(path);
+                },
+              },
+              {
                 label: revealLabel(),
                 onClick: () =>
                   void revealItemInDir(path).catch((error) => report("Couldn't show that file", error)),
@@ -771,6 +785,13 @@ function App() {
         onToggle: setSectionGuides,
       },
       {
+        id: "note-titles",
+        title: "Note Titles in Sidebar",
+        description: "Show notes by their title instead of their file name",
+        enabled: noteTitles,
+        onToggle: setNoteTitles,
+      },
+      {
         id: "zen-mode",
         title: "Zen Mode",
         description: "Hide everything but the note",
@@ -835,6 +856,8 @@ function App() {
       setSpellCheck,
       sectionGuides,
       setSectionGuides,
+      noteTitles,
+      setNoteTitles,
       zen,
       zenDimming,
       setZenDimming,
@@ -855,7 +878,19 @@ function App() {
   // Named rather than inlined into the handler table: the macOS menu bar needs
   // the same action, since ⌘W is a key equivalent there and never reaches the
   // keymap listener.
-  const closeCurrentTab = useCallback(() => closeFile(currentFile), [closeFile, currentFile]);
+  /**
+   * mod+W. With nothing open but the scratch note there is no tab left to
+   * close, and the window goes instead: hidden, for the main window on macOS,
+   * where the Dock brings it back as it was; closed, for any other.
+   */
+  const closeCurrentTab = useCallback(() => {
+    const nothingOpen = openPaths.length <= 1 && currentFile === UNTITLED_FILE;
+    if (nothingOpen) {
+      invoke("close_or_hide_window").catch((error) => report("Couldn't close the window", error));
+      return;
+    }
+    closeFile(currentFile);
+  }, [closeFile, currentFile, openPaths]);
 
   /**
    * Runs a formatting command on the note, when the note is what has the
@@ -1268,6 +1303,7 @@ function App() {
               pinned={vaultPins}
               onTogglePin={togglePinned}
               recentPaths={recentFiles}
+              showTitles={noteTitles}
               onOpenInTerminal={openInTerminal}
               onDelete={deleteEntry}
               onMove={moveEntry}
@@ -1366,11 +1402,14 @@ function App() {
         setSpellLanguage={setSpellLanguage}
         sectionGuides={sectionGuides}
         setSectionGuides={setSectionGuides}
+        noteTitles={noteTitles}
+        setNoteTitles={setNoteTitles}
         terminalApp={terminalApp}
         setTerminalApp={setTerminalApp}
         zenDimming={zenDimming}
         setZenDimming={setZenDimming}
         appearance={appearance}
+        windowTheme={windowTheme}
         setAppearance={setAppearance}
         resetAppearance={resetAppearance}
         compactMode={compactMode}

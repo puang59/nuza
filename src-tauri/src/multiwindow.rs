@@ -384,6 +384,21 @@ pub(crate) fn raise_recent(app: &tauri::AppHandle) {
     }
 }
 
+/// mod+W with nothing left to close: the window goes, as it does in other Mac
+/// apps. The main window is hidden rather than closed, so the app keeps
+/// running with it as it was, and a click on the Dock icon brings it back;
+/// any other window closes. Off macOS, where a hidden window has no Dock to
+/// come back from, the main window stays.
+#[tauri::command]
+pub(crate) fn close_or_hide_window(window: tauri::WebviewWindow) -> Result<(), String> {
+    if window.label() != MAIN_WINDOW {
+        return window.close().map_err(|e| e.to_string());
+    }
+    #[cfg(target_os = "macos")]
+    window.hide().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// The frontend's way to open a window: `File > New Window`.
 #[tauri::command]
 pub(crate) async fn open_new_window(app: tauri::AppHandle) -> Result<(), String> {
