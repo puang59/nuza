@@ -218,6 +218,15 @@ function gutterTheme() {
       backgroundColor: "transparent",
       opacity: "0.85",
     },
+    /* A heading with the caret on it shows its #s, hung in the margin where
+       its number is: the number steps aside for them rather than the two
+       being drawn over each other. */
+    ...Object.fromEntries(
+      [1, 2, 3, 4, 5, 6].map((level) => [
+        `.cm-lineNumbers .cm-gutterElement.cm-activeLineGutter.cm-gutter-h${level}`,
+        { opacity: "0" },
+      ])
+    ),
   });
 }
 
