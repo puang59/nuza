@@ -1,5 +1,13 @@
 import { syntaxTree } from "@codemirror/language";
-import { ChangeSet, EditorState, Range, StateField, Text } from "@codemirror/state";
+import {
+  ChangeSet,
+  EditorSelection,
+  EditorState,
+  Range,
+  StateEffect,
+  StateField,
+  Text,
+} from "@codemirror/state";
 import { Decoration, DecorationSet, EditorView } from "@codemirror/view";
 import type { SyntaxNode, SyntaxNodeRef, Tree } from "@lezer/common";
 import { FrontmatterRange, frontmatterRange, readFrontmatter } from "./frontmatter";
@@ -898,6 +906,50 @@ function merge(spans: Span[]): Span[] {
  * matters most on a long document, where rebuilding everything would put the
  * length of the file into the cost of a single keystroke.
  */
+/** The mouse button going down in the editor (true) and coming back up (false). */
+const dragging = StateEffect.define<boolean>();
+
+/**
+ * The selection as it was when the mouse button went down in the editor, for
+ * as long as it stays down; null otherwise.
+ */
+const pointerSelection = StateField.define<EditorSelection | null>({
+  create: () => null,
+  update(held, transaction) {
+    for (const effect of transaction.effects) {
+      if (effect.is(dragging)) return effect.value ? transaction.startState.selection : null;
+    }
+    return held && transaction.docChanged ? held.map(transaction.changes) : held;
+  },
+});
+
+/**
+ * Markup holds still while a selection is dragged out with the mouse.
+ *
+ * Markup opens on the lines a selection reaches, so as a drag crossed a line
+ * with `**bold**` or a link in it, that line opened up under the pointer: the
+ * words moved, and the drag ended somewhere other than where it was aimed.
+ * From the button going down until it comes back up, the rendering is left as
+ * it was, and it catches up with the selection once, on release.
+ */
+export const steadyWhileDragging = [
+  pointerSelection,
+  EditorView.domEventHandlers({
+    mousedown(event, view) {
+      if (event.button !== 0) return false;
+      view.dispatch({ effects: dragging.of(true) });
+      const release = () => {
+        window.removeEventListener("mouseup", release);
+        window.removeEventListener("blur", release);
+        if (view.state.field(pointerSelection, false)) view.dispatch({ effects: dragging.of(false) });
+      };
+      window.addEventListener("mouseup", release);
+      window.addEventListener("blur", release);
+      return false;
+    },
+  }),
+];
+
 export const liveMarkdownPreview = StateField.define<DecorationSet>({
   create: (state) => buildDecorations(state),
 
@@ -920,8 +972,13 @@ export const liveMarkdownPreview = StateField.define<DecorationSet>({
       return buildDecorations(state);
     }
 
+    // While a selection is being dragged out with the mouse the markup is
+    // left as it was when the button went down; see `steadyWhileDragging`.
+    const released = transaction.effects.some((effect) => effect.is(dragging) && !effect.value);
+    if (!transaction.docChanged && !released && state.field(pointerSelection, false)) return decorations;
+
     const selectionMoved = !state.selection.eq(startState.selection);
-    if (!transaction.docChanged && !selectionMoved) return decorations;
+    if (!transaction.docChanged && !selectionMoved && !released) return decorations;
 
     // A long list or quote is only redone in part while the edit leaves it
     // standing as it was. One that an edit splits, joins, ends early or turns
@@ -938,6 +995,10 @@ export const liveMarkdownPreview = StateField.define<DecorationSet>({
     };
 
     for (const range of startState.selection.ranges) carryOver(range);
+    // Let go after a drag: what was drawn is still what the selection was when
+    // the button went down, so those lines are redone along with the new ones.
+    const heldFrom = released ? startState.field(pointerSelection, false) : null;
+    if (heldFrom) for (const range of heldFrom.ranges) carryOver(range);
     for (const range of state.selection.ranges) spans.push(widen(state, newTree, range, budgeted));
     changes.iterChangedRanges((fromA, toA, fromB, toB) => {
       carryOver({ from: fromA, to: toA });
