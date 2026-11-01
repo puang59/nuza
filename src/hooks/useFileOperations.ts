@@ -1476,6 +1476,21 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
   );
 
   /**
+   * Copies a file into `targetDir`, for a note copied in the sidebar and
+   * pasted on a folder: under its own name where that is free, numbered where
+   * it is not. Unwritten edits are written first, as for a duplicate.
+   */
+  const copyEntry = useCallback(
+    async (path: string, targetDir: string) => {
+      if (dirtyPathsRef.current.has(path) && !conflictsRef.current.has(path)) await writeDocument(path);
+      const copy = await invoke<string>("copy_entry", { path, targetDir });
+      const entry = { name: fileNameOf(copy), path: copy, isDirectory: false };
+      setFolderData((tree) => addEntry(tree, rootPathRef.current ?? "", entry));
+    },
+    [writeDocument]
+  );
+
+  /**
    * Follows a wiki-link: opens the note it names, or - for a name no note in
    * the vault has - creates one beside the note the link is in and opens that,
    * the way a link to a note that is not written yet works in any vault app.
@@ -1716,6 +1731,7 @@ export function useFileOperations({ preferences, onFolderOpened }: UseFileOperat
     createFolder,
     renameEntry,
     duplicateEntry,
+    copyEntry,
     moveEntry,
     deleteEntry,
     attachFiles,

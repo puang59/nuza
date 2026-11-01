@@ -12,7 +12,7 @@ import {
 import { ArrowUpDown, ChevronsDownUp, FilePlus, FolderPlus, Regex, Search, X } from "lucide-react";
 import { cn } from "cn";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { draggedPath, endDrag } from "@/lib/dragSource";
+import { draggedPaths, endDrag } from "@/lib/dragSource";
 import { searchFiles } from "@/lib/fileSearch";
 import { ContentHit } from "@/lib/contentSearch";
 import { useContentSearch } from "@/hooks/useContentSearch";
@@ -34,6 +34,7 @@ import {
   sortTree,
 } from "@/lib/fileTree";
 import { withNoteExtension } from "@/lib/entryName";
+import { movableInto, outermost, rowsBetween } from "@/lib/treeSelection";
 import { samePath } from "@/lib/path";
 import { usePersistedState } from "@/hooks/usePersistedState";
 import { TreeContext, TreeActions, ContextMenuState, PendingCreate, createTreeMarks } from "./TreeContext";
@@ -53,6 +54,14 @@ import { Vault } from "@/lib/vaults";
 
 /** What the rest of the app can ask the sidebar to do. */
 /** The tree row `row` is, as a selection: a folder's row is its `<summary>`. */
+/** Nothing picked: one set for it, so the rows can tell at a glance that nothing changed. */
+const NONE_PICKED: ReadonlySet<string> = new Set();
+
+/** The paths of `rows`, in the order they are shown. */
+function pathsOf(rows: HTMLElement[]) {
+  return rows.flatMap((row) => (row.dataset.path ? [row.dataset.path] : []));
+}
+
 function rowSelection(row: HTMLElement | null): TreeSelection | null {
   const path = row?.dataset.path;
   return path ? { path, isDirectory: row.tagName === "SUMMARY" } : null;
@@ -89,6 +98,8 @@ interface SidebarProps {
   onCreateFolder: (parentPath: string, name: string) => Promise<void> | void;
   onRename: (path: string, newName: string) => Promise<void> | void;
   onDuplicate: (path: string) => Promise<void> | void;
+  /** Copies a file into a folder, for one copied in the tree and pasted elsewhere. */
+  onCopy: (path: string, targetDir: string) => Promise<void> | void;
   onDelete: (path: string) => Promise<void> | void;
   onMove: (path: string, targetDir: string) => Promise<void> | void;
   onAttachFiles: (directory: string, files: File[]) => Promise<void> | void;
@@ -126,6 +137,7 @@ function Sidebar({
   onCreateFolder,
   onRename,
   onDuplicate,
+  onCopy,
   onDelete,
   onMove,
   onAttachFiles,
@@ -162,10 +174,24 @@ function Sidebar({
    * it, for a file - so a folder just made is where the next note goes.
    */
   const [selected, setSelected] = useState<TreeSelection | null>(null);
+  /**
+   * Rows picked together, as in VS Code: mod-click adds or takes away a row,
+   * shift-click or shift and an arrow takes in every row from the anchor.
+   * Moved, deleted, cut or copied as one. Empty while only `selected` is.
+   */
+  const [picked, setPicked] = useState<ReadonlySet<string>>(NONE_PICKED);
+  /** Where a shift-click's range starts: the row last clicked on its own, or mod-clicked. */
+  const pickAnchor = useRef<string | null>(null);
+  /** Rows cut or copied in the tree, waiting to be pasted on a folder. */
+  const [held, setHeld] = useState<{ paths: string[]; cut: boolean } | null>(null);
   const [followed, setFollowed] = useState({ currentFile, rootPath });
   if (followed.currentFile !== currentFile || followed.rootPath !== rootPath) {
     setFollowed({ currentFile, rootPath });
-    if (followed.rootPath !== rootPath) setSelected(null);
+    if (followed.rootPath !== rootPath) {
+      setSelected(null);
+      setPicked(NONE_PICKED);
+      setHeld(null);
+    }
     if (inVault) setSelected({ path: currentFile, isDirectory: false });
   }
   /** Where the header's New File and New Folder put what they make, and where a new note goes. */
@@ -179,7 +205,8 @@ function Sidebar({
   const order = SORT_ORDERS.some((option) => option.id === sortOrder) ? sortOrder : "name";
   /** The tree in the order it is shown in. For name order it is the tree itself. */
   const shownData = useMemo(() => sortTree(data, order), [data, order]);
-  const [deleteTarget, setDeleteTarget] = useState<FileEntry | null>(null);
+  /** What the delete dialog is asking about: one row, or every picked one. */
+  const [deleteTarget, setDeleteTarget] = useState<FileEntry[] | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [query, setQuery] = useState("");
   // Whether what is typed is a regular expression to look for in the notes'
@@ -316,14 +343,26 @@ function Sidebar({
 
     if (key === "Escape") {
       event.preventDefault();
-      onReturnFocus?.();
+      // Two stages, as in search: let go of the picked rows, then of the panel.
+      if (picked.size) setPicked(NONE_PICKED);
+      else onReturnFocus?.();
       return;
     }
 
     if (key === "ArrowDown" || key === "ArrowUp" || (vimEnabled && (key === "j" || key === "k"))) {
       event.preventDefault();
       const forwards = key === "ArrowDown" || key === "j";
-      focusRow(rowAfter(visibleRows(tree), row, forwards ? 1 : -1));
+      const rows = visibleRows(tree);
+      const next = rowAfter(rows, row, forwards ? 1 : -1);
+      focusRow(next);
+      // Shift takes the rows stepped over along; a plain step lets them go.
+      if (event.shiftKey && next?.dataset.path && row?.dataset.path) {
+        pickAnchor.current ??= row.dataset.path;
+        setPicked(new Set(rowsBetween(pathsOf(rows), pickAnchor.current, next.dataset.path)));
+      } else {
+        setPicked(NONE_PICKED);
+        pickAnchor.current = next?.dataset.path ?? null;
+      }
       return;
     }
 
@@ -346,9 +385,22 @@ function Sidebar({
       setRenamingPath(entry.path);
       return;
     }
-    if ((key === "Delete" || (key === "Backspace" && (event.metaKey || event.ctrlKey))) && entry) {
+    const mod = event.metaKey || event.ctrlKey;
+    if ((key === "Delete" || (key === "Backspace" && mod)) && entry) {
       event.preventDefault();
-      setDeleteTarget(entry);
+      setDeleteTarget(picked.has(entry.path) ? entriesOf(picked) : [entry]);
+      return;
+    }
+
+    // Cut, copy and paste of files, between folders of the tree.
+    if (mod && !event.altKey && (key === "x" || key === "c") && entry) {
+      event.preventDefault();
+      hold(picked.has(entry.path) ? Array.from(picked) : [entry.path], key === "x");
+      return;
+    }
+    if (mod && !event.altKey && key === "v" && held && entry) {
+      event.preventDefault();
+      pasteInto(entry.isDirectory ? entry.path : parentOf(entry.path));
       return;
     }
 
@@ -471,12 +523,47 @@ function Sidebar({
 
   async function confirmDelete() {
     if (!deleteTarget) return;
-    const target = deleteTarget;
+    const targets = deleteTarget;
     setDeleteTarget(null);
-    try {
-      await onDelete(target.path);
-    } catch (error) {
-      report(`Couldn't delete "${target.name}"`, error);
+    setPicked(NONE_PICKED);
+    for (const target of targets) {
+      try {
+        await onDelete(target.path);
+      } catch (error) {
+        report(`Couldn't delete "${target.name}"`, error);
+      }
+    }
+  }
+
+  /** The tree's entries for `paths`, leaving out any inside another of them. */
+  function entriesOf(paths: Iterable<string>) {
+    return outermost(paths).flatMap((path) => findEntry(data, path) ?? []);
+  }
+
+  /** Holds rows for pasting: cut ones are moved when pasted, copied ones copied. */
+  function hold(paths: string[], cut: boolean) {
+    setHeld({ paths: outermost(paths), cut });
+  }
+
+  /**
+   * Puts the held rows in `folder`. Cut rows move, and are let go of once
+   * moved; copied ones stay held, so the same note can be pasted in several
+   * places. A copy into its own folder is a duplicate, numbered.
+   */
+  async function pasteInto(folder: string) {
+    if (!held) return;
+    if (held.cut) {
+      setHeld(null);
+      setPicked(NONE_PICKED);
+      for (const path of movableInto(held.paths, folder)) await moveEntry(path, folder);
+      return;
+    }
+    for (const path of held.paths) {
+      try {
+        await onCopy(path, folder);
+      } catch (error) {
+        report(`Couldn't copy "${fileNameOf(path)}"`, error);
+      }
     }
   }
 
@@ -556,10 +643,38 @@ function Sidebar({
     if (!contextMenu) return [];
     const { entry } = contextMenu;
 
+    const paste: ContextMenuItem[] = held
+      ? [
+          {
+            label: "Paste",
+            onClick: () => void pasteInto(entry?.isDirectory ? entry.path : (rootPath ?? "")),
+          },
+        ]
+      : [];
+
     if (!entry) {
       return [
         { label: "New File", onClick: () => beginCreate("file") },
         { label: "New Folder", onClick: () => beginCreate("folder") },
+        ...paste,
+      ];
+    }
+
+    // Right-clicked on one of several picked rows: what can be done to all of them.
+    if (picked.size > 1 && picked.has(entry.path)) {
+      const paths = Array.from(picked);
+      return [
+        { label: "Cut", onClick: () => hold(paths, true) },
+        { label: "Copy", onClick: () => hold(paths, false) },
+        {
+          label: "Copy Paths",
+          onClick: () => copyPath(paths.join("\n")),
+        },
+        {
+          label: `Delete ${outermost(paths).length} Items`,
+          onClick: () => setDeleteTarget(entriesOf(paths)),
+          danger: true,
+        },
       ];
     }
 
@@ -581,10 +696,15 @@ function Sidebar({
     items.push({ label: "Rename", onClick: () => setRenamingPath(entry.path) });
     if (!entry.isDirectory) items.push({ label: "Duplicate", onClick: () => duplicateEntry(entry.path) });
     items.push(
+      { label: "Cut", onClick: () => hold([entry.path], true) },
+      ...(entry.isDirectory ? [] : [{ label: "Copy", onClick: () => hold([entry.path], false) }]),
+      ...(entry.isDirectory ? paste : [])
+    );
+    items.push(
       { label: revealLabel(), onClick: () => revealEntry(entry.path) },
       { label: "Copy Path", onClick: () => copyPath(entry.path) },
       { label: "Copy Relative Path", onClick: () => copyPath(relativePath(rootPath ?? "", entry.path)) },
-      { label: "Delete", onClick: () => setDeleteTarget(entry), danger: true }
+      { label: "Delete", onClick: () => setDeleteTarget([entry]), danger: true }
     );
     return items;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -598,6 +718,7 @@ function Sidebar({
     selectedPath: selected?.path ?? null,
     renamingPath,
     pendingCreate,
+    picked,
   };
   const [marks] = useState(() => createTreeMarks(markValues));
   useLayoutEffect(() => marks.set(markValues));
@@ -788,7 +909,29 @@ function Sidebar({
           const target = e.target as Element;
           // Typing a name in, rather than choosing a row.
           if (target.closest("input")) return;
-          setSelected(rowSelection(target.closest<HTMLElement>("[data-path]")));
+          const row = target.closest<HTMLElement>("[data-path]");
+          const path = row?.dataset.path;
+          if (path && (e.metaKey || e.ctrlKey)) {
+            // Picking starts from the row last clicked on its own. Not from
+            // `selected`: the press that started this click has already
+            // focused, and so selected, the row being clicked.
+            const next = new Set(picked.size ? picked : pickAnchor.current ? [pickAnchor.current] : []);
+            if (next.has(path)) next.delete(path);
+            else next.add(path);
+            setPicked(next);
+            pickAnchor.current = path;
+            setSelected(rowSelection(row));
+            return;
+          }
+          if (path && e.shiftKey && treeRef.current) {
+            pickAnchor.current ??= path;
+            setPicked(new Set(rowsBetween(pathsOf(visibleRows(treeRef.current)), pickAnchor.current, path)));
+            setSelected(rowSelection(row));
+            return;
+          }
+          setPicked(NONE_PICKED);
+          pickAnchor.current = path ?? null;
+          setSelected(rowSelection(row));
         }}
         onContextMenu={(e) => {
           if (!hasFolder) return;
@@ -797,19 +940,19 @@ function Sidebar({
         }}
         onDragOver={(e) => {
           if (!rootPath) return;
-          if (!draggedPath() && !e.dataTransfer.types.includes("Files")) return;
+          if (!draggedPaths().length && !e.dataTransfer.types.includes("Files")) return;
           e.preventDefault();
         }}
         onDrop={(e) => {
           if (!rootPath) return;
           const files = Array.from(e.dataTransfer.files);
-          const dragging = draggedPath();
-          if (!files.length && !dragging) return;
+          const dragging = draggedPaths();
+          if (!files.length && !dragging.length) return;
 
           e.preventDefault();
           endDrag();
           if (files.length) attachFiles(rootPath, files);
-          else if (dragging) moveEntry(dragging, rootPath);
+          else for (const path of movableInto(dragging, rootPath)) moveEntry(path, rootPath);
         }}
         // Hidden rather than unmounted while another view is up: which
         // folders are open lives in the rows, and would be lost with them.
@@ -918,7 +1061,13 @@ function Sidebar({
       {/* Always mounted: it has to outlive `deleteTarget` long enough to
           animate closed. */}
       <ConfirmDeleteModal
-        target={deleteTarget}
+        target={
+          deleteTarget && {
+            name: deleteTarget[0]?.name ?? "",
+            isDirectory: deleteTarget.some((entry) => entry.isDirectory),
+            count: deleteTarget.length,
+          }
+        }
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
       />
