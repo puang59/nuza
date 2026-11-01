@@ -167,6 +167,8 @@ export interface SidebarHandle {
   focusTree: () => void;
   /** The folder selected in the tree - or the selected note's - for a new note to go in. */
   newNoteFolder: () => string | null;
+  /** Unfolds the tree down to a note, scrolls to it, and selects it with the keyboard on it. */
+  revealPath: (path: string) => void;
 }
 
 interface SidebarProps {
@@ -397,12 +399,57 @@ function Sidebar({
     focusRow(rows.find((row) => row.dataset.path === currentFile) ?? rows[0]);
   }
 
+  /**
+   * Opens the folders down to `path` from the top, one level at a time as each
+   * draws its contents, until its row is there to scroll to - and to focus,
+   * when `focus` asks. Hands back what cancels it.
+   */
+  function revealRow(path: string, focus: boolean) {
+    const tree = treeRef.current;
+    if (!tree || !rootPath) return;
+
+    const folders: string[] = [];
+    for (let folder = parentOf(path); folder.length > rootPath.length; folder = parentOf(folder)) {
+      folders.unshift(folder);
+    }
+
+    let frame = 0;
+    let tries = folders.length + 4;
+    function reveal() {
+      const find = (at: string) => tree!.querySelector<HTMLElement>(`[data-path="${CSS.escape(at)}"]`);
+
+      for (const folder of folders) {
+        const details = find(folder)?.parentElement;
+        if (!(details instanceof HTMLDetailsElement)) break;
+        if (!details.open) details.open = true;
+      }
+
+      const row = find(path);
+      // `nearest` so a row that is already visible is left where it is, rather
+      // than the panel jumping to centre it on every tab change.
+      if (row) {
+        row.scrollIntoView({ block: "nearest" });
+        if (focus) row.focus();
+      } else if (tries-- > 0) frame = requestAnimationFrame(reveal);
+    }
+
+    reveal();
+    return () => cancelAnimationFrame(frame);
+  }
+
   useImperativeHandle(ref, () => ({
     focusSearch: openSearch,
     // The panel is `inert` until it is open, and inert elements refuse focus,
     // so this waits for the frame the attribute comes off in.
     focusTree: () => requestAnimationFrame(focusOpenRow),
     newNoteFolder: () => headerTarget,
+    revealPath: (path: string) => {
+      setView("files");
+      closeSearch();
+      setSelected({ path, isDirectory: false });
+      // The panel is `inert` until it is open, as for `focusTree`.
+      requestAnimationFrame(() => revealRow(path, true));
+    },
   }));
 
   function selectResult(path: string) {
@@ -724,34 +771,9 @@ function Sidebar({
    * draws its contents, until the row is there to scroll to.
    */
   useEffect(() => {
-    const tree = treeRef.current;
-    if (!tree || !currentFile || !rootPath || showResults || !currentFile.startsWith(rootPath)) return;
-
-    const folders: string[] = [];
-    for (let path = parentOf(currentFile); path.length > rootPath.length; path = parentOf(path)) {
-      folders.unshift(path);
-    }
-
-    let frame = 0;
-    let tries = folders.length + 4;
-    function reveal() {
-      const find = (path: string) => tree!.querySelector<HTMLElement>(`[data-path="${CSS.escape(path)}"]`);
-
-      for (const folder of folders) {
-        const details = find(folder)?.parentElement;
-        if (!(details instanceof HTMLDetailsElement)) break;
-        if (!details.open) details.open = true;
-      }
-
-      const row = find(currentFile);
-      // `nearest` so a row that is already visible is left where it is, rather
-      // than the panel jumping to centre it on every tab change.
-      if (row) row.scrollIntoView({ block: "nearest" });
-      else if (tries-- > 0) frame = requestAnimationFrame(reveal);
-    }
-
-    reveal();
-    return () => cancelAnimationFrame(frame);
+    if (!currentFile || !rootPath || showResults || !currentFile.startsWith(rootPath)) return;
+    return revealRow(currentFile, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentFile, data, rootPath, showResults]);
 
   /** Opens the folder holding `path` in the system's file manager, with it selected. */
