@@ -201,6 +201,7 @@ pub fn run() {
             launch::uninstall_cli,
             files::duplicate_entry,
             files::copy_entry,
+            multiwindow::open_single_note_window,
             terminal::open_in_terminal,
             files::write_file,
             media::write_media,

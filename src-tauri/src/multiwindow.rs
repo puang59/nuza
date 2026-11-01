@@ -426,6 +426,7 @@ pub(crate) fn note_window_target(
         kind: "file",
         path: path.to_string(),
         vault: Some(vault.to_string()),
+        single: false,
     })
 }
 
@@ -453,6 +454,36 @@ pub(crate) async fn open_note_in_new_window(
         let root = locked(&held.root).clone();
         let target = note_window_target(&resolved, root.as_deref(), &path, &vault)?;
         open_window(&app, Some(target), frame).map(|_| ())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Opens a note from outside the window's vault in a window of its own, with
+/// the editor and nothing else: a file opened from Finder, or with
+/// `nuza <file>`, while a vault is open. The new window opens the note's
+/// folder, which is all the app may read for it. Only a markdown file that
+/// exists is opened this way.
+#[tauri::command]
+pub(crate) async fn open_single_note_window(
+    app: tauri::AppHandle,
+    path: String,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let resolved = Path::new(&path).canonicalize().map_err(|e| e.to_string())?;
+        let is_note = resolved
+            .extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("md"));
+        if !resolved.is_file() || !is_note {
+            return Err("That is not a note to open".to_string());
+        }
+        let target = OpenTarget {
+            kind: "file",
+            path: crate::cli::plain(resolved),
+            vault: None,
+            single: true,
+        };
+        open_window(&app, Some(target), None).map(|_| ())
     })
     .await
     .map_err(|e| e.to_string())?
@@ -690,6 +721,7 @@ pub(crate) fn restore_windows(app: &tauri::AppHandle, launched: Option<&OpenTarg
                 kind: "folder",
                 path: first.root,
                 vault: None,
+                single: false,
             },
         );
         if let (Some(frame), Some(window)) = (first.frame, app.get_webview_window(MAIN_WINDOW)) {
@@ -710,6 +742,7 @@ pub(crate) fn restore_windows(app: &tauri::AppHandle, launched: Option<&OpenTarg
                 kind: "folder",
                 path: window.root,
                 vault: None,
+                single: false,
             };
             if let Err(error) = open_window(&app, Some(target), window.frame) {
                 log::warn!("could not bring a window back: {}", error);
