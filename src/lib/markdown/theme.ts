@@ -193,6 +193,16 @@ const editorTheme = EditorView.theme(
          leaving a word or two on a line of their own. */
       textWrapStyle: "balance",
     },
+    /* The `#`s of the heading being edited, hung in the margin: a box with no
+       width whose contents are pushed out to its left, so the text after it
+       starts where it does when the marks are hidden. */
+    ".cm-md-heading-mark": {
+      display: "inline-flex",
+      justifyContent: "flex-end",
+      width: "0",
+      whiteSpace: "pre",
+      textIndent: "0",
+    },
     ".cm-md-h1": { fontSize: "1.9em", padding: "0.55em 0 0.2em" },
     ".cm-md-h2": { fontSize: "1.52em", padding: "0.6em 0 0.2em" },
     ".cm-md-h3": { fontSize: "1.28em", padding: "0.65em 0 0.2em" },

@@ -16,7 +16,7 @@ import { htmlKeepsIndentation } from "./htmlIndent";
 import { noteLinkCompletion } from "./linkCompletion";
 import { listIndent } from "./listIndent";
 import { continueListItem, insertNewLine, tabInProse } from "./lists";
-import { liveMarkdownPreview } from "./livePreview";
+import { liveMarkdownPreview, steadyWhileDragging } from "./livePreview";
 import { MathSyntax } from "./math";
 import { pasteUrlAsLink, wrapSelectionInMarks } from "./formatting";
 import { findInNote } from "./searchPanel";
@@ -129,6 +129,7 @@ export const liveMarkdown: Extension = [
   EditorView.lineWrapping,
   nuzaEditorTheme,
   liveMarkdownPreview,
+  steadyWhileDragging,
   headingFlash,
   outlineReporter,
   findInNote,
