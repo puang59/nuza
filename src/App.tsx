@@ -161,7 +161,12 @@ function App() {
   // Assumed until the window has answered, so the app does not flash opaque on
   // the way up on the platforms that do have a backdrop.
   const [hasBackdrop, setHasBackdrop] = useState(true);
-  const { appearance, update: setAppearance, reset: resetAppearance } = useAppearance(hasBackdrop);
+  const {
+    appearance,
+    theme: windowTheme,
+    update: setAppearance,
+    reset: resetAppearance,
+  } = useAppearance(hasBackdrop);
 
   // Read by the `compact:` variant in App.css, so flipping it retightens the
   // sidebar and chrome without a single component re-rendering.
@@ -1375,6 +1380,7 @@ function App() {
         zenDimming={zenDimming}
         setZenDimming={setZenDimming}
         appearance={appearance}
+        windowTheme={windowTheme}
         setAppearance={setAppearance}
         resetAppearance={resetAppearance}
         compactMode={compactMode}
