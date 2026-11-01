@@ -76,6 +76,18 @@ describe("enter under a list", () => {
   });
 });
 
+describe("enter at the start of a point under a paragraph", () => {
+  test("opens the empty point after a blank line, so the paragraph stays a paragraph", () => {
+    expect(pressEnter("para\n- |one")).toBe("para\n\n-\n- |one");
+    expect(pressEnter("para\n- [ ] |one")).toBe("para\n\n- [ ]\n- [ ] |one");
+  });
+
+  test("anywhere else, opens the point above as before", () => {
+    expect(pressEnter("- zero\n- |one")).toBe("- zero\n-\n- |one");
+    expect(pressEnter("para\n\n- |one")).toBe("para\n\n-\n- |one");
+  });
+});
+
 describe("enter in a quote", () => {
   test("carries the quote on", () => {
     expect(pressEnter("> quoted|")).toBe("> quoted\n> |");
