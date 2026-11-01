@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "bump-version": "bun run scripts/bump-version.ts",
+    "changelog": "bun run scripts/changelog.ts",
     "lint": "eslint .",
     "test": "bun test",
     "format": "prettier --write .",
