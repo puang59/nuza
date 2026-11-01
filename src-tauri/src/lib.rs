@@ -18,6 +18,7 @@ mod slow;
 mod state;
 mod tags;
 mod tasks;
+mod terminal;
 mod tree;
 mod vaultserver;
 mod watcher;
@@ -201,6 +202,7 @@ pub fn run() {
             files::duplicate_entry,
             files::copy_entry,
             multiwindow::close_or_hide_window,
+            terminal::open_in_terminal,
             files::write_file,
             media::write_media,
             recovery::keep_recovery,

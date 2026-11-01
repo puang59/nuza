@@ -8,7 +8,7 @@ import WritingStats from "./components/WritingStats";
 import Sidebar, { SidebarHandle } from "./components/Sidebar";
 import SettingsModal from "./components/SettingsModal";
 import FileSearchPalette from "./components/FileSearchPalette";
-import SettingsPalette from "./components/SettingsPalette";
+import SettingsPalette, { type PaletteCommand } from "./components/SettingsPalette";
 import ChangedOnDisk from "./components/ChangedOnDisk";
 import RecoveredEdits from "./components/RecoveredEdits";
 import SidePane from "./components/SidePane";
@@ -26,7 +26,7 @@ import SectionGuides from "./components/SectionGuides";
 import ZenBar from "./components/ZenBar";
 import { zenFocus } from "./lib/markdown/zen";
 import { formatBinding } from "./lib/keybinding";
-import type { KeymapAction } from "./lib/keymaps";
+import { KEYMAP_ACTIONS, type KeymapAction } from "./lib/keymaps";
 import type { ToggleSetting } from "./lib/settingsSearch";
 import { useVimMode } from "./hooks/useVimMode";
 import { useVaults } from "./hooks/useVaults";
@@ -119,6 +119,7 @@ function App() {
   // Off unless asked for: marks on the writing surface are not something to
   // put in front of everyone.
   const [sectionGuides, setSectionGuides] = usePersistedState("sectionGuides", false);
+  const [terminalApp, setTerminalApp] = usePersistedState("terminalApp", "", { debounceMs: 400 });
   // Zen mode: the note and nothing else. Not kept between launches - it is a
   // way of working for a while, and an app that came back with no chrome and
   // no hint of how to get it would be a worse surprise than one that did not.
@@ -322,6 +323,14 @@ function App() {
   // The open vault's pins, as one list per vault so the sidebar is only
   // handed a new one when they change.
   const vaultPins = useMemo(() => (rootPath ? (pins[rootPath] ?? NO_PINS) : NO_PINS), [pins, rootPath]);
+  const openInTerminal = useCallback(
+    (path: string) => {
+      invoke("open_in_terminal", { path, app: terminalApp || null }).catch((error) =>
+        report("Couldn't open a terminal there", error)
+      );
+    },
+    [terminalApp]
+  );
   const togglePinned = useCallback(
     (path: string) => {
       if (rootPath) setStoredPins((stored) => togglePin(readPins(stored), rootPath, path));
@@ -956,6 +965,27 @@ function App() {
 
   useKeymapListener(keymapBindings, keymapHandlers);
 
+  // Every action with a handler, for the palette: by its name, with its
+  // shortcut. Not the palette itself, which is already open.
+  const paletteCommands = useMemo<PaletteCommand[]>(
+    () =>
+      KEYMAP_ACTIONS.flatMap((action) => {
+        const run = (keymapHandlers as Partial<Record<KeymapAction, () => void>>)[action.id];
+        if (!run || action.id === "quick-settings") return [];
+        const binding = keymapBindings[action.id];
+        return [
+          {
+            id: action.id,
+            title: action.label,
+            description: action.description,
+            shortcut: binding ? formatBinding(binding) : "",
+            run,
+          },
+        ];
+      }),
+    [keymapHandlers, keymapBindings]
+  );
+
   /** Does what an action's keys would, for something on screen that offers it. */
   const runAction = useCallback(
     (action: KeymapAction) => (keymapHandlers as Partial<Record<KeymapAction, () => void>>)[action]?.(),
@@ -1233,6 +1263,7 @@ function App() {
               pinned={vaultPins}
               onTogglePin={togglePinned}
               recentPaths={recentFiles}
+              onOpenInTerminal={openInTerminal}
               onDelete={deleteEntry}
               onMove={moveEntry}
               onAttachFiles={attachFiles}
@@ -1300,7 +1331,12 @@ function App() {
         notesOnly
       />
 
-      <SettingsPalette isOpen={isQuickSettingsOpen} onClose={closeQuickSettings} settings={toggleSettings} />
+      <SettingsPalette
+        isOpen={isQuickSettingsOpen}
+        onClose={closeQuickSettings}
+        settings={toggleSettings}
+        commands={paletteCommands}
+      />
 
       <div className="contents print:hidden">
         <Notices notices={notices} onDismiss={dismissNotice} hold={noticeHold} />
@@ -1325,6 +1361,8 @@ function App() {
         setSpellLanguage={setSpellLanguage}
         sectionGuides={sectionGuides}
         setSectionGuides={setSectionGuides}
+        terminalApp={terminalApp}
+        setTerminalApp={setTerminalApp}
         zenDimming={zenDimming}
         setZenDimming={setZenDimming}
         appearance={appearance}
