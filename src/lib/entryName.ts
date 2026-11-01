@@ -115,10 +115,11 @@ export function nameFromHeading(text: string): string {
     .map((line) => /^#{1,6}\s+(.*?)\s*#*\s*$/.exec(line.trim())?.[1] ?? "")
     .find((title) => title.length > 0);
   if (!heading) return "";
-  return heading
+  return Array.from(heading)
+    .filter((character) => !isControl(character))
+    .join("")
     .replace(/[[\]*_`~]/g, "")
     .replace(/[/\\:*?"<>|]/g, " ")
-    .replace(/[\u0000-\u001f\u007f]/g, "")
     .replace(/\s+/g, " ")
     .replace(/^[.\s]+|[.\s]+$/g, "")
     .slice(0, 100)
