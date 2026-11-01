@@ -5,13 +5,13 @@ export function FileIcon({ name }: { name: string }) {
 
   switch (extension) {
     case "json":
-      return <FileJson className="h-4 w-4 text-yellow-400" />;
+      return <FileJson className="h-4 w-4 shrink-0 text-yellow-400" />;
 
     case "md":
     case "txt":
-      return <FileText className="h-4 w-4 text-zinc-500" />;
+      return <FileText className="h-4 w-4 shrink-0 text-zinc-500" />;
 
     default:
-      return <File className="h-4 w-4 text-zinc-500" />;
+      return <File className="h-4 w-4 shrink-0 text-zinc-500" />;
   }
 }
