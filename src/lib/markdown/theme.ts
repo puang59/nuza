@@ -92,18 +92,18 @@ const editorTheme = EditorView.theme(
     "&.cm-focused > .cm-scroller > .cm-cursorLayer .cm-cursor, .cm-cursor, .cm-dropCursor": {
       borderLeft: `2px solid ${ink.caret}`,
     },
-    /* Vim's block cursor draws itself as a background, not a border. Every
-       property here is `!important`: Vim's own theme names the same selectors
-       at the highest precedence, so a plain rule loses the tie and the cursor
-       keeps Vim's built-in pink whatever accent has been picked. */
+    /* Vim's block cursor draws itself as a background, not a border. These
+       are `!important`: Vim's own theme names the same selectors at the
+       highest precedence, so a plain rule loses the tie to its built-in pink. */
     ".cm-fat-cursor": {
       background: `${ink.caret} !important`,
       color: "var(--nuza-bg) !important",
     },
+    /* Out of focus - another app in front, or the sidebar being used - Vim
+       leaves an empty box where the cursor was. A caret goes away when its
+       editor is not being typed into, and so does this one. */
     "&:not(.cm-focused) .cm-fat-cursor": {
-      background: "none !important",
-      outline: `1px solid ${ink.caret} !important`,
-      color: "transparent !important",
+      display: "none !important",
     },
     /* Spelled out through the scroller and the selection layer, rather than as
        a flat `.cm-selectionBackground`: CodeMirror's own dark base theme sets
