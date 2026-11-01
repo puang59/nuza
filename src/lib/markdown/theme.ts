@@ -92,14 +92,17 @@ const editorTheme = EditorView.theme(
     "&.cm-focused > .cm-scroller > .cm-cursorLayer .cm-cursor, .cm-cursor, .cm-dropCursor": {
       borderLeft: `2px solid ${ink.caret}`,
     },
-    /* Vim's block cursor draws itself as a background, not a border. */
+    /* Vim's block cursor draws itself as a background, not a border. Every
+       property here is `!important`: Vim's own theme names the same selectors
+       at the highest precedence, so a plain rule loses the tie and the cursor
+       keeps Vim's built-in pink whatever accent has been picked. */
     ".cm-fat-cursor": {
       background: `${ink.caret} !important`,
       color: "var(--nuza-bg) !important",
     },
     "&:not(.cm-focused) .cm-fat-cursor": {
       background: "none !important",
-      outline: `1px solid ${ink.caret}`,
+      outline: `1px solid ${ink.caret} !important`,
       color: "transparent !important",
     },
     /* Spelled out through the scroller and the selection layer, rather than as
