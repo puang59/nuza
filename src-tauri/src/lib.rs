@@ -5,6 +5,7 @@ mod cli;
 mod files;
 mod folder;
 mod fonts;
+mod gitignore;
 mod index;
 mod launch;
 mod media;

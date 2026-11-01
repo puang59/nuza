@@ -163,7 +163,24 @@ pub(crate) fn read_level(
     prober: Prober,
 ) -> Result<Vec<Level>, String> {
     let owned = directory.to_path_buf();
-    let listed = match run_one(move || list_names(&owned), patience.listing) {
+    let (here_owned, root_owned) = (here.to_path_buf(), root.to_path_buf());
+    let listed = match run_one(
+        move || {
+            // What the vault's .gitignore files leave out is left out here,
+            // once, for the tree, the index and search alike.
+            list_names(&owned).map(|mut listed| {
+                listed.retain(|item| {
+                    !crate::gitignore::ignores(
+                        &root_owned,
+                        &here_owned.join(&item.name),
+                        item.kind == Kind::Folder,
+                    )
+                });
+                listed
+            })
+        },
+        patience.listing,
+    ) {
         Some(listed) => listed?,
         None => {
             return Err(format!(
