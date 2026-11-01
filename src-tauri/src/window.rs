@@ -98,3 +98,78 @@ pub(crate) fn set_transparency(
 ) -> Result<bool, String> {
     apply_transparency(&window, enabled)
 }
+
+/// A webview configuration that draws at the display's own refresh rate.
+///
+/// WebKit's `PreferPageRenderingUpdatesNear60FPSEnabled`, on by default,
+/// drives animation frames at the divisor of the refresh rate nearest 60: on a
+/// 144Hz screen that is 72fps, half what every native app beside nuza draws
+/// at, and the caret, scrolling and the panels sliding in all look it. It is
+/// read when a page is created, so it has to be in the configuration the
+/// webview is built with - turning it off on a live page changes nothing.
+///
+/// The switch is WebKit's private feature list, looked up by name: a WebKit
+/// that renames or drops it leaves the default in place rather than failing.
+/// nuza is not distributed through the App Store, which is where private API
+/// would matter. Built on the main thread, where WebKit's objects belong, and
+/// handed back to whichever thread is building the window.
+#[cfg(target_os = "macos")]
+pub(crate) fn full_rate_configuration(
+    app: &tauri::AppHandle,
+) -> Option<objc2::rc::Retained<objc2_web_kit::WKWebViewConfiguration>> {
+    use objc2::rc::Retained;
+    use objc2::MainThreadMarker;
+    use objc2_web_kit::WKWebViewConfiguration;
+
+    if let Some(main) = MainThreadMarker::new() {
+        return Some(full_rate(main));
+    }
+
+    /// Only carried across, never touched on the way: WebKit gets it back on
+    /// the main thread when the window is built.
+    struct Handoff(Retained<WKWebViewConfiguration>);
+    unsafe impl Send for Handoff {}
+
+    let (send, receive) = std::sync::mpsc::channel();
+    app.run_on_main_thread(move || {
+        if let Some(main) = MainThreadMarker::new() {
+            let _ = send.send(Handoff(full_rate(main)));
+        }
+    })
+    .ok()?;
+    receive.recv().ok().map(|handoff| handoff.0)
+}
+
+#[cfg(target_os = "macos")]
+fn full_rate(
+    main: objc2::MainThreadMarker,
+) -> objc2::rc::Retained<objc2_web_kit::WKWebViewConfiguration> {
+    use objc2::rc::Retained;
+    use objc2::runtime::{AnyClass, AnyObject, NSObjectProtocol};
+    use objc2::{msg_send, sel};
+    use objc2_foundation::{NSArray, NSString};
+    use objc2_web_kit::WKWebViewConfiguration;
+
+    const FEATURE: &str = "PreferPageRenderingUpdatesNear60FPSEnabled";
+
+    let config = unsafe { WKWebViewConfiguration::new(main) };
+    let preferences = unsafe { config.preferences() };
+    let Some(class) = AnyClass::get(c"WKPreferences") else {
+        return config;
+    };
+
+    unsafe {
+        let listed: bool = msg_send![class, respondsToSelector: sel!(_features)];
+        if !listed || !preferences.respondsToSelector(sel!(_setEnabled:forFeature:)) {
+            return config;
+        }
+        let features: Option<Retained<NSArray<AnyObject>>> = msg_send![class, _features];
+        for feature in features.iter().flat_map(|features| features.iter()) {
+            let key: Option<Retained<NSString>> = msg_send![&*feature, key];
+            if key.is_some_and(|key| key.to_string() == FEATURE) {
+                let _: () = msg_send![&*preferences, _setEnabled: false, forFeature: &*feature];
+            }
+        }
+    }
+    config
+}
