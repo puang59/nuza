@@ -117,6 +117,43 @@ const editorTheme = EditorView.theme(
     },
     ".cm-activeLine": { backgroundColor: "transparent" },
 
+    /* The note list `[[` opens: the window's own surface and ink rather than
+       CodeMirror's stock grey box, with the chosen row in the accent. The
+       colours are `!important` because the stock ones are set per light and
+       dark theme, through a longer selector. */
+    ".cm-tooltip.cm-tooltip-autocomplete": {
+      background: "var(--nuza-bg)",
+      border: `1px solid ${ink.hairline}`,
+      borderRadius: "8px",
+      boxShadow: "0 8px 24px rgba(0, 0, 0, 0.35)",
+      padding: "4px",
+      overflow: "hidden",
+    },
+    ".cm-tooltip-autocomplete > ul": {
+      fontFamily: "inherit !important",
+      fontSize: "0.9em",
+      maxHeight: "15em",
+      minWidth: "14em",
+    },
+    ".cm-tooltip-autocomplete > ul > li": {
+      padding: "3px 10px !important",
+      borderRadius: "5px",
+      color: `${ink.text} !important`,
+      lineHeight: "1.6",
+    },
+    ".cm-tooltip-autocomplete > ul > li[aria-selected]": {
+      background: `${ink.selection} !important`,
+      color: `${ink.heading} !important`,
+    },
+    ".cm-completionIcon": { display: "none" },
+    ".cm-completionMatchedText": { textDecoration: "none", color: ink.accent },
+    ".cm-completionDetail": {
+      color: ink.muted,
+      fontStyle: "normal",
+      fontSize: "0.85em",
+      marginLeft: "0.75em",
+    },
+
     /* Other copies of what you have selected, in the second accent so they
        read as related to the selection without being mistaken for it.
        CodeMirror's own default here is a bright green that belongs to no part

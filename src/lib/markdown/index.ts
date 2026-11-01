@@ -12,6 +12,7 @@ import { report } from "../notices";
 import { isMacPlatform } from "../platform";
 import { attachments } from "./attachments";
 import { htmlKeepsIndentation } from "./htmlIndent";
+import { noteLinkCompletion } from "./linkCompletion";
 import { listIndent } from "./listIndent";
 import { continueListItem, insertNewLine } from "./lists";
 import { liveMarkdownPreview } from "./livePreview";
@@ -128,6 +129,7 @@ export const liveMarkdown: Extension = [
   attachments,
   wrapSelectionInMarks,
   pasteUrlAsLink,
+  noteLinkCompletion,
 ];
 
 export { directoryOf, noteDirectory } from "./sources";
