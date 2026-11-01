@@ -422,8 +422,13 @@ textarea,
   animation: nuza-panel-out 140ms cubic-bezier(0.4, 0, 1, 1) forwards;
 }
 
+/*
+ * The side panels sliding in and out. Eased in gently and out long, rather
+ * than leaping a third of the way on the first frame: the note beside the
+ * panel moves with it, and a jump is what reads as a stutter.
+ */
 .sidebar-transition {
-  transition: width 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: width 220ms cubic-bezier(0.2, 0, 0, 1);
 }
 
 /*
