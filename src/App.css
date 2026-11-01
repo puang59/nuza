@@ -478,20 +478,6 @@ textarea,
  * `grid-template-rows: 0fr/1fr` trick, which not every webview this app ships
  * into can interpolate yet.
  */
-.sidebar-search {
-  overflow: hidden;
-  max-height: 0;
-  opacity: 0;
-  transition:
-    max-height 200ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 150ms ease-out;
-}
-
-.sidebar-search[data-open="true"] {
-  max-height: 3rem;
-  opacity: 1;
-}
-
 /*
  * Scrollbars, everywhere there is one: the explorer, the settings panel, the
  * vault list, the font list, quick open.
@@ -725,7 +711,6 @@ textarea,
 
   .sidebar-transition,
   .zen-fold,
-  .sidebar-search,
   .cm-drop-target,
   .cm-md-image img,
   .nuza-slider::-webkit-slider-thumb {

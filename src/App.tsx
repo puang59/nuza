@@ -1320,6 +1320,7 @@ function App() {
               pinned={vaultPins}
               onTogglePin={togglePinned}
               recentPaths={recentFiles}
+              searchShortcut={formatBinding(keymapBindings["search-files"])}
               showTitles={noteTitles}
               onOpenInTerminal={openInTerminal}
               onDelete={deleteEntry}
