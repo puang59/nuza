@@ -18,6 +18,27 @@ export function editorFontFamily(font: string) {
   return `"${font.replace(/["\\]/g, "\\$&")}", ${FALLBACK_FONT_STACK}`;
 }
 
+/** The face the app's own chrome is set in: the sidebar, tabs, menus and bars. */
+const UI_FONT_STACK = '"Inter Variable", "Inter", sans-serif';
+
+/** A monospace stack for code, independent of the prose font. */
+export const CODE_FONT_STACK =
+  'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace';
+
+function quoted(font: string) {
+  return `"${font.replace(/["\\]/g, "\\$&")}"`;
+}
+
+/** CSS `font-family` for the interface: a chosen font, then the app's own. */
+export function uiFontFamily(font: string) {
+  return font ? `${quoted(font)}, ${UI_FONT_STACK}` : UI_FONT_STACK;
+}
+
+/** CSS `font-family` for code: a chosen font, then the monospace stack. */
+export function codeFontFamily(font: string) {
+  return font ? `${quoted(font)}, ${CODE_FONT_STACK}` : CODE_FONT_STACK;
+}
+
 /** Comfortable reading size for body text; headings scale up from here. */
 export const DEFAULT_EDITOR_FONT_SIZE = 16;
 export const MIN_EDITOR_FONT_SIZE = 8;

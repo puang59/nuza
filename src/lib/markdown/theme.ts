@@ -1,5 +1,6 @@
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { EditorView } from "@codemirror/view";
+import { CODE_FONT_STACK } from "../fonts";
 import { tags as t } from "@lezer/highlight";
 
 /**
@@ -46,9 +47,11 @@ const CHECK_MARK =
   "TTMuNSA4LjRsMy4xIDMuMUwxMi41IDUiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzFFMUUxRSIgc3Ryb2tlLXdpZHRoPSIy" +
   "LjYiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjwvc3ZnPg==";
 
-/** A cross-platform monospace stack for code, independent of the prose font. */
-export const CODE_FONT_FAMILY =
-  'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace';
+/**
+ * The font code is set in: the one chosen in Settings, which the app writes to
+ * `--nuza-code-font`, or a cross-platform monospace stack.
+ */
+export const CODE_FONT_FAMILY = `var(--nuza-code-font, ${CODE_FONT_STACK})`;
 
 const editorTheme = EditorView.theme(
   {

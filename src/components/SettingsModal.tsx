@@ -58,6 +58,10 @@ interface SettingsModalProps {
   setAutoUpdateEnabled: (enabled: boolean) => void;
   editorFont: string;
   setEditorFont: (font: string) => void;
+  uiFont: string;
+  setUiFont: (font: string) => void;
+  codeFont: string;
+  setCodeFont: (font: string) => void;
   editorFontSize: number;
   setEditorFontSize: (size: number) => void;
   contentWidth: number;
@@ -118,6 +122,10 @@ export default function SettingsModal({
   setAutoUpdateEnabled,
   editorFont,
   setEditorFont,
+  uiFont,
+  setUiFont,
+  codeFont,
+  setCodeFont,
   editorFontSize,
   setEditorFontSize,
   contentWidth,
@@ -245,6 +253,10 @@ export default function SettingsModal({
                 setCompactMode={setCompactMode}
                 editorFont={editorFont}
                 setEditorFont={setEditorFont}
+                uiFont={uiFont}
+                setUiFont={setUiFont}
+                codeFont={codeFont}
+                setCodeFont={setCodeFont}
                 editorFontSize={editorFontSize}
                 setEditorFontSize={setEditorFontSize}
                 contentWidth={contentWidth}
