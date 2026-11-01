@@ -20,7 +20,7 @@ import { useKeymaps, useKeymapListener, VIM_OWNED_KEYS } from "./hooks/useKeymap
 import { useCloseTabMenu } from "./hooks/useCloseTabMenu";
 import { useSaveOnExit } from "./hooks/useSaveOnExit";
 import { useNotices } from "./hooks/useNotices";
-import { useFileOperations } from "./hooks/useFileOperations";
+import { UNTITLED_FILE, useFileOperations } from "./hooks/useFileOperations";
 import GettingStarted from "./components/GettingStarted";
 import SectionGuides from "./components/SectionGuides";
 import ZenBar from "./components/ZenBar";
@@ -864,7 +864,19 @@ function App() {
   // Named rather than inlined into the handler table: the macOS menu bar needs
   // the same action, since ⌘W is a key equivalent there and never reaches the
   // keymap listener.
-  const closeCurrentTab = useCallback(() => closeFile(currentFile), [closeFile, currentFile]);
+  /**
+   * mod+W. With nothing open but the scratch note there is no tab left to
+   * close, and the window goes instead: hidden, for the main window on macOS,
+   * where the Dock brings it back as it was; closed, for any other.
+   */
+  const closeCurrentTab = useCallback(() => {
+    const nothingOpen = openPaths.length <= 1 && currentFile === UNTITLED_FILE;
+    if (nothingOpen) {
+      invoke("close_or_hide_window").catch((error) => report("Couldn't close the window", error));
+      return;
+    }
+    closeFile(currentFile);
+  }, [closeFile, currentFile, openPaths]);
 
   /**
    * Runs a formatting command on the note, when the note is what has the
