@@ -368,6 +368,19 @@ pub(crate) async fn list_tags(
     .await
 }
 
+/// The title each note in the open vault gives itself, for the sidebar to show
+/// in place of file names.
+#[tauri::command]
+pub(crate) async fn list_titles(
+    window: tauri::WebviewWindow,
+) -> Result<Vec<crate::titles::NoteTitle>, String> {
+    off_thread(move || {
+        let index = vault_of(&window).index.clone();
+        Ok(scan_index(&index, crate::titles::title_in))
+    })
+    .await
+}
+
 /// The lines of the open vault's notes that contain `query`, ignoring case -
 /// or that a regular expression matches, when `pattern` is set - best first.
 #[tauri::command]

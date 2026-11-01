@@ -16,6 +16,8 @@ interface GeneralSettingsProps {
   setSpellLanguage: (language: SpellLanguage) => void;
   sectionGuides: boolean;
   setSectionGuides: (enabled: boolean) => void;
+  noteTitles: boolean;
+  setNoteTitles: (enabled: boolean) => void;
   zenDimming: boolean;
   setZenDimming: (enabled: boolean) => void;
 }
@@ -33,6 +35,8 @@ export default function GeneralSettings({
   setSpellLanguage,
   sectionGuides,
   setSectionGuides,
+  noteTitles,
+  setNoteTitles,
   zenDimming,
   setZenDimming,
 }: GeneralSettingsProps) {
@@ -76,6 +80,12 @@ export default function GeneralSettings({
         description="Marks for a note's headings down the edge, and the current section's name at the top"
       >
         <Switch checked={sectionGuides} onCheckedChange={setSectionGuides} />
+      </SettingRow>
+      <SettingRow
+        title="Note Titles in Sidebar"
+        description="Show each note by its title - the frontmatter's title, or its first heading - instead of its file name"
+      >
+        <Switch checked={noteTitles} onCheckedChange={setNoteTitles} />
       </SettingRow>
       <SettingRow
         title="Dim in Zen Mode"
