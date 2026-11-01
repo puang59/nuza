@@ -86,7 +86,7 @@ export default function ThreadList({ threads, current, onOpen, onDelete, onClose
         role="dialog"
         aria-label="Chats"
         onKeyDown={onKeyDown}
-        className="animate-menu-in absolute inset-x-2 top-10 z-20 flex max-h-[min(70%,26rem)] flex-col overflow-hidden rounded-xl border border-zinc-700/80 bg-[var(--nuza-bg)] shadow-2xl shadow-black/40"
+        className="animate-menu-in absolute inset-x-2 top-10 z-20 flex max-h-[min(70%,26rem)] flex-col overflow-hidden rounded-lg border border-zinc-700/80 bg-[var(--nuza-bg)] shadow-2xl shadow-black/40"
       >
         <div className="flex shrink-0 items-center justify-between gap-2 px-3 pt-2.5 pb-1.5">
           <h3 className="text-xs font-medium text-gray-300">

@@ -233,3 +233,25 @@ describe("the writer's own preferences", () => {
     expect(prompt).not.toContain("Question 0\n");
   });
 });
+
+describe("notes added to the context", () => {
+  test("go in after the note, in the turn's delimiter, as reference only", () => {
+    const prompt = buildPrompt(
+      {
+        agent: "Claude Code",
+        question: "Compare them",
+        context: null,
+        intent: "ask",
+        extras: [{ title: "plans.md (lines 3–4)", text: "ship it\nthen rest" }],
+      },
+      "abc"
+    );
+    expect(prompt).toContain("Other notes they included, for reference only");
+    expect(prompt).toContain('plans.md (lines 3–4)\n<note id="abc">\nship it\nthen rest\n</note id="abc">');
+  });
+
+  test("nothing is said about them when there are none", () => {
+    const prompt = buildPrompt({ agent: "Claude Code", question: "Hi", context: null, intent: "ask" }, "abc");
+    expect(prompt).not.toContain("Other notes they included");
+  });
+});

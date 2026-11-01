@@ -3,7 +3,7 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import type { EditorView } from "@codemirror/view";
 import { reasonFor, report } from "@/lib/notices";
 import type { AiContext } from "@/lib/ai/context";
-import { buildFollowUp, buildPrompt, markedNote, type Intent } from "@/lib/ai/prompt";
+import { buildFollowUp, buildPrompt, markedNote, type ContextExtra, type Intent } from "@/lib/ai/prompt";
 import type { AgentEvent } from "@/lib/ai/protocol";
 import {
   type Scope,
@@ -129,6 +129,8 @@ export interface AskInput {
   model: string | null;
   /** For a change to the selection alone: the selection, which its edits stay inside. */
   selected?: Selected | null;
+  /** Other notes, or lines of them, the writer added to the context. */
+  extras?: ContextExtra[];
 }
 
 export interface NoteAccess {
@@ -452,6 +454,7 @@ export function useAiChat(agent: string, access: NoteAccess) {
       intent,
       model,
       selected = null,
+      extras,
     }: AskInput) => {
       const id = ++nextId.current;
       // What was said before, for an agent that turns out not to have it.
@@ -468,9 +471,14 @@ export function useAiChat(agent: string, access: NoteAccess) {
         instructions,
         memory,
         history,
+        extras,
       };
       const full = buildPrompt(input);
-      const note = context ? `${context.title}\n${markedNote(context)}` : "";
+      // Everything that was sent about the notes: a follow-up only leaves it
+      // out when none of it has changed since.
+      const note =
+        (context ? `${context.title}\n${markedNote(context)}` : "") +
+        (extras ?? []).map((extra) => `\n\n${extra.title}\n${extra.text}`).join("");
       const unchanged = lastNote.current !== null && lastNote.current === note;
       const sent = unchanged ? buildFollowUp(input) : full;
       lastNote.current = note;

@@ -1,21 +1,20 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import {
-  BookOpen,
-  History,
-  PenLine,
-  Replace,
-  SquarePen,
-  ScanText,
-  SpellCheck,
-  Sparkles,
-  X,
-} from "lucide-react";
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { History, SquarePen, X } from "lucide-react";
 import { cn } from "cn";
 import { useAgent } from "@/hooks/useAgent";
 import { useAiChat, type ChatTurn, type Selected } from "@/hooks/useAiChat";
-import { buildContext, selectionLines, type AiContext } from "@/lib/ai/context";
+import { buildContext, fileName, selectionLines, type AiContext } from "@/lib/ai/context";
 import { agentKey, chooseModel, modelToUse, type ModelChoices } from "@/lib/ai/modelChoice";
-import type { Intent } from "@/lib/ai/prompt";
+import type { ContextExtra, Intent } from "@/lib/ai/prompt";
 import type { ModelInfo } from "@/lib/ai/protocol";
 import { contextUsed } from "@/lib/ai/transcript";
 import { matchesBinding } from "@/lib/keybinding";
@@ -29,7 +28,10 @@ import {
   rejectProposal,
 } from "@/lib/markdown/aiDiff";
 import type { EditCard } from "@/hooks/useAiChat";
-import ContextBox, { type ContextFile } from "./ContextBox";
+import ContextChips, { type ContextChip } from "./ContextChips";
+import ContextFiles from "./ContextFiles";
+import PanelSwitcher, { type PanelView } from "./PanelSwitcher";
+import { relativePath } from "@/lib/media";
 import SetupChecklist from "./SetupChecklist";
 import { CitationContext, type Citations } from "./citations";
 import { invoke } from "@tauri-apps/api/core";
@@ -37,15 +39,7 @@ import { report } from "@/lib/notices";
 import TurnView, { type TurnActions } from "./TurnView";
 import ThreadList from "./ThreadList";
 import Composer, { type ComposerHandle } from "./Composer";
-import {
-  ACTIONS,
-  canRun,
-  parseCommand,
-  requestFor,
-  wordAt,
-  type ActionId,
-  type WritingAction,
-} from "@/lib/ai/actions";
+import { canRun, parseCommand, requestFor, wordAt, type WritingAction } from "@/lib/ai/actions";
 
 /** The note a question is about, as the editor has it right now. */
 export interface NoteSnapshot {
@@ -85,16 +79,37 @@ interface AiPanelProps {
   /** What the writer asked the AI to keep in mind in this vault. */
   memory: string[];
   onRemember: (item: string) => void;
+  /** Every note in the open vault, for picking the ones that go as context. */
+  notes: readonly string[];
 }
 
-const CHIP_ICONS: Partial<Record<ActionId, typeof Sparkles>> = {
-  rephrase: Replace,
-  synonym: ScanText,
-  "explain-selection": BookOpen,
-  "explain-note": BookOpen,
-  proofread: SpellCheck,
-  improve: PenLine,
-};
+/** Lines of a note pinned to the context with mod+L, kept as they were then. */
+interface PinnedLines {
+  id: string;
+  path: string;
+  title: string;
+  first: number;
+  last: number;
+  text: string;
+}
+
+/** The most of any one added note that goes, and of all of them together. */
+const EXTRA_LIMIT = 12_000;
+const EXTRAS_LIMIT = 40_000;
+
+/** Where lines `first` to `last` (1-based) start and end in `text`. */
+function offsetsOfLines(text: string, first: number, last: number) {
+  const lines = text.split("\n");
+  const start = lines.slice(0, Math.max(0, first - 1)).reduce((sum, line) => sum + line.length + 1, 0);
+  const through = lines
+    .slice(0, Math.min(lines.length, last))
+    .reduce((sum, line) => sum + line.length + 1, 0);
+  return { from: Math.min(start, text.length), to: Math.min(Math.max(start, through - 1), text.length) };
+}
+
+function clip(text: string, limit: number) {
+  return text.length > limit ? `${text.slice(0, limit)}\n[… the rest left out …]` : text;
+}
 
 /**
  * Keys the panel answers itself, and the window's shortcuts leave alone while
@@ -146,6 +161,7 @@ const AiPanel = forwardRef<AiPanelHandle, AiPanelProps>(function AiPanel(
     instructions,
     memory,
     onRemember,
+    notes,
   },
   ref
 ) {
@@ -160,6 +176,12 @@ const AiPanel = forwardRef<AiPanelHandle, AiPanelProps>(function AiPanel(
   const [models, setModels] = useState<ModelInfo[]>([]);
   const composer = useRef<ComposerHandle>(null);
   const [showThreads, setShowThreads] = useState(false);
+  /** The conversation, or the notes to pick for its context. */
+  const [view, setView] = useState<PanelView>("chat");
+  /** Notes picked in the Files view, to go with every question. */
+  const [picked, setPicked] = useState<string[]>([]);
+  /** Lines pinned with mod+L. */
+  const [pinned, setPinned] = useState<PinnedLines[]>([]);
   /** What there is to act on: a selection, or at least a word at the caret. */
   const [selection, setSelection] = useState({ selected: false, onWord: false });
   /** A line from the panel itself, that goes again after a moment. */
@@ -188,11 +210,28 @@ const AiPanel = forwardRef<AiPanelHandle, AiPanelProps>(function AiPanel(
       focusComposer(next) {
         setIntent(next);
         look();
+        setView("chat");
+        // mod+L over a selection pins those lines to the context: they stay
+        // with the next questions however the selection moves after.
+        const note = readNote();
+        if (note && note.selection.to > note.selection.from) {
+          const [first, last] = selectionLines(note.text, note.selection);
+          const id = `${note.path}:${first}-${last}`;
+          const text = note.text
+            .split("\n")
+            .slice(first - 1, last)
+            .join("\n");
+          setPinned((list) =>
+            list.some((pin) => pin.id === id)
+              ? list
+              : [...list, { id, path: note.path, title: fileName(note.path), first, last, text }]
+          );
+        }
         // Once the panel is no longer `inert`, which it is until it opens.
         requestAnimationFrame(() => composer.current?.focus());
       },
     }),
-    [look]
+    [look, readNote]
   );
 
   // Opening the panel is the person going looking for AI: the settings are
@@ -242,7 +281,8 @@ const AiPanel = forwardRef<AiPanelHandle, AiPanelProps>(function AiPanel(
       shown: { text: string; action: string | null },
       as: Intent,
       note = readNote(),
-      selected: Selected | null = null
+      selected: Selected | null = null,
+      extras: ContextExtra[] = []
     ) => {
       if (chat.running || !config) return;
       const now = prepare(note, sendWholeNote);
@@ -267,10 +307,52 @@ const AiPanel = forwardRef<AiPanelHandle, AiPanelProps>(function AiPanel(
         intent: as,
         model,
         selected,
+        extras,
       });
     },
     [chat, config, readNote, sendWholeNote, model, instructions, memory]
   );
+
+  /**
+   * The note as the question will carry it, and what was added to it: the
+   * picked notes, read as they are now, and the pinned lines. A pin on the
+   * open note, with nothing selected there now, is marked in the note as its
+   * selection rather than sent twice.
+   */
+  const gather = useCallback(async () => {
+    let note = readNote();
+    const extras: ContextExtra[] = [];
+    let marked = false;
+    for (const pin of pinned) {
+      if (note && pin.path === note.path) {
+        const live =
+          note.selection.to > note.selection.from ? selectionLines(note.text, note.selection) : null;
+        if (live && live[0] === pin.first && live[1] === pin.last) continue;
+        if (!live && !marked) {
+          note = { ...note, selection: offsetsOfLines(note.text, pin.first, pin.last) };
+          marked = true;
+          continue;
+        }
+      }
+      const lines = pin.first === pin.last ? `line ${pin.first}` : `lines ${pin.first}–${pin.last}`;
+      extras.push({ title: `${pin.title} (${lines})`, text: clip(pin.text, EXTRA_LIMIT) });
+    }
+    let total = extras.reduce((sum, extra) => sum + extra.text.length, 0);
+    for (const path of picked) {
+      if (path === note?.path || total >= EXTRAS_LIMIT) continue;
+      try {
+        const text = clip(
+          await invoke<string>("read_file", { path }),
+          Math.min(EXTRA_LIMIT, EXTRAS_LIMIT - total)
+        );
+        extras.push({ title: relativePath(vaultPath ?? "", path), text });
+        total += text.length;
+      } catch {
+        // Gone since it was picked: it is left out, and the rest still go.
+      }
+    }
+    return { note, extras };
+  }, [readNote, pinned, picked, vaultPath]);
 
   /** Runs a writing action on what is selected - or, for a synonym, the word at the caret. */
   const run = useCallback(
@@ -325,10 +407,15 @@ const AiPanel = forwardRef<AiPanelHandle, AiPanelProps>(function AiPanel(
       const asked = text.trim();
       if (!asked) return;
       const command = parseCommand(asked);
-      if (command) run(command.action, command.rest);
-      else ask(asked, { text: asked, action: null }, intent);
+      if (command) {
+        run(command.action, command.rest);
+        return;
+      }
+      void gather().then(({ note, extras }) =>
+        ask(asked, { text: asked, action: null }, intent, note, null, extras)
+      );
     },
-    [ask, run, intent]
+    [ask, run, intent, gather]
   );
 
   const retry = useCallback(
@@ -411,30 +498,77 @@ const AiPanel = forwardRef<AiPanelHandle, AiPanelProps>(function AiPanel(
     }
   };
 
-  /** The note the next question carries, and how much the edits waiting over it change. */
-  const files = useMemo<ContextFile[]>(() => {
-    if (!prepared.ok || !prepared.context) return [];
-    const { context } = prepared;
-    let detail: string | null = null;
-    if (context.selection) {
-      const [first, last] = selectionLines(context.note, context.selection);
-      detail = first === last ? `line ${first}` : `lines ${first}–${last}`;
-    }
-    if (context.selectionOnly) detail = "only the selection";
-    else if (context.trimmed)
-      detail = `${detail ? `${detail} · ` : ""}${context.omittedLines} lines left out`;
-    const lines = (text: string) => (text ? text.split("\n").length : 0);
-    const pending = waitingFor(notePath)?.edits?.cards.filter((card) => card.status === "pending") ?? [];
-    return [
-      {
-        title: context.title,
+  /** What the next question carries: the open note, and what was added to it. */
+  const chips = useMemo<ContextChip[]>(() => {
+    const list: ContextChip[] = [];
+    /** The open note's selected lines, which a pin of the same lines would only repeat. */
+    let live: string | null = null;
+    if (prepared.ok && prepared.context) {
+      const { context } = prepared;
+      let detail: string | null = null;
+      if (context.selection) {
+        const [first, last] = selectionLines(context.note, context.selection);
+        detail = first === last ? `L${first}` : `L${first}–${last}`;
+        live = `${notePath}:${first}-${last}`;
+      }
+      list.push({
+        id: "note",
+        kind: "note",
+        label: context.title,
         detail,
-        preview: context.note,
-        added: pending.reduce((sum, card) => sum + lines(card.replace), 0),
-        removed: pending.reduce((sum, card) => sum + lines(card.find), 0),
-      },
-    ];
-  }, [prepared, notePath, waitingFor]);
+        title: context.selectionOnly
+          ? "Only the selection goes"
+          : context.trimmed
+            ? `${context.omittedLines} lines of it are left out, to fit`
+            : "The open note goes with your question",
+      });
+    }
+    for (const pin of pinned) {
+      if (pin.id === live) continue;
+      list.push({
+        id: pin.id,
+        kind: "lines",
+        label: pin.title,
+        detail: pin.first === pin.last ? `L${pin.first}` : `L${pin.first}–${pin.last}`,
+        title: pin.text,
+        onRemove: () => setPinned((all) => all.filter((other) => other.id !== pin.id)),
+      });
+    }
+    for (const path of picked) {
+      if (path === notePath) continue;
+      list.push({
+        id: path,
+        kind: "file",
+        label: fileName(path).replace(/\.md$/i, ""),
+        title: relativePath(vaultPath ?? "", path),
+        onRemove: () => setPicked((all) => all.filter((other) => other !== path)),
+      });
+    }
+    return list;
+  }, [prepared, pinned, picked, notePath, vaultPath]);
+
+  /**
+   * A fresh conversation has the composer in the middle of the panel, with
+   * nothing above it; once the first question goes it settles at the foot,
+   * under the answers. The move between the two is animated from where it
+   * was to where it lands, so it slides rather than jumps.
+   */
+  const centered = view === "chat" && chat.turns.length === 0;
+  const dock = useRef<HTMLDivElement>(null);
+  const dockWas = useRef<{ top: number; centered: boolean } | null>(null);
+  useLayoutEffect(() => {
+    const box = dock.current;
+    if (!box) return;
+    const top = box.getBoundingClientRect().top;
+    const was = dockWas.current;
+    dockWas.current = { top, centered };
+    if (!was || was.centered === centered || Math.abs(was.top - top) < 1) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    box.animate([{ transform: `translateY(${was.top - top}px)` }, { transform: "translateY(0)" }], {
+      duration: 320,
+      easing: "cubic-bezier(0.2, 0, 0, 1)",
+    });
+  });
 
   const used = lastTurn ? contextUsed(lastTurn.answer) : null;
   const signIn = config?.kind === "codex" ? () => void agent.login() : undefined;
@@ -539,6 +673,8 @@ const AiPanel = forwardRef<AiPanelHandle, AiPanelProps>(function AiPanel(
                 onClick={() => {
                   setShowThreads(false);
                   chat.newChat();
+                  setPinned([]);
+                  setPicked([]);
                 }}
                 disabled={chat.running}
                 title="New chat"
@@ -597,68 +733,62 @@ const AiPanel = forwardRef<AiPanelHandle, AiPanelProps>(function AiPanel(
             />
           </div>
         ) : (
-          <>
-            <div ref={scroller} className="min-h-0 flex-1 space-y-5 overflow-y-auto px-3 py-3">
-              {chat.turns.length === 0 && (
-                <div className="animate-ai-in space-y-3 pt-2">
-                  <p className="text-[13px] text-gray-300">
-                    {intent === "edit" ? "What should change?" : "What can I help with?"}
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {ACTIONS.filter(
-                      (action) =>
-                        action.id !== "remember" && canRun(action, selection.selected, selection.onWord)
+          <div className="flex min-h-0 flex-1 flex-col">
+            {view === "files" ? (
+              <div className="flex min-h-0 flex-1 flex-col px-3 pt-3">
+                <ContextFiles
+                  notes={notes}
+                  vault={vaultPath}
+                  current={notePath}
+                  picked={picked}
+                  onToggle={(path) =>
+                    setPicked((all) =>
+                      all.includes(path) ? all.filter((other) => other !== path) : [...all, path]
                     )
-                      .filter((action) => (selection.selected ? action.id !== "explain-note" : true))
-                      .map((action) => {
-                        const Icon = CHIP_ICONS[action.id] ?? Sparkles;
-                        return (
-                          <button
-                            key={action.id}
-                            type="button"
-                            title={action.hint}
-                            onClick={() => run(action, "")}
-                            className="flex cursor-pointer items-center gap-1.5 rounded-full border border-zinc-700/80 bg-zinc-800/40 px-2.5 py-1 text-xs text-gray-300 transition-colors hover:border-[var(--nuza-accent)] hover:text-white"
-                          >
-                            <Icon size={12} aria-hidden />
-                            {action.label}
-                          </button>
-                        );
-                      })}
-                  </div>
-                  <p className="text-[11px] text-gray-600">
-                    {selection.selected ? "These work on what you selected. " : ""}Type / for every action.
-                  </p>
-                </div>
-              )}
-              {chat.turns.map((turn) => (
-                <TurnView key={turn.id} turn={turn} agent={label} actions={turnActions} />
-              ))}
-              {agent.error && chat.turns.length === 0 && (
-                <p role="alert" className="text-xs text-amber-400">
-                  {agent.error.message}
-                </p>
-              )}
-            </div>
+                  }
+                />
+              </div>
+            ) : centered ? (
+              // A conversation not yet started: nothing above the composer,
+              // which sits in the middle until the first question goes.
+              <div className="flex-1" />
+            ) : (
+              <div ref={scroller} className="min-h-0 flex-1 space-y-5 overflow-y-auto px-3 py-3">
+                {chat.turns.map((turn) => (
+                  <TurnView key={turn.id} turn={turn} agent={label} actions={turnActions} />
+                ))}
+              </div>
+            )}
 
-            <div className="shrink-0 border-t border-zinc-800/80 p-2">
+            <div ref={dock} className={cn("shrink-0 p-2", !centered && "border-t border-zinc-800/80")}>
+              <div className="pb-1.5">
+                <PanelSwitcher view={view} onChange={setView} picked={picked.length} />
+              </div>
               {!prepared.ok && (
                 <p role="alert" className="px-1 pb-1.5 text-xs text-amber-400">
                   {prepared.message}
                 </p>
               )}
-              <ContextBox
-                files={files}
+              {agent.error && chat.turns.length === 0 && (
+                <p role="alert" className="px-1 pb-1.5 text-xs text-amber-400">
+                  {agent.error.message}
+                </p>
+              )}
+              {cannotSearch && <p className="px-1 pb-1.5 text-[11px] text-gray-500">{cannotSearch}</p>}
+              <ContextChips
+                chips={chips}
                 reviewable={!!reviewTarget}
                 onReview={() => reviewTarget && focus(reviewTarget.turn, reviewTarget.card)}
-                notice={cannotSearch}
               />
               {flash && <p className="animate-ai-in px-1 pb-1.5 text-xs text-gray-400">{flash}</p>}
               <Composer
                 ref={composer}
                 value={question}
                 onChange={setQuestion}
-                onSend={send}
+                onSend={(text) => {
+                  setView("chat");
+                  send(text);
+                }}
                 onStop={chat.stop}
                 onAction={run}
                 onEscape={onReturnFocus}
@@ -673,7 +803,8 @@ const AiPanel = forwardRef<AiPanelHandle, AiPanelProps>(function AiPanel(
                 used={used}
               />
             </div>
-          </>
+            {centered && <div className="flex-1" />}
+          </div>
         )}
 
         {/* The handle is on the right, against the note; dragging right widens. */}

@@ -125,6 +125,13 @@ describe("an answer as it is shown", () => {
         intent: "edit",
       }),
       buildFollowUp({ agent: "Codex", question: "?", context: null, intent: "ask" }),
+      buildPrompt({
+        agent: "Codex",
+        question: "?",
+        context: null,
+        intent: "ask",
+        extras: [{ title: "b.md", text: "y" }],
+      }),
     ].join("\n");
     for (const phrase of FRAMING_PHRASES) expect(full).toContain(phrase);
   });
