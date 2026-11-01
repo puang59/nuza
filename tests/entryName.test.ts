@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { nameProblem, newEntryProblem, withNoteExtension } from "../src/lib/entryName";
+import { nameFromHeading, nameProblem, newEntryProblem, withNoteExtension } from "../src/lib/entryName";
 
 /** The problem, or "" when there is none, so a test can read as one line. */
 function problem(name: string) {
@@ -135,5 +135,22 @@ describe("newEntryProblem", () => {
     expect(newEntryProblem("journal/../x")).toBe("That is not a name");
     expect(newEntryProblem("journal/.hidden")).toBe("A name cannot start with a dot");
     expect(newEntryProblem("a\\b")).toBe("Use / between folders");
+  });
+});
+
+describe("nameFromHeading", () => {
+  test("the first heading's words", () => {
+    expect(nameFromHeading("# Groceries for Sunday\n\nmilk")).toBe("Groceries for Sunday");
+    expect(nameFromHeading("intro\n## Plans ##\n# Later")).toBe("Plans");
+  });
+
+  test("without what a file name cannot hold, or markup", () => {
+    expect(nameFromHeading("# Q3: plans/ideas **draft**?")).toBe("Q3 plans ideas draft");
+    expect(nameFromHeading("# ...hidden")).toBe("hidden");
+  });
+
+  test("nothing to offer without a heading", () => {
+    expect(nameFromHeading("# ")).toBe("");
+    expect(nameFromHeading("just text")).toBe("");
   });
 });

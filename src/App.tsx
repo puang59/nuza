@@ -9,6 +9,7 @@ import Sidebar, { SidebarHandle } from "./components/Sidebar";
 import SettingsModal from "./components/SettingsModal";
 import FileSearchPalette from "./components/FileSearchPalette";
 import SettingsPalette, { type PaletteCommand } from "./components/SettingsPalette";
+import NameNoteDialog from "./components/NameNoteDialog";
 import ChangedOnDisk from "./components/ChangedOnDisk";
 import RecoveredEdits from "./components/RecoveredEdits";
 import SidePane from "./components/SidePane";
@@ -282,6 +283,9 @@ function App() {
     openTarget,
     singleNote,
     setSingleNote,
+    naming,
+    saveDraftAs,
+    cancelNaming,
     save,
     saveDirty,
     flush,
@@ -1387,6 +1391,15 @@ function App() {
         onSelect={linkToNote}
         placeholder="Link to a note"
         notesOnly
+      />
+
+      <NameNoteDialog
+        naming={naming}
+        onSave={(path, name) => void saveDraftAs(path, name)}
+        onCancel={() => {
+          cancelNaming();
+          returnFocusToEditor();
+        }}
       />
 
       <SettingsPalette

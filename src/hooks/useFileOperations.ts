@@ -20,6 +20,7 @@ import { listenHere } from "@/lib/windowEvents";
 import { dropOwnWrites, isOwnWrite, noteOwnWrite, type OwnWrites } from "@/lib/ownWrites";
 import { readScratch, writeScratch } from "@/lib/scratch";
 import { TITLE_PROMPT, withoutUntouchedPrompt } from "@/lib/titlePrompt";
+import { nameFromHeading, withNoteExtension } from "@/lib/entryName";
 import { NOTE_PATTERN } from "@/lib/fileIndex";
 import { EMPTY_SESSION, readSession, tabsToRestore, writeSession } from "@/lib/session";
 import { ATTACHMENT_EVENT, announceAttachment, fileNameOf, writeMedia } from "@/lib/media";
@@ -128,6 +129,8 @@ export function useFileOperations({
    * outside any vault - with the editor and nothing else.
    */
   const [singleNote, setSingleNote] = useState(false);
+  /** A draft being saved, waiting on the name to save it under. */
+  const [naming, setNaming] = useState<{ path: string; suggested: string } | null>(null);
   const pathListeners = useRef({ onPathMoved, onPathDeleted });
   pathListeners.current = { onPathMoved, onPathDeleted };
   // Read once, on the way up: the editor is built around this, and a later
@@ -679,16 +682,11 @@ export function useFileOperations({
 
       const root = rootPathRef.current;
       if (root && isWithin(path, root)) {
-        // A draft made with "New Note" already has somewhere of its own to
-        // go: made real there outright, the way any other note is saved,
-        // rather than asking where to put it. A name taken by something else
-        // since the tab was opened - a sync client writing in a note of the
-        // same name, say - fails here and reports, leaving the draft as it
-        // was rather than writing over whatever is there now.
-        await invoke("create_file", { parentPath: directoryOf(path) || root, name: fileNameOf(path) });
-        setFolderData((tree) => addEntry(tree, root, { name: fileNameOf(path), path, isDirectory: false }));
-        dropDraft(path);
-        await writeDocument(path);
+        // A draft made with "New Note" has a folder already, but not a name:
+        // it is asked for, offering the note's own heading, and the note is
+        // made under it by `saveDraftAs`.
+        const suggested = nameFromHeading(readDocument(path)) || fileNameOf(path).replace(/\.md$/i, "");
+        setNaming({ path, suggested });
         return;
       }
 
@@ -708,6 +706,41 @@ export function useFileOperations({
       if (!isConflict(error)) report("Couldn't save this note", error);
     }
   }, [writeDocument, readDocument, markSaved, rewriteDocuments, dropDraft]);
+
+  /**
+   * Makes the draft at `path` a note called `name`, in the draft's folder, and
+   * moves its tab - text, history and caret - onto the new file. A name taken
+   * already fails and reports, leaving the draft as it was rather than
+   * writing over what is there.
+   */
+  const saveDraftAs = useCallback(
+    async (path: string, name: string) => {
+      const root = rootPathRef.current;
+      if (!root) return;
+      const folder = directoryOf(path) || root;
+      const file = withNoteExtension(name.trim());
+      const target = joinPath(folder, file);
+      try {
+        await invoke("create_file", { parentPath: folder, name: file });
+      } catch (error) {
+        report(`Couldn't save "${file}"`, error);
+        return;
+      }
+      setNaming(null);
+      rewriteDocuments((p) => (p === path ? target : p));
+      dropDraft(path);
+      setCurrentFile((current) => (current === path ? target : current));
+      setOpenPaths((paths) => paths.map((p) => (p === path ? target : p)));
+      recentRef.current = recentRef.current.map((p) => (p === path ? target : p));
+      setFolderData((tree) => addEntry(tree, root, { name: file, path: target, isDirectory: false }));
+      try {
+        await writeDocument(target);
+      } catch (error) {
+        if (!isConflict(error)) report("Couldn't save this note", error);
+      }
+    },
+    [rewriteDocuments, dropDraft, writeDocument]
+  );
 
   // Everything that has drifted from disk, so the timer below can see what is
   // outstanding without being restarted every time the set changes.
@@ -1755,6 +1788,9 @@ export function useFileOperations({
     openTarget,
     singleNote,
     setSingleNote,
+    naming,
+    saveDraftAs,
+    cancelNaming: () => setNaming(null),
     save,
     saveDirty,
     flush,
