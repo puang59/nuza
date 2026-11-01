@@ -261,6 +261,8 @@ function Sidebar({
   const [pendingCreate, setPendingCreate] = useState<PendingCreate>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const [sortOrder, setSortOrder] = usePersistedState<SortOrder>("sidebarSort", "name");
+  const [sortReversed, setSortReversed] = usePersistedState("sidebarSortReversed", false);
+  const [foldersFirst, setFoldersFirst] = usePersistedState("sidebarFoldersFirst", true);
   const [sortMenu, setSortMenu] = useState<{ x: number; y: number } | null>(null);
   // Folded to begin with, which is also when it costs nothing: the tags are
   // only read from the vault while the panel is open.
@@ -309,7 +311,10 @@ function Sidebar({
   // Storage can hold anything; an order that is not one falls back to name.
   const order = SORT_ORDERS.some((option) => option.id === sortOrder) ? sortOrder : "name";
   /** The tree in the order it is shown in. For name order it is the tree itself. */
-  const shownData = useMemo(() => sortTree(data, order), [data, order]);
+  const shownData = useMemo(
+    () => sortTree(data, order, { reversed: sortReversed === true, foldersFirst: foldersFirst !== false }),
+    [data, order, sortReversed, foldersFirst]
+  );
   /**
    * The notes of this vault opened most recently, leaving out the one on
    * screen and any that are pinned. Not shown in a vault small enough to see
@@ -1199,11 +1204,28 @@ function Sidebar({
         <ContextMenu
           x={sortMenu.x}
           y={sortMenu.y}
-          items={SORT_ORDERS.map((option) => ({
-            label: option.label,
-            checked: option.id === order,
-            onClick: () => setSortOrder(option.id),
-          }))}
+          items={[
+            ...SORT_ORDERS.map((option) => ({
+              label: option.label,
+              checked: option.id === order,
+              onClick: () => setSortOrder(option.id),
+            })),
+            // Which way round, in the words that fit the order chosen.
+            ...(order === "name" ? ["A to Z", "Z to A"] : ["Newest First", "Oldest First"]).map(
+              (label, index) => ({
+                label,
+                checked: (sortReversed === true) === (index === 1),
+                divided: index === 0,
+                onClick: () => setSortReversed(index === 1),
+              })
+            ),
+            {
+              label: "Folders First",
+              checked: foldersFirst !== false,
+              divided: true,
+              onClick: () => setFoldersFirst((on) => on === false),
+            },
+          ]}
           onClose={() => setSortMenu(null)}
         />
       )}
