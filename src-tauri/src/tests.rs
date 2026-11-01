@@ -2318,6 +2318,7 @@ fn folder(path: &str) -> OpenTarget {
         kind: "folder",
         path: path.to_string(),
         vault: None,
+        single: false,
     }
 }
 
@@ -2326,6 +2327,7 @@ fn note_at(path: &str) -> OpenTarget {
         kind: "file",
         path: path.to_string(),
         vault: None,
+        single: false,
     }
 }
 
@@ -2632,6 +2634,7 @@ fn a_note_window_counts_as_its_vault_while_it_opens() {
         kind: "file",
         path: "/vault/sub/note.md".to_string(),
         vault: Some("/vault".to_string()),
+        single: false,
     };
     let windows = vec![Open {
         label: "w-1".to_string(),

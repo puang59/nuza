@@ -1,8 +1,9 @@
-import { memo } from "react";
-import { ArrowDownCircle, PanelLeft, RefreshCw, Save, Settings } from "lucide-react";
+import { memo, useState } from "react";
+import { ArrowDownCircle, ChevronDown, PanelLeft, RefreshCw, Save, Settings } from "lucide-react";
 import { UpdateStatus } from "@/hooks/useAppUpdater";
 import { isMacPlatform } from "@/lib/platform";
 import TabBar from "./TabBar";
+import ContextMenu, { ContextMenuItem } from "./Sidebar/ContextMenu";
 
 interface EditorHeaderProps {
   updateStatus: UpdateStatus;
@@ -23,6 +24,56 @@ interface EditorHeaderProps {
   onOpenSettings: () => void;
   onSave: () => void;
   onToggleSidebar: () => void;
+  /** A note on its own: the tabs give way to a picker of recent notes. */
+  single?: boolean;
+  /** Notes opened most recently, newest first, for that picker. */
+  recentPaths?: readonly string[];
+  /** Opens a note from the picker, in this window. */
+  onOpenRecent?: (path: string) => void;
+}
+
+/**
+ * The note on its own, by name, opening a list of the notes opened most
+ * recently - which open in its place - and a way into the note's folder.
+ */
+function NotePicker({
+  currentFile,
+  recentPaths,
+  onOpen,
+  onShowFolder,
+}: {
+  currentFile: string;
+  recentPaths: readonly string[];
+  onOpen: (path: string) => void;
+  onShowFolder: () => void;
+}) {
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const name = (path: string) => (path.split(/[/\\]/).pop() ?? path).replace(/\.md$/i, "");
+  const items: ContextMenuItem[] = [
+    ...recentPaths
+      // Files only: the scratch note has no path, and no file to open.
+      .filter((path) => path !== currentFile && /[/\\]/.test(path) && /\.md$/i.test(path))
+      .slice(0, 10)
+      .map((path) => ({ label: name(path), onClick: () => onOpen(path) })),
+    { label: "Open Folder in Sidebar", onClick: onShowFolder, divided: recentPaths.length > 1 },
+  ];
+
+  return (
+    <>
+      <button
+        data-tauri-drag-region="false"
+        onClick={(event) => {
+          const box = event.currentTarget.getBoundingClientRect();
+          setMenu({ x: box.left, y: box.bottom + 4 });
+        }}
+        className="absolute left-1/2 flex max-w-[40%] -translate-x-1/2 cursor-pointer items-center gap-1.5 truncate rounded-md px-3 py-1 text-sm text-zinc-300 transition-colors hover:bg-white/5 hover:text-white"
+      >
+        <span className="truncate">{name(currentFile)}</span>
+        <ChevronDown size={13} className="shrink-0 text-zinc-500" />
+      </button>
+      {menu && <ContextMenu x={menu.x} y={menu.y} items={items} onClose={() => setMenu(null)} />}
+    </>
+  );
 }
 
 /** Short label shown next to the update icon for states worth surfacing. */
@@ -142,6 +193,9 @@ function EditorHeader({
   onOpenSettings,
   onSave,
   onToggleSidebar,
+  single = false,
+  recentPaths = [],
+  onOpenRecent,
 }: EditorHeaderProps) {
   // macOS traffic lights overlay the top-left corner of the window, so the header
   // needs left padding to clear them. Windows/Linux draw their own native window
@@ -150,18 +204,30 @@ function EditorHeader({
   const leadingPadding = isMacPlatform() ? "pl-24" : "pl-4";
 
   return (
-    <header data-tauri-drag-region className={`h-12 shrink-0 flex items-center gap-4 px-4 ${leadingPadding}`}>
-      <TabBar
-        paths={openPaths}
-        activePath={currentFile}
-        dirtyPaths={dirtyPaths}
-        missingPaths={missingPaths}
-        onSelect={onSelectTab}
-        onClose={onCloseTab}
-        onReorder={onReorderTabs}
-        onMenu={onTabMenu}
-        onTearOff={onTearOffTab}
-      />
+    <header
+      data-tauri-drag-region
+      className={`relative h-12 shrink-0 flex items-center gap-4 px-4 ${leadingPadding}`}
+    >
+      {single ? (
+        <NotePicker
+          currentFile={currentFile}
+          recentPaths={recentPaths}
+          onOpen={(path) => onOpenRecent?.(path)}
+          onShowFolder={onToggleSidebar}
+        />
+      ) : (
+        <TabBar
+          paths={openPaths}
+          activePath={currentFile}
+          dirtyPaths={dirtyPaths}
+          missingPaths={missingPaths}
+          onSelect={onSelectTab}
+          onClose={onCloseTab}
+          onReorder={onReorderTabs}
+          onMenu={onTabMenu}
+          onTearOff={onTearOffTab}
+        />
+      )}
 
       <div className="ml-auto flex shrink-0 items-center gap-3">
         <UpdateButton

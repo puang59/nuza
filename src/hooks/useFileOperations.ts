@@ -123,6 +123,11 @@ export function useFileOperations({
 }: UseFileOperationsOptions) {
   // Read when a path changes rather than taken as dependencies, so a caller
   // passing fresh functions does not rebuild every file operation.
+  /**
+   * Whether this window is showing a note on its own - one opened from
+   * outside any vault - with the editor and nothing else.
+   */
+  const [singleNote, setSingleNote] = useState(false);
   const pathListeners = useRef({ onPathMoved, onPathDeleted });
   pathListeners.current = { onPathMoved, onPathDeleted };
   // Read once, on the way up: the editor is built around this, and a later
@@ -489,6 +494,8 @@ export function useFileOperations({
   /** Switches the app over to a folder that has already been read. */
   const adoptFolder = useCallback(
     (folder: OpenedFolder, focus?: string, alone = false) => {
+      // A folder opened as a vault is a vault: the window shows all of it.
+      setSingleNote(false);
       setRootPath(folder.path);
       setFolderData(folder.entries);
 
@@ -1598,10 +1605,16 @@ export function useFileOperations({
       const plan = planOpen(target, rootPathRef.current);
       if (!plan) return;
 
-      if ("select" in plan) {
+      if ("window" in plan) {
+        await invoke("open_single_note_window", { path: plan.window }).catch((error) =>
+          report(`Couldn't open "${fileNameOf(plan.window)}"`, error)
+        );
+      } else if ("select" in plan) {
         await selectFile(plan.select);
       } else if (!(await openVault(plan.folder, plan.focus, plan.alone))) {
         report(`Couldn't open "${plan.folder}"`);
+      } else if (plan.single) {
+        setSingleNote(true);
       }
     },
     [selectFile, openVault]
@@ -1740,6 +1753,8 @@ export function useFileOperations({
     openFolder,
     openVault,
     openTarget,
+    singleNote,
+    setSingleNote,
     save,
     saveDirty,
     flush,

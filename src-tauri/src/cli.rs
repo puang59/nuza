@@ -20,6 +20,10 @@ pub struct OpenTarget {
     /// brought along. Without it a note opens in its own folder.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub vault: Option<String>,
+    /// A note opened on its own, from outside any open vault: its window
+    /// shows the editor alone.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub single: bool,
 }
 
 /// A path without the `\\?\` that canonicalising puts on one in Windows,
@@ -53,6 +57,7 @@ pub fn target_from_args(args: &[String], cwd: &Path) -> Option<OpenTarget> {
                 kind,
                 path: plain(path),
                 vault: None,
+                single: false,
             })
         })
 }
