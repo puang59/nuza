@@ -30,6 +30,21 @@ function useSystemTheme(): Theme {
 }
 import { usePersistedState } from "./usePersistedState";
 
+/** The colours chosen for each theme, keeping only the ones that are colours. */
+function readPalettes(stored: unknown): Appearance["palettes"] {
+  if (!stored || typeof stored !== "object") return undefined;
+  const palettes: NonNullable<Appearance["palettes"]> = {};
+  const colour = (value: unknown) => (typeof value === "string" && isHexColor(value) ? value : undefined);
+  for (const theme of ["dark", "light"] as const) {
+    const palette = (stored as Record<string, { background?: unknown; text?: unknown } | undefined>)[theme];
+    if (!palette || typeof palette !== "object") continue;
+    const background = colour(palette.background);
+    const text = colour(palette.text);
+    if (background || text) palettes[theme] = { background, text };
+  }
+  return palettes;
+}
+
 /** The chosen colours, kept on the document root rather than in React state. */
 export function useAppearance(hasBackdrop = true) {
   const [stored, setStored] = usePersistedState<Appearance>("appearance", DEFAULT_APPEARANCE, {
@@ -51,6 +66,7 @@ export function useAppearance(hasBackdrop = true) {
         typeof value.transparency === "number" ? value.transparency : DEFAULT_APPEARANCE.transparency
       ),
       theme: isThemeChoice(value.theme) ? value.theme : DEFAULT_APPEARANCE.theme,
+      palettes: readPalettes(value.palettes),
     };
   }, [stored]);
 
@@ -96,8 +112,8 @@ export function useAppearance(hasBackdrop = true) {
     [setStored]
   );
 
-  // "Reset colours" is the accent and the transparency; the theme is a choice
-  // of its own, and stays.
+  // "Reset colours" is the accent, the theme's colours and the transparency;
+  // the theme is a choice of its own, and stays.
   const reset = useCallback(
     () =>
       setStored((current) => ({ ...DEFAULT_APPEARANCE, theme: current?.theme ?? DEFAULT_APPEARANCE.theme })),

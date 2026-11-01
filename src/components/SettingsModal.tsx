@@ -5,7 +5,7 @@ import { useExitAnimation } from "@/hooks/useExitAnimation";
 import { KeymapAction } from "@/lib/keymaps";
 import { UpdateStatus } from "@/hooks/useAppUpdater";
 import GeneralSettings from "./settings/GeneralSettings";
-import { Appearance } from "@/lib/appearance";
+import { Appearance, Theme } from "@/lib/appearance";
 import AppearanceSettings from "./settings/AppearanceSettings";
 import KeymapSettings from "./settings/KeymapSettings";
 import InfoSettings from "./settings/InfoSettings";
@@ -46,6 +46,8 @@ interface SettingsModalProps {
   zenDimming: boolean;
   setZenDimming: (enabled: boolean) => void;
   appearance: Appearance;
+  /** The theme the window is in now, light or dark. */
+  windowTheme: Theme;
   setAppearance: (change: Partial<Appearance>) => void;
   resetAppearance: () => void;
   compactMode: boolean;
@@ -103,6 +105,7 @@ export default function SettingsModal({
   zenDimming,
   setZenDimming,
   appearance,
+  windowTheme,
   setAppearance,
   resetAppearance,
   compactMode,
@@ -229,6 +232,7 @@ export default function SettingsModal({
             {activeSection === "appearance" && (
               <AppearanceSettings
                 appearance={appearance}
+                windowTheme={windowTheme}
                 setAppearance={setAppearance}
                 resetAppearance={resetAppearance}
                 compactMode={compactMode}
