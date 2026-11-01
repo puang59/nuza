@@ -22,13 +22,27 @@ export interface Appearance {
   /** How much of the desktop shows through, 0 (opaque) to 100 (invisible). */
   transparency: number;
   theme: ThemeChoice;
+  /** The window's background and the ink, where they have been changed, per theme. */
+  palettes?: Partial<Record<Theme, Palette>>;
+}
+
+/** A theme's own colours, where they differ from the ones it comes with. */
+export interface Palette {
+  background?: string;
+  text?: string;
 }
 
 /**
- * The window behind everything, and the ink notes are written in, for each
- * theme. Not settings on their own: a note app that lets you pick both ends of
- * its own contrast is a note app you can make unreadable. Swapping the pair as
- * a whole keeps each one where it was tuned.
+ * How far apart the ink and the background have to be: WCAG's AA level for
+ * body text. Below it, what was asked for is put back to the theme's own.
+ */
+export const MIN_CONTRAST = 4.5;
+
+/**
+ * The window behind everything, and the ink notes are written in, as each
+ * theme comes. Either can be changed in Settings, but only within reach of the
+ * other: a note app that lets you pick both ends of its own contrast is a note
+ * app you can make unreadable, which `paletteFor` does not allow.
  */
 export const THEMES: Record<Theme, { background: string; foreground: string }> = {
   dark: { background: "#1E1E1E", foreground: "#D4D4D8" },
@@ -125,6 +139,45 @@ function isLight(hex: string) {
   return (r * 299 + g * 587 + b * 114) / 1000 > 140;
 }
 
+/** WCAG relative luminance of a colour. */
+function luminance(hex: string) {
+  const [r, g, b] = channels(hex).map((channel) => {
+    const value = channel / 255;
+    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** The WCAG contrast ratio between two colours, from 1 to 21. */
+export function contrast(a: string, b: string) {
+  const [light, dark] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (light + 0.05) / (dark + 0.05);
+}
+
+/**
+ * The background and ink `theme` is drawn in: its own, or the ones chosen in
+ * Settings - but never two that cannot be read against each other. Changing
+ * both ends of a note app's contrast is how it is made unreadable, so a text
+ * colour too close to the background gives way to the theme's own, and if
+ * that cannot be read on the background either, the background gives way.
+ * `putBack` says which, for Settings to explain.
+ */
+export function paletteFor(appearance: Appearance, theme: Theme) {
+  const own = THEMES[theme];
+  const chosen = appearance.palettes?.[theme] ?? {};
+  const background = chosen.background ?? own.background;
+  const text = chosen.text ?? own.foreground;
+
+  if (contrast(text, background) >= MIN_CONTRAST) {
+    return { background, foreground: text, putBack: null };
+  }
+  if (contrast(own.foreground, background) >= MIN_CONTRAST) {
+    return { background, foreground: own.foreground, putBack: "text" as const };
+  }
+  const foreground = contrast(text, own.background) >= MIN_CONTRAST ? text : own.foreground;
+  return { background: own.background, foreground, putBack: "background" as const };
+}
+
 export function clampTransparency(value: number) {
   return Math.min(100, Math.max(0, Math.round(Number.isFinite(value) ? value : 0)));
 }
@@ -146,7 +199,7 @@ export function appearanceVariables(
   /** The theme in force - `appearance.theme`, with "system" already settled. */
   theme: Theme = "dark"
 ): Record<string, string> {
-  const { background, foreground } = THEMES[theme];
+  const { background, foreground } = paletteFor(appearance, theme);
   // The accent is picked against the dark window. On a light one the same
   // colour is too pale to read as text - a link, a bullet - so it is taken
   // down towards the ink first, and everything derived from it follows.

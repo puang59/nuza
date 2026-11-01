@@ -16,7 +16,7 @@ import {
   clampLineHeight,
   listSystemFonts,
 } from "@/lib/fonts";
-import { Appearance, THEME_CHOICES, clampTransparency } from "@/lib/appearance";
+import { Appearance, Palette, THEME_CHOICES, Theme, clampTransparency, paletteFor } from "@/lib/appearance";
 import ColorField from "./ColorField";
 import FontPicker from "./FontPicker";
 import { Switch } from "@/components/ui/switch";
@@ -24,6 +24,7 @@ import SettingRow from "./SettingRow";
 
 interface AppearanceSettingsProps {
   appearance: Appearance;
+  windowTheme: Theme;
   setAppearance: (change: Partial<Appearance>) => void;
   resetAppearance: () => void;
   compactMode: boolean;
@@ -44,6 +45,7 @@ interface AppearanceSettingsProps {
 
 export default function AppearanceSettings({
   appearance,
+  windowTheme,
   setAppearance,
   resetAppearance,
   compactMode,
@@ -61,6 +63,18 @@ export default function AppearanceSettings({
   lineHeight,
   setLineHeight,
 }: AppearanceSettingsProps) {
+  // The colours this theme is drawn in now, and what - if anything - had to
+  // be put back to keep the note readable.
+  const shown = paletteFor(appearance, windowTheme);
+  const chosen = appearance.palettes?.[windowTheme] ?? {};
+  const palette = {
+    background: chosen.background ?? shown.background,
+    text: chosen.text ?? shown.foreground,
+  };
+  const putBack = shown.putBack;
+  const setPalette = (change: Palette) =>
+    setAppearance({ palettes: { ...appearance.palettes, [windowTheme]: { ...chosen, ...change } } });
+
   const [fonts, setFonts] = useState<string[]>([]);
   const [fontSizeInput, setFontSizeInput] = useState(String(editorFontSize));
   const isMac = isMacPlatform();
@@ -140,8 +154,30 @@ export default function AppearanceSettings({
       </SettingRow>
 
       <SettingRow
+        title="Background"
+        description={`The window behind the note, in the ${windowTheme} theme${
+          putBack === "background" ? " - not enough contrast with the text, so the theme's own is used" : ""
+        }`}
+      >
+        <ColorField
+          label="Background colour"
+          value={palette.background}
+          onChange={(background) => setPalette({ background })}
+        />
+      </SettingRow>
+
+      <SettingRow
+        title="Text"
+        description={`The ink notes are written in, in the ${windowTheme} theme${
+          putBack === "text" ? " - not enough contrast with the background, so the theme's own is used" : ""
+        }`}
+      >
+        <ColorField label="Text colour" value={palette.text} onChange={(text) => setPalette({ text })} />
+      </SettingRow>
+
+      <SettingRow
         title="Reset Colours"
-        description="Put the accent and transparency back to how they started"
+        description="Put the accent, background, text and transparency back to how they started"
       >
         <button
           onClick={resetAppearance}
