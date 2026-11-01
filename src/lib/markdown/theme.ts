@@ -193,6 +193,12 @@ const editorTheme = EditorView.theme(
          leaving a word or two on a line of their own. */
       textWrapStyle: "balance",
     },
+    /* Points of a list held a little apart, so they read as points and not as
+       one paragraph broken over lines. Above the line rather than below, so
+       the gap goes with the item it belongs to when it moves. */
+    ".cm-md-item-gap": {
+      paddingTop: "0.3em",
+    },
     /* The `#`s of the heading being edited, hung in the margin: a box with no
        width whose contents are pushed out to its left, so the text after it
        starts where it does when the marks are hidden. */
@@ -203,14 +209,14 @@ const editorTheme = EditorView.theme(
       whiteSpace: "pre",
       textIndent: "0",
     },
-    ".cm-md-h1": { fontSize: "1.9em", padding: "0.55em 0 0.2em" },
-    ".cm-md-h2": { fontSize: "1.52em", padding: "0.6em 0 0.2em" },
-    ".cm-md-h3": { fontSize: "1.28em", padding: "0.65em 0 0.2em" },
-    ".cm-md-h4": { fontSize: "1.12em", padding: "0.7em 0 0.2em" },
-    ".cm-md-h5": { fontSize: "1em", padding: "0.75em 0 0.2em" },
+    ".cm-md-h1": { fontSize: "1.9em", padding: "0.55em 0 0.35em" },
+    ".cm-md-h2": { fontSize: "1.52em", padding: "0.6em 0 0.35em" },
+    ".cm-md-h3": { fontSize: "1.28em", padding: "0.65em 0 0.35em" },
+    ".cm-md-h4": { fontSize: "1.12em", padding: "0.7em 0 0.35em" },
+    ".cm-md-h5": { fontSize: "1em", padding: "0.75em 0 0.35em" },
     ".cm-md-h6": {
       fontSize: "0.92em",
-      padding: "0.8em 0 0.2em",
+      padding: "0.8em 0 0.35em",
       color: ink.muted,
       letterSpacing: "0.06em",
       textTransform: "uppercase",
