@@ -295,6 +295,48 @@ const endBlock: Command = (view) => {
 };
 
 /**
+ * Enter with the caret at the start of a point's text, where that point sits
+ * straight under a paragraph: an empty point opens above it, as anywhere
+ * else, but after a blank line.
+ *
+ * Left to the markdown command, the empty point above was a bare `-` on the
+ * line under the paragraph, which markdown reads as a heading's underline - so
+ * the paragraph turned into a heading. A list after a blank line is the same
+ * list, and its empty first point is only that.
+ */
+const openPointUnderParagraph: Command = (view) => {
+  const { state } = view;
+  const { doc } = state;
+  const { main } = state.selection;
+  if (state.selection.ranges.length > 1 || !main.empty) return false;
+
+  const line = doc.lineAt(main.head);
+  if (line.number === 1) return false;
+  const item = listItemAt(state, main.head);
+  if (!item || doc.lineAt(item.from).number !== line.number) return false;
+  if (contentStart(doc, item, line) !== main.head || main.head === line.to) return false;
+
+  const above = doc.line(line.number - 1);
+  let inParagraph = false;
+  for (let node: SyntaxNode | null = syntaxTree(state).resolve(above.to, -1); node; node = node.parent) {
+    if (node.name === "Paragraph" && node.parent?.name === "Document") inParagraph = true;
+  }
+  if (!inParagraph) return false;
+
+  const marker = doc.sliceString(line.from, main.head).trimEnd();
+  const insert = state.lineBreak + marker + state.lineBreak;
+  view.dispatch(
+    state.update({
+      changes: { from: line.from, insert },
+      selection: EditorSelection.cursor(main.head + insert.length),
+      scrollIntoView: true,
+      userEvent: "input",
+    })
+  );
+  return true;
+};
+
+/**
  * Enter, in a document that is mostly points: a new point where the markdown
  * command would carry the old one on, a way out of a carried-on line left
  * empty, a clean end to a list or a quote, and the markdown command everywhere
@@ -302,5 +344,10 @@ const endBlock: Command = (view) => {
  * a nested list.
  */
 export function insertNewLine(continueMarkup: Command): Command {
-  return (view) => startListItem(view) || leaveListItem(view) || endBlock(view) || continueMarkup(view);
+  return (view) =>
+    startListItem(view) ||
+    leaveListItem(view) ||
+    endBlock(view) ||
+    openPointUnderParagraph(view) ||
+    continueMarkup(view);
 }
