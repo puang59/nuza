@@ -2,6 +2,7 @@ mod agent;
 #[cfg(target_os = "linux")]
 mod appimage;
 mod cli;
+mod dock;
 mod files;
 mod folder;
 mod fonts;
@@ -129,6 +130,10 @@ pub fn run() {
                     .queue(multiwindow::MAIN_WINDOW, target);
             }
 
+            // Recent vaults in the Dock icon's menu.
+            #[cfg(target_os = "macos")]
+            dock::install(app.handle());
+
             // The main window, built here rather than from the config file so
             // its webview can be given a configuration first - see
             // `window::full_rate_configuration`.
@@ -204,6 +209,7 @@ pub fn run() {
             files::duplicate_entry,
             files::copy_entry,
             multiwindow::open_single_note_window,
+            dock::set_dock_vaults,
             multiwindow::close_or_hide_window,
             terminal::open_in_terminal,
             files::write_file,

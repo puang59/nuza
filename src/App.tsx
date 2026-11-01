@@ -171,6 +171,10 @@ function App() {
 
   const { module: vimModule, extension: vimExtension } = useVimMode(vimEnabled);
   const { vaults, remember: rememberVault, rename: renameVault, forget: forgetVault } = useVaults();
+  // The Dock icon's menu lists these on macOS; elsewhere the call does nothing.
+  useEffect(() => {
+    invoke("set_dock_vaults", { vaults: vaults.map(({ path, name }) => ({ path, name })) }).catch(() => {});
+  }, [vaults]);
   // Assumed until the window has answered, so the app does not flash opaque on
   // the way up on the platforms that do have a backdrop.
   const [hasBackdrop, setHasBackdrop] = useState(true);
