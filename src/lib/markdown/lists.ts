@@ -166,6 +166,12 @@ const startListItem: Command = (view) => {
     const item = listItemAt(state, range.head);
     const line = doc.lineAt(range.head);
     if (!item || item.from >= line.from || !/\S/.test(line.text)) return null;
+    // A line set in by less than the item's own text is one markdown only
+    // counts as part of the point because nothing came between them - a
+    // sentence written straight under a list. It is prose, and enter carries
+    // on as prose rather than starting a bullet nobody asked for.
+    const indent = continuation(doc, item);
+    if (indent === null || /^[\s>]*/.exec(line.text)![0].length < indent.length) return null;
     return item;
   });
 
@@ -230,12 +236,71 @@ const leaveListItem: Command = (view) => {
   return true;
 };
 
+/** A point with nothing in it yet: the marker, perhaps a task's box, and no text. */
+const EMPTY_ITEM = /^\s*([-+*]|\d+[.)])(\s+\[[ xX]\])?\s*$/;
+/** A line of a quote with nothing in it: one `>` and no text. */
+const EMPTY_QUOTE = /^\s*>\s*$/;
+
+/**
+ * Where enter on an empty line ends a list or a quote, if it does: the empty
+ * last point of a list with points above it, or the empty last line of a
+ * quote. Null anywhere else, including a nested list - that one steps out a
+ * level at a time, which the markdown command already does.
+ */
+function endOfBlock(state: EditorState, pos: number): Line | null {
+  const { doc } = state;
+  const line = doc.lineAt(pos);
+  if (pos !== line.to || line.number === 1) return null;
+  const above = doc.line(line.number - 1);
+
+  if (EMPTY_ITEM.test(line.text)) {
+    const item = listItemAt(state, pos);
+    const list = item?.parent;
+    if (!item || !list || doc.lineAt(item.from).number !== line.number) return null;
+    if (list.parent?.name !== "Document") return null;
+    if (item.nextSibling?.name === "ListItem" || item.prevSibling?.name !== "ListItem") return null;
+    return line;
+  }
+
+  if (EMPTY_QUOTE.test(line.text) && /^\s*>/.test(above.text) && !listItemAt(state, pos)) return line;
+  return null;
+}
+
+/**
+ * Enter on the empty point at the end of a list, or the empty line at the end
+ * of a quote: out of it, with a blank line left behind.
+ *
+ * Taking the marker away is not enough on its own. Markdown reads a line
+ * written straight under a list or a quote as more of it, so the sentence
+ * typed next would be drawn set in under the last point, or inside the quote.
+ * A blank line is what ends one.
+ */
+const endBlock: Command = (view) => {
+  const { state } = view;
+  const ends = state.selection.ranges.map((range) => (range.empty ? endOfBlock(state, range.head) : null));
+  if (!ends.some(Boolean)) return false;
+
+  let index = 0;
+  const change = state.changeByRange((range) => {
+    const line = ends[index++];
+    if (!line) return { range };
+    return {
+      changes: { from: line.from, to: line.to, insert: state.lineBreak },
+      range: EditorSelection.cursor(line.from + state.lineBreak.length),
+    };
+  });
+
+  view.dispatch(state.update(change, { scrollIntoView: true, userEvent: "input" }));
+  return true;
+};
+
 /**
  * Enter, in a document that is mostly points: a new point where the markdown
  * command would carry the old one on, a way out of a carried-on line left
- * empty, and the markdown command everywhere else - it is the one that knows
- * how to end an empty item, renumber what follows and get a quote right.
+ * empty, a clean end to a list or a quote, and the markdown command everywhere
+ * else - it is the one that knows how to renumber what follows and step out of
+ * a nested list.
  */
 export function insertNewLine(continueMarkup: Command): Command {
-  return (view) => startListItem(view) || leaveListItem(view) || continueMarkup(view);
+  return (view) => startListItem(view) || leaveListItem(view) || endBlock(view) || continueMarkup(view);
 }

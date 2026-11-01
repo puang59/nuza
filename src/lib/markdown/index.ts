@@ -11,10 +11,12 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { report } from "../notices";
 import { isMacPlatform } from "../platform";
 import { attachments } from "./attachments";
+import { htmlKeepsIndentation } from "./htmlIndent";
 import { listIndent } from "./listIndent";
 import { continueListItem, insertNewLine } from "./lists";
 import { liveMarkdownPreview } from "./livePreview";
 import { MathSyntax } from "./math";
+import { pasteUrlAsLink, wrapSelectionInMarks } from "./formatting";
 import { findInNote } from "./searchPanel";
 import { sectionFolding } from "./folding";
 import { codeBlockScrolling } from "./codeScroll";
@@ -81,11 +83,13 @@ const openLinkOnModClick = EditorView.domEventHandlers({
  * rather than a point of its own, carried on underneath the text it belongs
  * to. Outside a list it is left to do what it does everywhere else.
  */
+export const markdownNewLine = insertNewLine(insertNewlineContinueMarkupCommand({ nonTightLists: false }));
+
 const markdownEditingKeymap = Prec.high(
   keymap.of([
     {
       key: "Enter",
-      run: insertNewLine(insertNewlineContinueMarkupCommand({ nonTightLists: false })),
+      run: markdownNewLine,
       shift: continueListItem,
     },
     { key: "Backspace", run: deleteMarkupBackward },
@@ -108,6 +112,7 @@ export const liveMarkdown: Extension = [
     addKeymap: false,
   }),
   markdownEditingKeymap,
+  htmlKeepsIndentation,
   EditorView.lineWrapping,
   nuzaEditorTheme,
   liveMarkdownPreview,
@@ -121,6 +126,8 @@ export const liveMarkdown: Extension = [
   listIndent,
   openLinkOnModClick,
   attachments,
+  wrapSelectionInMarks,
+  pasteUrlAsLink,
 ];
 
 export { directoryOf, noteDirectory } from "./sources";

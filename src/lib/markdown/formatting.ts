@@ -1,4 +1,7 @@
+import { syntaxTree } from "@codemirror/language";
 import { ChangeSpec, EditorSelection, EditorState, Line, StateCommand, Text } from "@codemirror/state";
+import { EditorView } from "@codemirror/view";
+import type { SyntaxNode } from "@lezer/common";
 
 /**
  * Bold, italic and links from the keyboard.
@@ -153,6 +156,63 @@ function toggleWrap(marker: string): StateCommand {
 
 export const toggleInlineCode = toggleWrap("`");
 export const toggleStrikethrough = toggleWrap("~~");
+
+/** The marks that wrap a selection when typed over it, rather than replacing it. */
+const WRAPPING_MARKS = new Set(["*", "_", "`", "~", "="]);
+
+/**
+ * Typing `*` over a selected word wraps it in stars instead of deleting it -
+ * and a second `*` makes it bold, since the word stays selected. The same goes
+ * for `_`, `` ` ``, `~` and `=`. Quotes and brackets already wrap this way.
+ *
+ * Inside a fenced block the key types over the selection, as it does in any
+ * code editor.
+ */
+export const wrapSelectionInMarks = EditorView.inputHandler.of((view, from, to, text) => {
+  const { state } = view;
+  if (!WRAPPING_MARKS.has(text) || from === to || state.readOnly) return false;
+  if (state.selection.ranges.some((range) => range.empty)) return false;
+  for (let node: SyntaxNode | null = syntaxTree(state).resolve(from, 1); node; node = node.parent) {
+    if (node.name === "FencedCode" || node.name === "CodeBlock") return false;
+  }
+
+  const change = state.changeByRange((range) => ({
+    changes: [
+      { from: range.from, insert: text },
+      { from: range.to, insert: text },
+    ],
+    range: EditorSelection.range(range.anchor + text.length, range.head + text.length),
+  }));
+  view.dispatch(state.update(change, { scrollIntoView: true, userEvent: "input.type" }));
+  return true;
+});
+
+/**
+ * A URL pasted over selected text links the text to it, rather than replacing
+ * it with the URL. Text spanning lines, or a selection that is itself a URL,
+ * is pasted over as usual.
+ */
+export const pasteUrlAsLink = EditorView.domEventHandlers({
+  paste(event, view) {
+    const pasted = event.clipboardData?.getData("text/plain").trim() ?? "";
+    if (!URL.test(pasted)) return false;
+
+    const { state } = view;
+    const ranges = state.selection.ranges;
+    if (ranges.some((range) => range.empty)) return false;
+    const labels = ranges.map((range) => state.sliceDoc(range.from, range.to));
+    if (labels.some((label) => label.includes("\n") || URL.test(label.trim()))) return false;
+
+    event.preventDefault();
+    let index = 0;
+    const change = state.changeByRange(({ from, to }) => {
+      const insert = `[${labels[index++]}](${pasted})`;
+      return { changes: { from, to, insert }, range: EditorSelection.cursor(from + insert.length) };
+    });
+    view.dispatch(state.update(change, { scrollIntoView: true, userEvent: "input.paste" }));
+    return true;
+  },
+});
 
 /** What a line starts with, as far as these commands are concerned. */
 interface LinePrefix {
