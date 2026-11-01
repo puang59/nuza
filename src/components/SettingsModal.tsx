@@ -42,6 +42,8 @@ interface SettingsModalProps {
   sectionGuides: boolean;
   noteTitles: boolean;
   setNoteTitles: (enabled: boolean) => void;
+  terminalApp: string;
+  setTerminalApp: (app: string) => void;
   setSectionGuides: (enabled: boolean) => void;
   zenDimming: boolean;
   setZenDimming: (enabled: boolean) => void;
@@ -100,6 +102,8 @@ export default function SettingsModal({
   setSectionGuides,
   noteTitles,
   setNoteTitles,
+  terminalApp,
+  setTerminalApp,
   zenDimming,
   setZenDimming,
   appearance,
@@ -221,6 +225,8 @@ export default function SettingsModal({
                 setSectionGuides={setSectionGuides}
                 noteTitles={noteTitles}
                 setNoteTitles={setNoteTitles}
+                terminalApp={terminalApp}
+                setTerminalApp={setTerminalApp}
                 zenDimming={zenDimming}
                 setZenDimming={setZenDimming}
               />

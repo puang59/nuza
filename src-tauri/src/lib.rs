@@ -18,6 +18,7 @@ mod slow;
 mod state;
 mod tags;
 mod tasks;
+mod terminal;
 mod titles;
 mod tree;
 mod vaultserver;
@@ -202,6 +203,7 @@ pub fn run() {
             launch::uninstall_cli,
             files::duplicate_entry,
             files::copy_entry,
+            terminal::open_in_terminal,
             files::write_file,
             media::write_media,
             recovery::keep_recovery,

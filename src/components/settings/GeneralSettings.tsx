@@ -20,6 +20,8 @@ interface GeneralSettingsProps {
   setNoteTitles: (enabled: boolean) => void;
   zenDimming: boolean;
   setZenDimming: (enabled: boolean) => void;
+  terminalApp: string;
+  setTerminalApp: (app: string) => void;
 }
 
 export default function GeneralSettings({
@@ -39,6 +41,8 @@ export default function GeneralSettings({
   setNoteTitles,
   zenDimming,
   setZenDimming,
+  terminalApp,
+  setTerminalApp,
 }: GeneralSettingsProps) {
   return (
     <div className="divide-y divide-zinc-800">
@@ -92,6 +96,18 @@ export default function GeneralSettings({
         description="In zen mode, fade everything but the paragraph you are writing"
       >
         <Switch checked={zenDimming} onCheckedChange={setZenDimming} />
+      </SettingRow>
+      <SettingRow
+        title="Terminal"
+        description="The app Open in Terminal uses for a folder. Leave it empty for the system's own terminal."
+      >
+        <input
+          aria-label="Terminal app"
+          value={terminalApp}
+          placeholder="System default"
+          onChange={(e) => setTerminalApp(e.target.value)}
+          className="w-40 rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-white outline-none placeholder:text-zinc-500 focus-visible:border-[var(--nuza-accent)]"
+        />
       </SettingRow>
       <CommandLineSetting />
     </div>
