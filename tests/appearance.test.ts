@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { DEFAULT_APPEARANCE, THEMES, appearanceVariables, isThemeChoice } from "../src/lib/appearance";
+import {
+  DEFAULT_APPEARANCE,
+  THEMES,
+  appearanceVariables,
+  isThemeChoice,
+  paletteFor,
+} from "../src/lib/appearance";
 
 describe("appearanceVariables by theme", () => {
   test("paints the dark theme as it always was", () => {
@@ -39,5 +45,46 @@ describe("isThemeChoice", () => {
     expect(["dark", "light", "system"].every(isThemeChoice)).toBe(true);
     expect(isThemeChoice("sepia")).toBe(false);
     expect(isThemeChoice(undefined)).toBe(false);
+  });
+});
+
+describe("chosen colours", () => {
+  test("a readable pair is used as chosen", () => {
+    const appearance = {
+      ...DEFAULT_APPEARANCE,
+      palettes: { dark: { background: "#101820", text: "#F0E6D2" } },
+    };
+    expect(paletteFor(appearance, "dark")).toEqual({
+      background: "#101820",
+      foreground: "#F0E6D2",
+      putBack: null,
+    });
+    expect(appearanceVariables(appearance, true, "dark")["--nuza-bg"]).toBe("#101820");
+  });
+
+  test("text too close to the background gives way to the theme's own", () => {
+    const appearance = { ...DEFAULT_APPEARANCE, palettes: { dark: { text: "#2A2A2A" } } };
+    expect(paletteFor(appearance, "dark")).toEqual({
+      background: "#1E1E1E",
+      foreground: "#D4D4D8",
+      putBack: "text",
+    });
+  });
+
+  test("a background nothing can be read on gives way too", () => {
+    const appearance = {
+      ...DEFAULT_APPEARANCE,
+      palettes: { dark: { background: "#C8C8C8", text: "#D0D0D0" } },
+    };
+    expect(paletteFor(appearance, "dark")).toEqual({
+      background: "#1E1E1E",
+      foreground: "#D0D0D0",
+      putBack: "background",
+    });
+  });
+
+  test("each theme keeps its own", () => {
+    const appearance = { ...DEFAULT_APPEARANCE, palettes: { dark: { background: "#000000" } } };
+    expect(paletteFor(appearance, "light").background).toBe("#FBFBFA");
   });
 });
