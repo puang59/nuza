@@ -247,6 +247,36 @@ fn frame_of<R: Runtime>(window: &tauri::WebviewWindow<R>) -> Option<Frame> {
 
 static NEXT_WINDOW: AtomicUsize = AtomicUsize::new(1);
 
+/// A builder for a window from `config`, with the webview set up to draw at
+/// the display's refresh rate where that can be asked for.
+fn window_builder<'a>(
+    app: &'a tauri::AppHandle,
+    config: &'a tauri::utils::config::WindowConfig,
+) -> Result<tauri::WebviewWindowBuilder<'a, tauri::Wry, tauri::AppHandle>, String> {
+    #[allow(unused_mut)]
+    let mut builder =
+        tauri::WebviewWindowBuilder::from_config(app, config).map_err(|e| e.to_string())?;
+    #[cfg(target_os = "macos")]
+    if let Some(configuration) = crate::window::full_rate_configuration(app) {
+        builder = builder.with_webview_configuration(configuration);
+    }
+    Ok(builder)
+}
+
+/// The first window, from the settings `tauri.conf.json` gives it. The config
+/// file says not to create it, so that it can be built here like the rest.
+pub(crate) fn build_main_window(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+    let config = app
+        .config()
+        .app
+        .windows
+        .first()
+        .cloned()
+        .ok_or("There is no main window in the config")?;
+    window_builder(app, &config)?.build()?;
+    Ok(())
+}
+
 /// Opens a window - on `target` when there is one - set at `frame` when there
 /// is one, and otherwise a little way from the window in front.
 ///
@@ -287,8 +317,7 @@ pub(crate) fn open_window(
         })
     });
 
-    let mut builder =
-        tauri::WebviewWindowBuilder::from_config(app, &config).map_err(|e| e.to_string())?;
+    let mut builder = window_builder(app, &config)?;
     if let Some(frame) = beside.filter(|frame| usable_frame(frame, &screens(app))) {
         builder = builder
             .position(f64::from(frame.x), f64::from(frame.y))

@@ -8,7 +8,7 @@ import {
   useIsDragged,
   useIsDragOver,
 } from "@/lib/dragSource";
-import { nameProblem } from "@/lib/entryName";
+import { nameProblem, newEntryProblem } from "@/lib/entryName";
 import { hasUnavailable, parentOf } from "@/lib/fileTree";
 import { movableInto } from "@/lib/treeSelection";
 import { FileIcon } from "@/lib/utils";
@@ -36,7 +36,7 @@ export function NewEntryRow({
         initialValue=""
         onSubmit={onSubmit}
         onCancel={onCancel}
-        validate={nameProblem}
+        validate={newEntryProblem}
         className="min-w-0 flex-1 rounded bg-zinc-900 px-1 py-0.5 text-sm text-white outline outline-1 outline-blue-500"
       />
     </li>

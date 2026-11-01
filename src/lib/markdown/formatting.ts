@@ -158,12 +158,13 @@ export const toggleInlineCode = toggleWrap("`");
 export const toggleStrikethrough = toggleWrap("~~");
 
 /** The marks that wrap a selection when typed over it, rather than replacing it. */
-const WRAPPING_MARKS = new Set(["*", "_", "`", "~", "="]);
+const WRAPPING_MARKS = new Set(["*", "_", "`", "~", "=", '"', "'"]);
 
 /**
  * Typing `*` over a selected word wraps it in stars instead of deleting it -
  * and a second `*` makes it bold, since the word stays selected. The same goes
- * for `_`, `` ` ``, `~` and `=`. Quotes and brackets already wrap this way.
+ * for `_`, `` ` ``, `~`, `=` and quotes, which no longer pair themselves in
+ * prose. Brackets already wrap this way.
  *
  * Inside a fenced block the key types over the selection, as it does in any
  * code editor.

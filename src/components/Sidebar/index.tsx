@@ -449,18 +449,35 @@ function Sidebar({
       if (!pendingCreate) return;
       const { parentPath, type } = pendingCreate;
       setPendingCreate(null);
+
+      // `journal/2026/today` makes the folders on the way, as VS Code does,
+      // leaving any that are already there as they are.
+      const parts = name.split("/").map((part) => part.trim());
       // A file named without an extension is a note: `ideas` is `ideas.md`,
       // not a file the vault cannot open as one.
-      if (type === "file") name = withNoteExtension(name);
+      const leaf = type === "file" ? withNoteExtension(parts.pop()!) : parts.pop()!;
+      let parent = parentPath;
       try {
-        if (type === "file") await onCreateFile(parentPath, name);
-        else await onCreateFolder(parentPath, name);
-        setSelected({ path: joinPath(parentPath, name), isDirectory: type === "folder" });
+        for (const folder of parts) {
+          const path = joinPath(parent, folder);
+          if (!findEntry(data, path)?.isDirectory) {
+            try {
+              await onCreateFolder(parent, folder);
+            } catch (error) {
+              // In the vault but not yet read into the tree.
+              if (!String(error).includes("already exists")) throw error;
+            }
+          }
+          parent = path;
+        }
+        if (type === "file") await onCreateFile(parent, leaf);
+        else await onCreateFolder(parent, leaf);
+        setSelected({ path: joinPath(parent, leaf), isDirectory: type === "folder" });
       } catch (error) {
         report(`Couldn't create "${name}"`, error);
       }
     },
-    [pendingCreate, onCreateFile, onCreateFolder]
+    [pendingCreate, data, onCreateFile, onCreateFolder]
   );
 
   const submitRename = useCallback(
