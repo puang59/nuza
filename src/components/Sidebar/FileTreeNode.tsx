@@ -10,7 +10,7 @@ import {
 } from "@/lib/dragSource";
 import { nameProblem } from "@/lib/entryName";
 import { hasUnavailable, parentOf } from "@/lib/fileTree";
-import { samePath } from "@/lib/path";
+import { isWithin, samePath } from "@/lib/path";
 import { FileIcon } from "@/lib/utils";
 import { FileEntry } from "@/lib/types";
 import { useTreeContext, useTreeMark } from "./TreeContext";
@@ -42,6 +42,9 @@ export function NewEntryRow({
     </li>
   );
 }
+
+/** How long a closed folder has to be held under a drag before it opens. */
+const SPRING_OPEN_DELAY = 600;
 
 /**
  * One row of the tree, and the rows underneath it when it is a folder.
@@ -118,20 +121,29 @@ function FileTreeNode({ entry }: { entry: FileEntry }) {
   /**
    * Whether this row would do anything with what is being dragged over it.
    *
-   * Files from outside go to `dropTarget`, so any row takes them - a folder
-   * into itself, a file into the folder it is in. A row dragged from the tree
-   * only moves into a folder, so a file row has nothing to offer it: the drop
-   * handler has always known that, and the drag-over handler did not, which
-   * left a note dragged over another note lit up and showing a move cursor for
-   * a drop that then did nothing at all.
+   * Everything goes to `dropTarget`: a folder takes it itself, and a file
+   * hands it to the folder it is in - so a note let go of over a note lands
+   * beside it, as it does in VS Code, rather than nowhere. A row dragged from
+   * the tree is refused by the folder it is already in, and by itself and
+   * anything inside it.
    */
   function wouldTake(e: React.DragEvent) {
     if (carriesFiles(e)) return true;
     const dragging = draggedPath();
-    if (!dragging || dragging === entry.path || !entry.isDirectory) return false;
-    // The folder it is already in has nothing to do with it either.
-    return !samePath(parentOf(dragging), entry.path);
+    if (!dragging || isWithin(dropTarget, dragging)) return false;
+    return !samePath(parentOf(dragging), dropTarget);
   }
+
+  /**
+   * A closed folder held under a drag for a moment opens, so a note can be
+   * carried down into a folder several levels deep without letting go first.
+   */
+  const springTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function stopSpring() {
+    if (springTimer.current) clearTimeout(springTimer.current);
+    springTimer.current = null;
+  }
+  useEffect(() => stopSpring, []);
 
   function handleDragOver(e: React.DragEvent) {
     if (!wouldTake(e)) return;
@@ -139,12 +151,28 @@ function FileTreeNode({ entry }: { entry: FileEntry }) {
     e.stopPropagation();
     // Copying something in from outside, moving something already in the vault.
     e.dataTransfer.dropEffect = carriesFiles(e) ? "copy" : "move";
-    setDragOver(entry.path);
+    // The folder that will take it lights up, which for a file is the one it is in.
+    setDragOver(dropTarget);
+    if (entry.isDirectory && !detailsRef.current?.open && !springTimer.current) {
+      springTimer.current = setTimeout(() => {
+        springTimer.current = null;
+        if (detailsRef.current) detailsRef.current.open = true;
+      }, SPRING_OPEN_DELAY);
+    }
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    e.stopPropagation();
+    // Crossing from the row's name onto its icon is not leaving it.
+    if (e.relatedTarget instanceof Node && e.currentTarget.contains(e.relatedTarget)) return;
+    stopSpring();
+    if (isDraggedOver || !entry.isDirectory) setDragOver(null);
   }
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
     e.stopPropagation();
+    stopSpring();
 
     const files = Array.from(e.dataTransfer.files);
     const dragging = draggedPath();
@@ -152,8 +180,8 @@ function FileTreeNode({ entry }: { entry: FileEntry }) {
 
     if (files.length) {
       attachFiles(dropTarget, files);
-    } else if (dragging && dragging !== entry.path && entry.isDirectory) {
-      moveEntry(dragging, entry.path);
+    } else if (dragging && !isWithin(dropTarget, dragging)) {
+      moveEntry(dragging, dropTarget);
     }
   }
 
@@ -200,10 +228,7 @@ function FileTreeNode({ entry }: { entry: FileEntry }) {
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
             onDragOver={handleDragOver}
-            onDragLeave={(e) => {
-              e.stopPropagation();
-              if (isDraggedOver) setDragOver(null);
-            }}
+            onDragLeave={handleDragLeave}
             onDrop={handleDrop}
             onContextMenu={(e) => {
               e.preventDefault();
@@ -265,10 +290,7 @@ function FileTreeNode({ entry }: { entry: FileEntry }) {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
         onDragOver={handleDragOver}
-        onDragLeave={(e) => {
-          e.stopPropagation();
-          if (isDraggedOver) setDragOver(null);
-        }}
+        onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         onClick={() => !isRenaming && onFileSelect && onFileSelect(entry.path)}
         onContextMenu={(e) => {

@@ -27,11 +27,13 @@ import {
   SortOrder,
   TreeSelection,
   createTarget,
+  findEntry,
   joinPath,
   nameOf,
   parentOf,
   sortTree,
 } from "@/lib/fileTree";
+import { withNoteExtension } from "@/lib/entryName";
 import { samePath } from "@/lib/path";
 import { usePersistedState } from "@/hooks/usePersistedState";
 import { TreeContext, TreeActions, ContextMenuState, PendingCreate, createTreeMarks } from "./TreeContext";
@@ -335,6 +337,21 @@ function Sidebar({
     if (!row) return;
     const folder = folderOf(row);
 
+    // As in VS Code's explorer: F2 renames the row, and Delete - or
+    // mod+Backspace, which is the Mac's - asks to delete it.
+    const entry = row.dataset.path ? findEntry(data, row.dataset.path) : null;
+    if (key === "F2" && entry) {
+      event.preventDefault();
+      setPendingCreate(null);
+      setRenamingPath(entry.path);
+      return;
+    }
+    if ((key === "Delete" || (key === "Backspace" && (event.metaKey || event.ctrlKey))) && entry) {
+      event.preventDefault();
+      setDeleteTarget(entry);
+      return;
+    }
+
     // Rightwards goes inwards: a shut folder opens, an open one steps into.
     if (key === "ArrowRight" || (vimEnabled && key === "l")) {
       if (!folder) return;
@@ -380,6 +397,9 @@ function Sidebar({
       if (!pendingCreate) return;
       const { parentPath, type } = pendingCreate;
       setPendingCreate(null);
+      // A file named without an extension is a note: `ideas` is `ideas.md`,
+      // not a file the vault cannot open as one.
+      if (type === "file") name = withNoteExtension(name);
       try {
         if (type === "file") await onCreateFile(parentPath, name);
         else await onCreateFolder(parentPath, name);

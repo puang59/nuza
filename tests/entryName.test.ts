@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { nameProblem } from "../src/lib/entryName";
+import { nameProblem, withNoteExtension } from "../src/lib/entryName";
 
 /** The problem, or "" when there is none, so a test can read as one line. */
 function problem(name: string) {
@@ -98,5 +98,23 @@ describe("names the tree could not show", () => {
   test("nothing at all", () => {
     expect(problem("")).toBe("A name is needed");
     expect(problem("   ")).toBe("A name is needed");
+  });
+});
+
+describe("withNoteExtension", () => {
+  test("a name with no extension becomes a note", () => {
+    expect(withNoteExtension("ideas")).toBe("ideas.md");
+    expect(withNoteExtension("Meeting notes")).toBe("Meeting notes.md");
+  });
+
+  test("a dot that is not an extension does not count as one", () => {
+    expect(withNoteExtension("v1.2")).toBe("v1.2.md");
+    expect(withNoteExtension("Dr. Who")).toBe("Dr. Who.md");
+  });
+
+  test("a name that already has an extension is left alone", () => {
+    expect(withNoteExtension("ideas.md")).toBe("ideas.md");
+    expect(withNoteExtension("data.csv")).toBe("data.csv");
+    expect(withNoteExtension("README.MD")).toBe("README.MD");
   });
 });
