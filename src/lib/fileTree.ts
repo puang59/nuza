@@ -232,8 +232,15 @@ export function addFile(tree: FileEntry[], rootPath: string, path: string): File
   return addEntry(withFolder, rootPath, { name: nameOf(path), path, isDirectory: false });
 }
 
-/** How the sidebar orders a folder's contents. Folders always come first. */
+/** How the sidebar orders a folder's contents. */
 export type SortOrder = "name" | "modified" | "created";
+
+export interface SortOptions {
+  /** Z to A by name; oldest first by date. */
+  reversed?: boolean;
+  /** Folders above files, on by default; off, the two are sorted together. */
+  foldersFirst?: boolean;
+}
 
 export const SORT_ORDERS: { id: SortOrder; label: string }[] = [
   { id: "name", label: "Name" },
@@ -258,21 +265,29 @@ function byName(a: FileEntry, b: FileEntry) {
 }
 
 /**
- * The tree as the sidebar shows it: folders first, then by name, or newest
- * first by date. The tree itself stays in name order - the order every edit to
- * it keeps - so this is only ever a view of it, and for name order it is the
- * tree itself.
+ * The tree as the sidebar shows it: by name A to Z, or newest first by date,
+ * either way round, with folders first unless asked otherwise. The tree itself
+ * stays in name order with folders first - the order every edit to it keeps -
+ * so this is only ever a view of it, and in that order it is the tree itself.
  */
-export function sortTree(tree: FileEntry[], order: SortOrder): FileEntry[] {
-  if (order === "name") return tree;
+export function sortTree(
+  tree: FileEntry[],
+  order: SortOrder,
+  { reversed = false, foldersFirst = true }: SortOptions = {}
+): FileEntry[] {
+  if (order === "name" && !reversed && foldersFirst) return tree;
 
+  const compare = (a: FileEntry, b: FileEntry) => {
+    if (order === "name") return byName(a, b);
+    const newer = timeOf(b, order) - timeOf(a, order);
+    return (Number.isNaN(newer) ? 0 : newer) || byName(a, b);
+  };
   const sort = (entries: FileEntry[]): FileEntry[] =>
     entries
       .map((entry) => (entry.children ? { ...entry, children: sort(entry.children) } : entry))
       .sort((a, b) => {
-        if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
-        const newer = timeOf(b, order) - timeOf(a, order);
-        return (Number.isNaN(newer) ? 0 : newer) || byName(a, b);
+        if (foldersFirst && a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+        return reversed ? compare(b, a) : compare(a, b);
       });
 
   return sort(tree);

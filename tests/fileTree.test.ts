@@ -159,6 +159,38 @@ describe("sortTree", () => {
     expect(names(sortTree(tree, "created").slice(2))).toEqual(["old.md", "new.md", "mid.md"]);
   });
 
+  test("either way round", () => {
+    expect(names(sortTree(tree, "name", { reversed: true }))).toEqual([
+      "b-dir",
+      "a-dir",
+      "old.md",
+      "new.md",
+      "mid.md",
+    ]);
+    expect(names(sortTree(tree, "modified", { reversed: true }).slice(2))).toEqual([
+      "old.md",
+      "mid.md",
+      "new.md",
+    ]);
+  });
+
+  test("folders and files together, when folders first is off", () => {
+    expect(names(sortTree(tree, "name", { foldersFirst: false }))).toEqual([
+      "a-dir",
+      "b-dir",
+      "mid.md",
+      "new.md",
+      "old.md",
+    ]);
+    expect(names(sortTree(tree, "modified", { foldersFirst: false }))).toEqual([
+      "new.md",
+      "mid.md",
+      "old.md",
+      "a-dir",
+      "b-dir",
+    ]);
+  });
+
   test("a file with no time yet is the newest, and two of them go by name", () => {
     const withNew = [...tree, file("zz-made.md"), file("aa-made.md")];
     expect(names(sortTree(withNew, "modified")).slice(2, 4)).toEqual(["aa-made.md", "zz-made.md"]);
