@@ -31,6 +31,10 @@ interface AppearanceSettingsProps {
   setCompactMode: (enabled: boolean) => void;
   editorFont: string;
   setEditorFont: (font: string) => void;
+  uiFont: string;
+  setUiFont: (font: string) => void;
+  codeFont: string;
+  setCodeFont: (font: string) => void;
   editorFontSize: number;
   setEditorFontSize: (size: number) => void;
   contentWidth: number;
@@ -48,6 +52,10 @@ export default function AppearanceSettings({
   setCompactMode,
   editorFont,
   setEditorFont,
+  uiFont,
+  setUiFont,
+  codeFont,
+  setCodeFont,
   editorFontSize,
   setEditorFontSize,
   contentWidth,
@@ -183,8 +191,19 @@ export default function AppearanceSettings({
         <Switch checked={compactMode} onCheckedChange={setCompactMode} />
       </SettingRow>
 
-      <SettingRow title="Font" description="Any font installed on your system">
+      <SettingRow
+        title="Font"
+        description="The font notes are written in - any font installed on your system"
+      >
         <FontPicker fonts={fonts} value={editorFont} onChange={setEditorFont} />
+      </SettingRow>
+
+      <SettingRow title="Interface Font" description="The sidebar, tabs, menus and status bar">
+        <FontPicker fonts={fonts} value={uiFont} onChange={setUiFont} />
+      </SettingRow>
+
+      <SettingRow title="Code Font" description="Inline code, code blocks and frontmatter">
+        <FontPicker fonts={fonts} value={codeFont} onChange={setCodeFont} />
       </SettingRow>
 
       <SettingRow
