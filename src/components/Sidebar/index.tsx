@@ -202,6 +202,8 @@ interface SidebarProps {
   onTogglePin?: (path: string) => void;
   /** Notes opened most recently, newest first, from any vault. */
   recentPaths?: readonly string[];
+  /** Opens a folder of the vault in the terminal chosen in Settings. */
+  onOpenInTerminal?: (path: string) => void;
   onDelete: (path: string) => Promise<void> | void;
   onMove: (path: string, targetDir: string) => Promise<void> | void;
   onAttachFiles: (directory: string, files: File[]) => Promise<void> | void;
@@ -243,6 +245,7 @@ function Sidebar({
   pinned = NO_PATHS,
   onTogglePin,
   recentPaths = NO_PATHS,
+  onOpenInTerminal,
   onDelete,
   onMove,
   onAttachFiles,
@@ -809,6 +812,9 @@ function Sidebar({
       return [
         { label: "New File", onClick: () => beginCreate("file") },
         { label: "New Folder", onClick: () => beginCreate("folder") },
+        ...(onOpenInTerminal && rootPath
+          ? [{ label: "Open in Terminal", onClick: () => onOpenInTerminal(rootPath), divided: true }]
+          : []),
         ...paste,
       ];
     }
@@ -837,6 +843,8 @@ function Sidebar({
         { label: "New File", onClick: () => beginCreate("file", entry.path) },
         { label: "New Folder", onClick: () => beginCreate("folder", entry.path) }
       );
+      if (onOpenInTerminal)
+        items.push({ label: "Open in Terminal", onClick: () => onOpenInTerminal(entry.path) });
     }
     // The note in front cannot also be beside itself.
     if (onOpenToSide && !entry.isDirectory && entry.path !== currentFile) {
