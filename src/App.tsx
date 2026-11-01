@@ -39,6 +39,7 @@ import { useRecentFiles } from "./hooks/useRecentFiles";
 import { useOutline } from "./hooks/useOutline";
 import { hasEmbeds, refreshEmbeds, setVaultFiles } from "./lib/markdown/embedIndex";
 import { useResizableAiPanel, useResizableSidebar } from "./hooks/useResizableSidebar";
+import { useSteadyColumn } from "./hooks/useSteadyColumn";
 import { report } from "./lib/notices";
 import { isMainWindow } from "./lib/windowLabel";
 import { addFrontmatter, addProperty, canAddFrontmatter } from "./lib/markdown/addFrontmatter";
@@ -278,6 +279,14 @@ function App() {
     startResize: startAiPanelResize,
     resetWidth: resetAiPanelWidth,
   } = useResizableAiPanel();
+
+  // The width the side panels take up, for holding the note's column still
+  // while one of them slides in or out.
+  const editorArea = useRef<HTMLDivElement>(null);
+  const panelSpace =
+    (aiEnabled && isAiOpen && !zen ? aiPanelWidth + SIDEBAR_GAP : 0) +
+    (isSidebarOpen && !zen ? sidebarWidth + SIDEBAR_GAP : 0);
+  useSteadyColumn(editorArea, panelSpace, !isResizing && !isResizingAiPanel);
   const { notices, dismiss: dismissNotice, hold: noticeHold } = useNotices();
   const { recent: recentFiles, record: recordRecentFile } = useRecentFiles();
 
@@ -1048,7 +1057,10 @@ function App() {
             surface reads as the deepest layer, with the sidebar and the bars
             above it. Tinted rather than filled so window vibrancy still shows
             through when transparency is on. */}
-        <div className="flex-1 min-w-0 h-full relative flex overflow-hidden rounded-t-lg bg-[var(--nuza-editor-tint)] transition-[background-color] duration-300 motion-reduce:transition-none print:block print:h-auto print:overflow-visible print:rounded-none print:bg-transparent">
+        <div
+          ref={editorArea}
+          className="flex-1 min-w-0 h-full relative flex overflow-hidden rounded-t-lg bg-[var(--nuza-editor-tint)] transition-[background-color] duration-300 motion-reduce:transition-none print:block print:h-auto print:overflow-visible print:rounded-none print:bg-transparent"
+        >
           <div className="relative flex min-w-0 flex-1 flex-col print:block">
             {/* Above the text rather than over it: the note underneath is what
               the choice is about, and covering it would be a poor way to ask. */}

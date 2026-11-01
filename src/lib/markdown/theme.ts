@@ -70,8 +70,10 @@ const editorTheme = EditorView.theme(
        the line you are typing never sits pinned to the window edge. */
     ".cm-content": {
       maxWidth: MEASURE,
-      width: "100%",
-      flexGrow: "1",
+      // Held at one width while a side panel slides, so the text is not
+      // re-wrapped on every frame of it - see `useSteadyColumn`.
+      width: "var(--nuza-steady-column, 100%)",
+      flexGrow: "var(--nuza-steady-grow, 1)",
       margin: "0 auto",
       padding: "4rem 0 45vh",
       lineHeight: LINE_HEIGHT,
