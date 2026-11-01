@@ -1,23 +1,50 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { Settings2 } from "lucide-react";
+import { Command } from "lucide-react";
 import { cn } from "cn";
 import { useExitAnimation } from "@/hooks/useExitAnimation";
 import { searchSettings, ToggleSetting } from "@/lib/settingsSearch";
 import { Switch } from "@/components/ui/switch";
+import { usePersistedState } from "@/hooks/usePersistedState";
 import MatchedText from "./MatchedText";
+
+/** Something the app can do, from the keymap: run once, then out of the way. */
+export interface PaletteCommand {
+  id: string;
+  title: string;
+  description: string;
+  /** Its keyboard shortcut, as it is shown in menus. */
+  shortcut: string;
+  run: () => void;
+}
+
+type Entry = ToggleSetting | PaletteCommand;
+
+function isCommand(entry: Entry): entry is PaletteCommand {
+  return "run" in entry;
+}
+
+/** How many commands are remembered as recently run. */
+const RECENT_COMMANDS = 8;
 
 interface SettingsPaletteProps {
   isOpen: boolean;
   onClose: () => void;
   settings: ToggleSetting[];
+  commands?: PaletteCommand[];
 }
 
 /**
- * The on/off settings, a keystroke away: the quick-open palette's floating
- * search, over the switches instead of the files. Flipping one leaves it open,
- * since the next thing wanted is as often another switch as it is the note.
+ * Everything the app can do, and the on/off settings, a keystroke away: the
+ * quick-open palette's floating search, over the commands and the switches
+ * instead of the files. A command runs and the palette goes, since what is
+ * wanted next is the note; flipping a switch leaves it open, since the next
+ * thing wanted is as often another switch. With nothing typed, the commands
+ * run most recently come first.
  */
-function SettingsPalette({ isOpen, onClose, settings }: SettingsPaletteProps) {
+const NO_COMMANDS: PaletteCommand[] = [];
+
+function SettingsPalette({ isOpen, onClose, settings, commands = NO_COMMANDS }: SettingsPaletteProps) {
+  const [recent, setRecent] = usePersistedState<string[]>("recentCommands", []);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const { isMounted, isClosing } = useExitAnimation(isOpen);
@@ -30,10 +57,38 @@ function SettingsPalette({ isOpen, onClose, settings }: SettingsPaletteProps) {
     }
   }, [isOpen]);
 
+  const entries = useMemo<Entry[]>(() => {
+    const order = (command: PaletteCommand) => {
+      const index = Array.isArray(recent) ? recent.indexOf(command.id) : -1;
+      return index < 0 ? Infinity : index;
+    };
+    const byRecency = commands
+      .map((command, index) => ({ command, index }))
+      .sort((a, b) => order(a.command) - order(b.command) || a.index - b.index)
+      .map(({ command }) => command);
+    return [...byRecency, ...settings];
+  }, [commands, settings, recent]);
+
   const matches = useMemo(
-    () => (isMounted ? searchSettings(settings, query) : []),
-    [isMounted, settings, query]
+    () => (isMounted ? searchSettings(entries, query) : []),
+    [isMounted, entries, query]
   );
+
+  /** Runs a command once the palette has handed the keyboard back to the note. */
+  function choose(entry: Entry) {
+    if (!isCommand(entry)) {
+      entry.onToggle(!entry.enabled);
+      return;
+    }
+    setRecent((list) =>
+      [entry.id, ...(Array.isArray(list) ? list : []).filter((id) => id !== entry.id)].slice(
+        0,
+        RECENT_COMMANDS
+      )
+    );
+    onClose();
+    setTimeout(entry.run, 0);
+  }
 
   useEffect(() => {
     listRef.current?.children[activeIndex]?.scrollIntoView({ block: "nearest" });
@@ -55,8 +110,7 @@ function SettingsPalette({ isOpen, onClose, settings }: SettingsPaletteProps) {
 
     if (event.key === "Enter" && matches[activeIndex]) {
       event.preventDefault();
-      const { setting } = matches[activeIndex];
-      setting.onToggle(!setting.enabled);
+      choose(matches[activeIndex].setting);
     }
   }
 
@@ -79,12 +133,12 @@ function SettingsPalette({ isOpen, onClose, settings }: SettingsPaletteProps) {
         )}
       >
         <div className="flex shrink-0 items-center gap-2 px-3 py-2 leading-5">
-          <Settings2 className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
+          <Command className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
           <input
             autoFocus
             value={query}
-            placeholder="Search settings"
-            aria-label="Quick settings"
+            placeholder="Search commands and settings"
+            aria-label="Commands and settings"
             onChange={(e) => {
               setQuery(e.target.value);
               setActiveIndex(0);
@@ -95,13 +149,13 @@ function SettingsPalette({ isOpen, onClose, settings }: SettingsPaletteProps) {
 
         {matches.length === 0 ? (
           <p className="border-t border-white/5 px-3 py-4 text-center text-xs text-zinc-500">
-            No settings match.
+            Nothing matches.
           </p>
         ) : (
           <ul
             ref={listRef}
             role="listbox"
-            aria-label="Settings"
+            aria-label="Commands and settings"
             className="max-h-[280px] min-h-0 overflow-y-auto border-t border-white/5 p-1"
           >
             {matches.map(({ setting, highlight }, index) => (
@@ -111,12 +165,12 @@ function SettingsPalette({ isOpen, onClose, settings }: SettingsPaletteProps) {
                 key={setting.id}
                 role="option"
                 aria-selected={index === activeIndex}
-                aria-checked={setting.enabled}
+                aria-checked={isCommand(setting) ? undefined : setting.enabled}
                 onMouseEnter={() => setActiveIndex(index)}
                 // Keeps the keyboard in the search box, so the arrows and
                 // Enter carry on working after a click.
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => setting.onToggle(!setting.enabled)}
+                onClick={() => choose(setting)}
                 title={setting.description}
                 className={cn(
                   "flex cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 text-[13px] leading-5 transition-colors",
@@ -129,13 +183,19 @@ function SettingsPalette({ isOpen, onClose, settings }: SettingsPaletteProps) {
                 <span className="min-w-0 flex-1 truncate text-[11px] text-zinc-500">
                   {setting.description}
                 </span>
-                <Switch
-                  size="sm"
-                  checked={setting.enabled}
-                  tabIndex={-1}
-                  aria-hidden
-                  className="pointer-events-none"
-                />
+                {isCommand(setting) ? (
+                  setting.shortcut && (
+                    <kbd className="shrink-0 font-sans text-[11px] text-zinc-500">{setting.shortcut}</kbd>
+                  )
+                ) : (
+                  <Switch
+                    size="sm"
+                    checked={setting.enabled}
+                    tabIndex={-1}
+                    aria-hidden
+                    className="pointer-events-none"
+                  />
+                )}
               </li>
             ))}
           </ul>
