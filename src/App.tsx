@@ -567,6 +567,14 @@ function App() {
                 : []),
               { label: "Move to New Window", onClick: () => void openInNewWindow(path, true) },
               {
+                label: "Reveal in Sidebar",
+                onClick: () => {
+                  setZen(false);
+                  setIsSidebarOpen(true);
+                  sidebarRef.current?.revealPath(path);
+                },
+              },
+              {
                 label: revealLabel(),
                 onClick: () =>
                   void revealItemInDir(path).catch((error) => report("Couldn't show that file", error)),
