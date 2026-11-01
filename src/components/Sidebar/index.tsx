@@ -210,6 +210,8 @@ interface SidebarProps {
   recentPaths?: readonly string[];
   /** Notes shown by their own title rather than their file name. */
   showTitles?: boolean;
+  /** The search's keyboard shortcut, as menus show it, for the hint in the field. */
+  searchShortcut?: string;
   /** Opens a folder of the vault in the terminal chosen in Settings. */
   onOpenInTerminal?: (path: string) => void;
   onDelete: (path: string) => Promise<void> | void;
@@ -255,6 +257,7 @@ function Sidebar({
   recentPaths = NO_PATHS,
   showTitles = false,
   onOpenInTerminal,
+  searchShortcut,
   onDelete,
   onMove,
   onAttachFiles,
@@ -394,15 +397,14 @@ function Sidebar({
   const showResults = isSearching && query.trim().length > 0;
 
   function openSearch() {
-    // Nothing to search until a folder is open, and the keymap can reach this
-    // even when the header's toggle is not on screen.
+    // Nothing to search until a folder is open.
     if (!hasFolder) return;
     // The search is of the files, wherever the sidebar happened to be.
     setView("files");
     setIsSearching(true);
-    // The row animates open from zero height, so it is not focusable until the
-    // browser has laid it out.
-    requestAnimationFrame(() => searchRef.current?.focus());
+    // From the keymap the panel may only now be opening, and is `inert`
+    // until it has.
+    if (document.activeElement !== searchRef.current) requestAnimationFrame(() => searchRef.current?.focus());
   }
 
   function closeSearch() {
@@ -494,12 +496,14 @@ function Sidebar({
   function onSearchKeyDown(event: React.KeyboardEvent) {
     if (event.key === "Escape") {
       event.preventDefault();
-      // Two stages: clear what you typed, then put the panel back.
+      // Two stages: clear what you typed, then go back to the note.
       if (query) {
         setQuery("");
         setActiveIndex(0);
       } else {
         closeSearch();
+        searchRef.current?.blur();
+        onReturnFocus?.();
       }
       return;
     }
@@ -975,16 +979,6 @@ function Sidebar({
         {hasFolder && view === "files" && (
           <div className="flex shrink-0 items-center gap-0.5 ml-auto">
             <button
-              onClick={() => (isSearching ? closeSearch() : openSearch())}
-              title="Search Files"
-              className={cn(
-                "cursor-pointer rounded p-1 transition-colors hover:bg-zinc-800 hover:text-white",
-                isSearching ? "text-[var(--nuza-accent)]" : "text-zinc-500"
-              )}
-            >
-              <Search className="h-3.5 w-3.5" />
-            </button>
-            <button
               onClick={() => beginCreate("file")}
               title={headerTargetName ? `New File in ${headerTargetName}` : "New File"}
               className="cursor-pointer rounded p-1 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-white"
@@ -1023,16 +1017,14 @@ function Sidebar({
         )}
       </div>
 
-      {hasFolder && <ViewSwitcher view={view} onChange={setView} />}
-
-      {/* Kept mounted and collapsed to zero height so it slides rather than
-          appears, and so the tree below it moves with it. */}
-      <div className={cn("sidebar-search", view !== "files" && "hidden")} data-open={isSearching}>
-        <div className="px-2 pt-1.5">
+      {/* Always there, in every view: searching is what the sidebar is most
+          often opened for. Typing in it brings the Files view up. */}
+      {hasFolder && (
+        <div className="px-2 pb-1.5">
           <div
             className={cn(
-              "flex items-center gap-1.5 rounded-md border bg-zinc-800/60 px-2 py-1 transition-colors",
-              isSearching ? "border-zinc-700" : "border-transparent"
+              "group/search flex items-center gap-1.5 rounded-md border bg-zinc-800/50 px-2 py-1 transition-colors",
+              isSearching ? "border-zinc-600 bg-zinc-800/70" : "border-zinc-800 hover:border-zinc-700"
             )}
           >
             <Search className="h-3 w-3 shrink-0 text-zinc-500" />
@@ -1041,6 +1033,10 @@ function Sidebar({
               value={query}
               placeholder={patternSearch ? "Find text by pattern" : "Find a file or text"}
               aria-label="Search files"
+              onFocus={openSearch}
+              onBlur={() => {
+                if (!query) setIsSearching(false);
+              }}
               onChange={(e) => {
                 setQuery(e.target.value);
                 setActiveIndex(0);
@@ -1064,6 +1060,11 @@ function Sidebar({
             >
               <Regex className="h-3 w-3" />
             </button>
+            {searchShortcut && !query && (
+              <kbd className="shrink-0 font-sans text-[10px] text-zinc-600 transition-opacity group-focus-within/search:opacity-0">
+                {searchShortcut}
+              </kbd>
+            )}
             {query && (
               <button
                 onClick={() => {
@@ -1079,7 +1080,9 @@ function Sidebar({
             )}
           </div>
         </div>
-      </div>
+      )}
+
+      {hasFolder && <ViewSwitcher view={view} onChange={setView} />}
 
       <div
         ref={treeRef}

@@ -40,9 +40,11 @@ describe("sidebar folder actions", () => {
 
   test("keeps the toolbar in an opened empty folder", () => {
     const html = renderSidebar("/vault");
-    for (const title of ["Search Files", "New File", "New Folder", "Sort Order", "Collapse Folders"]) {
+    for (const title of ["New File", "New Folder", "Sort Order", "Collapse Folders"]) {
       expect(html).toContain(`title="${title}"`);
     }
+    // The search is a field that is always there, rather than a button.
+    expect(html).toContain('aria-label="Search files"');
     expect(html).not.toContain("Open Folder");
   });
 
