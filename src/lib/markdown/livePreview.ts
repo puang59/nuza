@@ -84,6 +84,21 @@ function isBeingEdited(state: EditorState, from: number, to: number) {
   return state.selection.ranges.some((range) => range.from <= last.to && range.to >= first.from);
 }
 
+/**
+ * Whether the selection is in, or right up against, `link`: the test for when
+ * a link's `[`, `]` and `(url)` are shown, rather than the whole line's.
+ *
+ * A link's destination is often longer than the words it labels, and opened
+ * along with the rest of its line it made the paragraph re-wrap round every
+ * URL in it - doubling in height, pushing everything under it down - the
+ * moment the caret came anywhere near. Its markup now opens when the caret
+ * reaches the link itself, including from either side of it, which is where
+ * arrowing into it lands.
+ */
+function isInLink(state: EditorState, link: SyntaxNode) {
+  return state.selection.ranges.some((range) => range.from <= link.to && range.to >= link.from);
+}
+
 /** Runs `visit` for every line a node covers, flagging the first and last. */
 function eachLine(
   doc: Text,
@@ -434,7 +449,9 @@ function decorateNode(node: SyntaxNodeRef, build: Build): boolean | undefined {
     name === "LinkMark" ||
     name === "LinkTitle"
   ) {
-    out.push((isBeingEdited(state, from, to) ? DIMMED : HIDDEN).range(from, to));
+    const link = node.node.parent;
+    const editing = link?.name === "Link" ? isInLink(state, link) : isBeingEdited(state, from, to);
+    out.push((editing ? DIMMED : HIDDEN).range(from, to));
     return;
   }
 
@@ -455,7 +472,8 @@ function decorateNode(node: SyntaxNodeRef, build: Build): boolean | undefined {
     // redundant once the link renders.
     const parent = node.node.parent?.name;
     if (parent === "Link" || parent === "Image") {
-      out.push((isBeingEdited(state, from, to) ? DIMMED : HIDDEN).range(from, to));
+      const editing = parent === "Link" ? isInLink(state, node.node.parent!) : isBeingEdited(state, from, to);
+      out.push((editing ? DIMMED : HIDDEN).range(from, to));
     } else if (parent !== "Autolink") {
       // Typed straight into the text - `www.site.top`, `https://site.top`, an
       // email address - which is a link all the same, and mod-click opens it.

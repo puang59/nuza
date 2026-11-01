@@ -2,6 +2,7 @@ import { syntaxTree } from "@codemirror/language";
 import { ChangeSpec, EditorSelection, EditorState, Line, Text } from "@codemirror/state";
 import { Command } from "@codemirror/view";
 import type { SyntaxNode } from "@lezer/common";
+import { frontmatterRange } from "./frontmatter";
 
 /** The first child of `node` with the given name, or null. */
 export function firstChild(node: SyntaxNode, name: string) {
@@ -295,6 +296,48 @@ const endBlock: Command = (view) => {
 };
 
 /**
+ * Enter with the caret at the start of a point's text, where that point sits
+ * straight under a paragraph: an empty point opens above it, as anywhere
+ * else, but after a blank line.
+ *
+ * Left to the markdown command, the empty point above was a bare `-` on the
+ * line under the paragraph, which markdown reads as a heading's underline - so
+ * the paragraph turned into a heading. A list after a blank line is the same
+ * list, and its empty first point is only that.
+ */
+const openPointUnderParagraph: Command = (view) => {
+  const { state } = view;
+  const { doc } = state;
+  const { main } = state.selection;
+  if (state.selection.ranges.length > 1 || !main.empty) return false;
+
+  const line = doc.lineAt(main.head);
+  if (line.number === 1) return false;
+  const item = listItemAt(state, main.head);
+  if (!item || doc.lineAt(item.from).number !== line.number) return false;
+  if (contentStart(doc, item, line) !== main.head || main.head === line.to) return false;
+
+  const above = doc.line(line.number - 1);
+  let inParagraph = false;
+  for (let node: SyntaxNode | null = syntaxTree(state).resolve(above.to, -1); node; node = node.parent) {
+    if (node.name === "Paragraph" && node.parent?.name === "Document") inParagraph = true;
+  }
+  if (!inParagraph) return false;
+
+  const marker = doc.sliceString(line.from, main.head).trimEnd();
+  const insert = state.lineBreak + marker + state.lineBreak;
+  view.dispatch(
+    state.update({
+      changes: { from: line.from, insert },
+      selection: EditorSelection.cursor(main.head + insert.length),
+      scrollIntoView: true,
+      userEvent: "input",
+    })
+  );
+  return true;
+};
+
+/**
  * Enter, in a document that is mostly points: a new point where the markdown
  * command would carry the old one on, a way out of a carried-on line left
  * empty, a clean end to a list or a quote, and the markdown command everywhere
@@ -302,5 +345,46 @@ const endBlock: Command = (view) => {
  * a nested list.
  */
 export function insertNewLine(continueMarkup: Command): Command {
-  return (view) => startListItem(view) || leaveListItem(view) || endBlock(view) || continueMarkup(view);
+  return (view) =>
+    startListItem(view) ||
+    leaveListItem(view) ||
+    endBlock(view) ||
+    openPointUnderParagraph(view) ||
+    continueMarkup(view);
 }
+
+/** Blocks with a Tab of their own: indenting a point, code, a table, HTML. */
+const TAB_OWNERS = new Set(["ListItem", "FencedCode", "CodeBlock", "Table", "HTMLBlock"]);
+
+/**
+ * Tab in a paragraph. Left to the stock command it indented the whole line,
+ * wherever the caret was, and a second press made four spaces - which is an
+ * indented code block, so the paragraph turned into code.
+ *
+ * In the middle of a line it types a tab, as Obsidian does. At the start of a
+ * line, where any indent at all is on its way to making code, it does nothing.
+ * Points, code, tables, HTML and the frontmatter keep the indenting Tab they
+ * had; a selection does too, since indenting a run of lines is asked for.
+ */
+export const tabInProse: Command = (view) => {
+  const { state } = view;
+  const { ranges } = state.selection;
+  if (ranges.some((range) => !range.empty)) return false;
+
+  const front = frontmatterRange(state.doc);
+  for (const range of ranges) {
+    if (front && range.head <= front.to) return false;
+    for (let node: SyntaxNode | null = syntaxTree(state).resolve(range.head, -1); node; node = node.parent) {
+      if (TAB_OWNERS.has(node.name)) return false;
+    }
+  }
+
+  const change = state.changeByRange((range) => {
+    const line = state.doc.lineAt(range.head);
+    // Nothing but indentation, or a quote's `>`, before the caret.
+    if (/^[\s>]*$/.test(line.text.slice(0, range.head - line.from))) return { range };
+    return { changes: { from: range.head, insert: "\t" }, range: EditorSelection.cursor(range.head + 1) };
+  });
+  view.dispatch(state.update(change, { scrollIntoView: true, userEvent: "input" }));
+  return true;
+};

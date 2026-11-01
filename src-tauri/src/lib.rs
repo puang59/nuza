@@ -126,6 +126,11 @@ pub fn run() {
                     .queue(multiwindow::MAIN_WINDOW, target);
             }
 
+            // The main window, built here rather than from the config file so
+            // its webview can be given a configuration first - see
+            // `window::full_rate_configuration`.
+            multiwindow::build_main_window(app.handle())?;
+
             // A window without a backdrop is a window that paints itself
             // opaque - the frontend already handles that, and it is not worth
             // refusing to start over.
