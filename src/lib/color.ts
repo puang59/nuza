@@ -39,6 +39,10 @@ export function hsvToHex({ h, s, v }: Hsv): string {
     return val - val * sat * Math.max(0, Math.min(k, 4 - k, 1));
   };
   return `#${[channel(5), channel(3), channel(1)]
-    .map((c) => Math.round(c * 255).toString(16).padStart(2, "0"))
+    .map((c) =>
+      Math.round(c * 255)
+        .toString(16)
+        .padStart(2, "0")
+    )
     .join("")}`;
 }
