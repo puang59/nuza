@@ -2,12 +2,31 @@ import { Switch } from "@/components/ui/switch";
 import { SPELL_LANGUAGES, SpellLanguage } from "@/lib/spellDictionaries";
 import CommandLineSetting from "./CommandLineSetting";
 import SettingRow from "./SettingRow";
+import Segmented from "./Segmented";
+import { TAB_SIZES, type TabSize } from "@/lib/tabSize";
+import ColorField from "./ColorField";
+import {
+  VIM_BAR_PRESETS,
+  VIM_BAR_SLOTS,
+  VimBarStyle,
+  resolveVimBarColor,
+  vimBarBadge,
+  vimBarColors,
+} from "@/lib/vimBar";
+
+const TAB_SIZE_CHOICES = TAB_SIZES.map((size) => ({ id: String(size), label: `${size} Spaces` }));
 
 interface GeneralSettingsProps {
   vimEnabled: boolean;
   setVimEnabled: (enabled: boolean) => void;
+  vimBar: VimBarStyle;
+  setVimBar: (style: VimBarStyle) => void;
+  /** The accent and the ink as they are now, for the colours that follow them. */
+  windowColors: { accent: string; ink: string };
   showLineNumbers: boolean;
   setShowLineNumbers: (enabled: boolean) => void;
+  tabSize: TabSize;
+  setTabSize: (size: TabSize) => void;
   typewriterScrolling: boolean;
   setTypewriterScrolling: (enabled: boolean) => void;
   spellCheck: boolean;
@@ -24,10 +43,77 @@ interface GeneralSettingsProps {
   setTerminalApp: (app: string) => void;
 }
 
+/**
+ * The status bar's colours, with Vim on: a preset, with a preview of it, and then each colour
+ * on its own. Changing one makes the set Custom, starting from what was shown.
+ */
+function VimBarSettings({
+  style,
+  onChange,
+  windowColors,
+}: {
+  style: VimBarStyle;
+  onChange: (style: VimBarStyle) => void;
+  windowColors: { accent: string; ink: string };
+}) {
+  const colors = vimBarColors(style);
+  const preset =
+    style.preset === "custom" || VIM_BAR_PRESETS.some((p) => p.id === style.preset)
+      ? style.preset
+      : "classic";
+
+  return (
+    <>
+      <SettingRow
+        title="Status Bar Colours"
+        description="The mode and clock badges in the status bar, with Vim on"
+      >
+        <div className="flex w-40 flex-col items-stretch gap-2">
+          <select
+            aria-label="Status bar colours"
+            className="cursor-pointer rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-white outline-none focus:border-[var(--nuza-accent)]"
+            value={preset}
+            onChange={(event) => onChange({ ...style, preset: event.target.value })}
+          >
+            {VIM_BAR_PRESETS.map((choice) => (
+              <option key={choice.id} value={choice.id}>
+                {choice.label}
+              </option>
+            ))}
+            <option value="custom">Custom</option>
+          </select>
+          {/* The bar's own badges, in miniature. */}
+          <div aria-hidden className="flex overflow-hidden rounded font-mono text-[9px] font-bold uppercase">
+            {VIM_BAR_SLOTS.map((slot) => (
+              <span key={slot.id} className="flex-1 py-0.5 text-center" style={vimBarBadge(colors[slot.id])}>
+                {slot.id === "clock" ? "12:00" : slot.id.slice(0, 3)}
+              </span>
+            ))}
+          </div>
+        </div>
+      </SettingRow>
+      {VIM_BAR_SLOTS.map((slot) => (
+        <SettingRow key={slot.id} title={slot.label} description={slot.description}>
+          <ColorField
+            label={`${slot.label} colour`}
+            value={resolveVimBarColor(colors[slot.id], windowColors)}
+            onChange={(color) => onChange({ preset: "custom", custom: { ...colors, [slot.id]: color } })}
+          />
+        </SettingRow>
+      ))}
+    </>
+  );
+}
+
 export default function GeneralSettings({
   vimEnabled,
   setVimEnabled,
+  vimBar,
+  setVimBar,
+  windowColors,
   showLineNumbers,
+  tabSize,
+  setTabSize,
   setShowLineNumbers,
   typewriterScrolling,
   setTypewriterScrolling,
@@ -49,8 +135,17 @@ export default function GeneralSettings({
       <SettingRow title="Vim Mode" description="Enable Vim keybindings for the editor">
         <Switch checked={vimEnabled} onCheckedChange={setVimEnabled} />
       </SettingRow>
+      {vimEnabled && <VimBarSettings style={vimBar} onChange={setVimBar} windowColors={windowColors} />}
       <SettingRow title="Line Numbers" description="Show line numbers in the editor gutter">
         <Switch checked={showLineNumbers} onCheckedChange={setShowLineNumbers} />
+      </SettingRow>
+      <SettingRow title="Tab Size" description="How many spaces Tab indents by, in lists, code and HTML">
+        <Segmented
+          label="Tab size"
+          choices={TAB_SIZE_CHOICES}
+          value={String(tabSize)}
+          onChange={(size) => setTabSize(Number(size) as TabSize)}
+        />
       </SettingRow>
       <SettingRow
         title="Typewriter Scrolling"

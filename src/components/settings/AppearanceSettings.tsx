@@ -21,6 +21,13 @@ import ColorField from "./ColorField";
 import FontPicker from "./FontPicker";
 import { Switch } from "@/components/ui/switch";
 import SettingRow from "./SettingRow";
+import type { PanelSide } from "@/hooks/useResizableSidebar";
+import Segmented from "./Segmented";
+
+const SIDEBAR_SIDES: { id: PanelSide; label: string }[] = [
+  { id: "left", label: "Left" },
+  { id: "right", label: "Right" },
+];
 
 interface AppearanceSettingsProps {
   appearance: Appearance;
@@ -29,6 +36,8 @@ interface AppearanceSettingsProps {
   resetAppearance: () => void;
   compactMode: boolean;
   setCompactMode: (enabled: boolean) => void;
+  sidebarSide: PanelSide;
+  setSidebarSide: (side: PanelSide) => void;
   editorFont: string;
   setEditorFont: (font: string) => void;
   uiFont: string;
@@ -50,6 +59,8 @@ export default function AppearanceSettings({
   resetAppearance,
   compactMode,
   setCompactMode,
+  sidebarSide,
+  setSidebarSide,
   editorFont,
   setEditorFont,
   uiFont,
@@ -94,26 +105,12 @@ export default function AppearanceSettings({
   return (
     <div className="divide-y divide-zinc-800">
       <SettingRow title="Theme" description="Light or dark, or whichever your system is using">
-        <div
-          role="radiogroup"
-          aria-label="Theme"
-          className="flex rounded-md border border-zinc-700 bg-zinc-800 p-0.5"
-        >
-          {THEME_CHOICES.map((choice) => (
-            <button
-              key={choice.id}
-              type="button"
-              role="radio"
-              aria-checked={appearance.theme === choice.id}
-              onClick={() => setAppearance({ theme: choice.id })}
-              className={`cursor-pointer rounded px-2.5 py-0.5 text-xs transition-colors ${
-                appearance.theme === choice.id ? "bg-zinc-700 text-white" : "text-zinc-400 hover:text-white"
-              }`}
-            >
-              {choice.label}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          label="Theme"
+          choices={THEME_CHOICES}
+          value={appearance.theme}
+          onChange={(theme) => setAppearance({ theme })}
+        />
       </SettingRow>
 
       <SettingRow
@@ -189,6 +186,18 @@ export default function AppearanceSettings({
 
       <SettingRow title="Compact Mode" description="Tighter rows in the sidebar, tabs and status bars">
         <Switch checked={compactMode} onCheckedChange={setCompactMode} />
+      </SettingRow>
+
+      <SettingRow
+        title="Sidebar Side"
+        description="Which side of the window the file tree is on - the AI panel takes the other"
+      >
+        <Segmented
+          label="Sidebar side"
+          choices={SIDEBAR_SIDES}
+          value={sidebarSide}
+          onChange={setSidebarSide}
+        />
       </SettingRow>
 
       <SettingRow

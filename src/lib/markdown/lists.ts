@@ -1,4 +1,4 @@
-import { syntaxTree } from "@codemirror/language";
+import { getIndentUnit, indentString, syntaxTree } from "@codemirror/language";
 import { ChangeSpec, EditorSelection, EditorState, Line, Text } from "@codemirror/state";
 import { Command } from "@codemirror/view";
 import type { SyntaxNode } from "@lezer/common";
@@ -362,7 +362,10 @@ const TAB_OWNERS = new Set(["ListItem", "FencedCode", "CodeBlock", "Table", "HTM
  * indented code block, so the paragraph turned into code.
  *
  * In the middle of a line it types a tab, as Obsidian does. At the start of a
- * line, where any indent at all is on its way to making code, it does nothing.
+ * line it indents by the Tab Size from Settings, at the caret rather than the
+ * whole line, so a quote's `>` stays where it is. Indented far enough that is
+ * a code block, as it would be in any other markdown editor - pressing Tab
+ * there is asking for indentation, and doing nothing read as Tab being broken.
  * Points, code, tables, HTML and the frontmatter keep the indenting Tab they
  * had; a selection does too, since indenting a run of lines is asked for.
  */
@@ -382,8 +385,13 @@ export const tabInProse: Command = (view) => {
   const change = state.changeByRange((range) => {
     const line = state.doc.lineAt(range.head);
     // Nothing but indentation, or a quote's `>`, before the caret.
-    if (/^[\s>]*$/.test(line.text.slice(0, range.head - line.from))) return { range };
-    return { changes: { from: range.head, insert: "\t" }, range: EditorSelection.cursor(range.head + 1) };
+    const insert = /^[\s>]*$/.test(line.text.slice(0, range.head - line.from))
+      ? indentString(state, getIndentUnit(state))
+      : "\t";
+    return {
+      changes: { from: range.head, insert },
+      range: EditorSelection.cursor(range.head + insert.length),
+    };
   });
   view.dispatch(state.update(change, { scrollIntoView: true, userEvent: "input" }));
   return true;
