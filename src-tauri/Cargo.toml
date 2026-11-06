@@ -1,6 +1,6 @@
 [package]
 name = "nuza"
-version = "2.1.0"
+version = "2.2.0"
 description = "A fast, privacy-first, local-first markdown notes app"
 authors = ["puang59"]
 edition = "2021"
