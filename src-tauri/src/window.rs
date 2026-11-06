@@ -76,6 +76,39 @@ pub(crate) fn apply_transparency(
     }
 }
 
+/// Lets a trackpad pinch reach the page.
+///
+/// wry switches WebView2's pinch zoom off along with the rest of its zoom
+/// controls, and with it off WebView2 drops the gesture before the page can
+/// see it as a wheel event with Ctrl held - so the editor has nothing to zoom
+/// its text to. Only the pinch is switched back on: Ctrl+= and the like stay
+/// the app's own, and the page cancels the zoom a pinch would otherwise cause.
+/// Only WebView2 has the setting; elsewhere there is nothing to do.
+pub(crate) fn pass_pinch_to_page(window: &tauri::WebviewWindow) {
+    #[cfg(target_os = "windows")]
+    {
+        use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Settings5;
+        use windows::core::Interface;
+
+        let result = window.with_webview(|webview| unsafe {
+            let settings = webview
+                .controller()
+                .CoreWebView2()
+                .and_then(|core| core.Settings())
+                .and_then(|settings| settings.cast::<ICoreWebView2Settings5>());
+            if let Ok(settings) = settings {
+                let _ = settings.SetIsPinchZoomEnabled(true);
+            }
+        });
+        if let Err(error) = result {
+            log::warn!("pinch zoom left off: {}", error);
+        }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    let _ = window;
+}
+
 /// Tauri command wrapper around [`apply_transparency`] for toggling the
 /// effect at runtime from the frontend's settings panel.
 ///
