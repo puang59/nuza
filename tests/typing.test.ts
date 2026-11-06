@@ -7,6 +7,7 @@ import { EditorView } from "@codemirror/view";
 import { GFM } from "@lezer/markdown";
 import { htmlKeepsIndentation } from "../src/lib/markdown/htmlIndent";
 import { insertNewLine, tabInProse } from "../src/lib/markdown/lists";
+import { tabSizeExtension } from "../src/lib/tabSize";
 
 const enter = insertNewLine(insertNewlineContinueMarkupCommand({ nonTightLists: false }));
 
@@ -20,9 +21,9 @@ function pressEnter(marked: string, extensions: Extension = []) {
 }
 
 /** Presses Tab, reporting whether the prose command took it, as `[taken] note`. */
-function pressTab(marked: string) {
+function pressTab(marked: string, extensions: Extension = []) {
   let taken = false;
-  const after = press((view) => (taken = tabInProse(view)), marked);
+  const after = press((view) => (taken = tabInProse(view)), marked, extensions);
   return `${taken ? "taken" : "passed on"} ${after}`;
 }
 
@@ -114,9 +115,14 @@ describe("tab in a paragraph", () => {
     expect(pressTab("plain |text")).toBe("taken plain \t|text");
   });
 
-  test("does nothing at the start of a line, where an indent would make code", () => {
-    expect(pressTab("|plain text")).toBe("taken |plain text");
-    expect(pressTab("> |quoted")).toBe("taken > |quoted");
+  test("indents at the start of a line, by the indent unit", () => {
+    expect(pressTab("|plain text")).toBe("taken   |plain text");
+    expect(pressTab("|")).toBe("taken   |");
+    expect(pressTab("> |quoted")).toBe("taken >   |quoted");
+  });
+
+  test("follows the Tab Size setting", () => {
+    expect(pressTab("|plain text", tabSizeExtension(4))).toBe("taken     |plain text");
   });
 
   test("leaves lists and code to the indenting tab", () => {

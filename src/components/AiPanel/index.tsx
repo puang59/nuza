@@ -11,6 +11,7 @@ import {
 import { History, SquarePen, X } from "lucide-react";
 import { cn } from "cn";
 import { useAgent } from "@/hooks/useAgent";
+import type { PanelSide } from "@/hooks/useResizableSidebar";
 import { useAiChat, type ChatTurn, type Selected } from "@/hooks/useAiChat";
 import { buildContext, fileName, selectionLines, type AiContext } from "@/lib/ai/context";
 import { agentKey, chooseModel, modelToUse, type ModelChoices } from "@/lib/ai/modelChoice";
@@ -56,6 +57,8 @@ export interface AiPanelHandle {
 interface AiPanelProps {
   isOpen: boolean;
   width: number;
+  /** The edge of the window the panel is docked against; its handle is on the other, against the note. */
+  side: PanelSide;
   isResizing: boolean;
   onResizeStart: (event: React.PointerEvent) => void;
   onResizeReset: () => void;
@@ -136,7 +139,7 @@ function prepare(note: NoteSnapshot | null, wholeNote: boolean): Prepared {
 }
 
 /**
- * The AI panel, docked on the left: what the note's context is, the
+ * The AI panel, docked opposite the sidebar: what the note's context is, the
  * conversation so far, and a place to ask. Only ever opened by the person,
  * with mod+L - nothing else in the app points at it.
  */
@@ -145,6 +148,7 @@ const AiPanel = forwardRef<AiPanelHandle, AiPanelProps>(function AiPanel(
     isOpen,
     width,
     isResizing,
+    side,
     onResizeStart,
     onResizeReset,
     readNote,
@@ -807,7 +811,7 @@ const AiPanel = forwardRef<AiPanelHandle, AiPanelProps>(function AiPanel(
           </div>
         )}
 
-        {/* The handle is on the right, against the note; dragging right widens. */}
+        {/* The handle is against the note; dragging away from the window's edge widens. */}
         <div
           onPointerDown={onResizeStart}
           onDoubleClick={onResizeReset}
@@ -816,7 +820,8 @@ const AiPanel = forwardRef<AiPanelHandle, AiPanelProps>(function AiPanel(
           aria-label="Resize the AI panel"
           title="Drag to resize, double-click to reset"
           className={cn(
-            "absolute -right-1 top-0 z-10 h-full w-2 cursor-col-resize after:absolute after:inset-y-0 after:right-1 after:w-px after:transition-colors",
+            "absolute top-0 z-10 h-full w-2 cursor-col-resize after:absolute after:inset-y-0 after:w-px after:transition-colors",
+            side === "left" ? "-right-1 after:right-1" : "-left-1 after:left-1",
             isResizing ? "after:bg-[var(--nuza-accent)]" : "after:bg-transparent hover:after:bg-zinc-500"
           )}
         />

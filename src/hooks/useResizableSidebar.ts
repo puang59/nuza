@@ -48,11 +48,23 @@ export function clampAiPanelWidth(width: number) {
   return clampTo(AI_PANEL, width);
 }
 
+/** Which edge of the window a panel is docked against. */
+export type PanelSide = "left" | "right";
+
+/** The edge across the note from `side`, where the other panel goes. */
+export function oppositeSide(side: PanelSide): PanelSide {
+  return side === "left" ? "right" : "left";
+}
+
+export function isPanelSide(value: unknown): value is PanelSide {
+  return value === "left" || value === "right";
+}
+
 /**
  * How far a drag has widened a panel. A panel docked on the right grows as
  * the pointer moves left, one docked on the left as it moves right.
  */
-export function widthAfterDrag(side: "left" | "right", startWidth: number, startX: number, x: number) {
+export function widthAfterDrag(side: PanelSide, startWidth: number, startX: number, x: number) {
   return startWidth + (side === "right" ? startX - x : x - startX);
 }
 
@@ -62,7 +74,7 @@ export function widthAfterDrag(side: "left" | "right", startWidth: number, start
  * absolute position so the handle stays glued to the cursor regardless of
  * surrounding padding.
  */
-function useResizablePanel(side: "left" | "right", storageKey: string, limits: PanelLimits) {
+function useResizablePanel(side: PanelSide, storageKey: string, limits: PanelLimits) {
   const [storedWidth, setWidth] = usePersistedState(storageKey, limits.initial, {
     // Every pointermove is a new width; storage only needs the one it stops on.
     debounceMs: PERSIST_DELAY_MS,
@@ -125,12 +137,12 @@ function useResizablePanel(side: "left" | "right", storageKey: string, limits: P
   return { width, isResizing, startResize, resetWidth };
 }
 
-/** The file sidebar, docked on the right. */
-export function useResizableSidebar() {
-  return useResizablePanel("right", "sidebarWidth", SIDEBAR);
+/** The file sidebar, docked on `side` - the right unless Settings says otherwise. */
+export function useResizableSidebar(side: PanelSide) {
+  return useResizablePanel(side, "sidebarWidth", SIDEBAR);
 }
 
-/** The AI panel, docked on the left, opposite the sidebar. */
-export function useResizableAiPanel() {
-  return useResizablePanel("left", "aiPanelWidth", AI_PANEL);
+/** The AI panel, docked on `side`: opposite the sidebar. */
+export function useResizableAiPanel(side: PanelSide) {
+  return useResizablePanel(side, "aiPanelWidth", AI_PANEL);
 }

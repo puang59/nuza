@@ -3,6 +3,7 @@ import { StatsSubscription, useDocumentStats } from "@/hooks/useDocumentStats";
 import NoteAge from "./NoteAge";
 import ContextMenu from "./Sidebar/ContextMenu";
 import { StatusItem, useStatusItems } from "@/hooks/useStatusItems";
+import { VimBarColors, VimBarSlot, vimBarBadge } from "@/lib/vimBar";
 
 /**
  * The wall clock, ticking on its own. It used to come in as a prop that was
@@ -32,22 +33,19 @@ interface StatusBarProps {
   notePath: string | null;
   /** Whether the note has nothing unsaved in it. */
   saved: boolean;
+  /** The badges' colours, from Settings. */
+  colors: VimBarColors;
 }
 
-/** Background/text color for each Vim mode indicator, keyed by CodeMirror's mode name. */
-const VIM_MODE_STYLES: Record<string, string> = {
-  insert: "bg-[#96FF96] text-black",
-  normal: "bg-[#9696FF] text-black",
-  replace: "bg-[#FF9696] text-black",
-  visual: "bg-[#FFFF96] text-black",
-};
+/** CodeMirror's mode names that have a badge of their own. */
+const MODES = new Set<string>(["normal", "insert", "visual", "replace"]);
 
 /**
  * The bottom bar as Vim users get it: mode on the left, then where the caret is
  * and how much has been written, with the file name and the time on the right.
  */
-function StatusBar({ mode, currentFile, subscribeToStats, notePath, saved }: StatusBarProps) {
-  const modeStyle = VIM_MODE_STYLES[mode];
+function StatusBar({ mode, currentFile, subscribeToStats, notePath, saved, colors }: StatusBarProps) {
+  const modeStyle = MODES.has(mode) ? vimBarBadge(colors[mode as VimBarSlot]) : undefined;
   const fileName = currentFile.split(/[/\\]/).pop() || "untitled.md";
   const timestamp = useClock();
   const { words, line, column } = useDocumentStats(subscribeToStats);
@@ -66,7 +64,7 @@ function StatusBar({ mode, currentFile, subscribeToStats, notePath, saved }: Sta
       style={{ background: "var(--nuza-status-bg)" }}
     >
       <div className="flex h-full shrink-0 items-center">
-        <span className={`text-xs uppercase px-4 h-full flex shrink-0 items-center w-fit ${modeStyle ?? ""}`}>
+        <span className="text-xs uppercase px-4 h-full flex shrink-0 items-center w-fit" style={modeStyle}>
           {modeStyle ? `--${mode}--` : ""}
         </span>
         <span className="font-light text-xs text-gray-500 flex items-center gap-3 px-4">
@@ -89,7 +87,10 @@ function StatusBar({ mode, currentFile, subscribeToStats, notePath, saved }: Sta
       <span className="font-light text-xs text-gray-400 flex h-full min-w-0 flex-1 items-center justify-end gap-2">
         {shows("fileName") && <span className="min-w-0 truncate @max-[520px]:hidden">{fileName}</span>}
         {shows("clock") && (
-          <span className="text-xs font-medium uppercase px-4 h-full flex shrink-0 items-center bg-[var(--nuza-accent)] text-black w-fit ml-2">
+          <span
+            className="text-xs font-medium uppercase px-4 h-full flex shrink-0 items-center w-fit ml-2"
+            style={vimBarBadge(colors.clock)}
+          >
             {timestamp}
           </span>
         )}

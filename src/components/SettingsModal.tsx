@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
+import type { PanelSide } from "@/hooks/useResizableSidebar";
+import type { TabSize } from "@/lib/tabSize";
 import { X, SlidersHorizontal, Palette, Keyboard, Info, Sparkles, LucideIcon } from "lucide-react";
 import { cn } from "cn";
 import { useExitAnimation } from "@/hooks/useExitAnimation";
 import { KeymapAction } from "@/lib/keymaps";
 import { UpdateStatus } from "@/hooks/useAppUpdater";
 import GeneralSettings from "./settings/GeneralSettings";
-import { Appearance, Theme } from "@/lib/appearance";
+import { Appearance, Theme, paletteFor } from "@/lib/appearance";
+import type { VimBarStyle } from "@/lib/vimBar";
 import AppearanceSettings from "./settings/AppearanceSettings";
 import KeymapSettings from "./settings/KeymapSettings";
 import InfoSettings from "./settings/InfoSettings";
@@ -31,8 +34,12 @@ interface SettingsModalProps {
   onClose: () => void;
   vimEnabled: boolean;
   setVimEnabled: (enabled: boolean) => void;
+  vimBar: VimBarStyle;
+  setVimBar: (style: VimBarStyle) => void;
   showLineNumbers: boolean;
   setShowLineNumbers: (enabled: boolean) => void;
+  tabSize: TabSize;
+  setTabSize: (size: TabSize) => void;
   typewriterScrolling: boolean;
   setTypewriterScrolling: (enabled: boolean) => void;
   spellCheck: boolean;
@@ -54,6 +61,8 @@ interface SettingsModalProps {
   resetAppearance: () => void;
   compactMode: boolean;
   setCompactMode: (enabled: boolean) => void;
+  sidebarSide: PanelSide;
+  setSidebarSide: (side: PanelSide) => void;
   autoUpdateEnabled: boolean;
   setAutoUpdateEnabled: (enabled: boolean) => void;
   editorFont: string;
@@ -96,7 +105,11 @@ export default function SettingsModal({
   onClose,
   vimEnabled,
   setVimEnabled,
+  vimBar,
+  setVimBar,
   showLineNumbers,
+  tabSize,
+  setTabSize,
   setShowLineNumbers,
   typewriterScrolling,
   setTypewriterScrolling,
@@ -118,6 +131,8 @@ export default function SettingsModal({
   resetAppearance,
   compactMode,
   setCompactMode,
+  sidebarSide,
+  setSidebarSide,
   autoUpdateEnabled,
   setAutoUpdateEnabled,
   editorFont,
@@ -224,7 +239,15 @@ export default function SettingsModal({
               <GeneralSettings
                 vimEnabled={vimEnabled}
                 setVimEnabled={setVimEnabled}
+                vimBar={vimBar}
+                setVimBar={setVimBar}
+                windowColors={{
+                  accent: appearance.accent,
+                  ink: paletteFor(appearance, windowTheme).foreground,
+                }}
                 showLineNumbers={showLineNumbers}
+                tabSize={tabSize}
+                setTabSize={setTabSize}
                 setShowLineNumbers={setShowLineNumbers}
                 typewriterScrolling={typewriterScrolling}
                 setTypewriterScrolling={setTypewriterScrolling}
@@ -251,6 +274,8 @@ export default function SettingsModal({
                 resetAppearance={resetAppearance}
                 compactMode={compactMode}
                 setCompactMode={setCompactMode}
+                sidebarSide={sidebarSide}
+                setSidebarSide={setSidebarSide}
                 editorFont={editorFont}
                 setEditorFont={setEditorFont}
                 uiFont={uiFont}

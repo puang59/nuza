@@ -59,6 +59,7 @@ import { useBacklinks } from "@/hooks/useBacklinks";
 import { EMPTY_OUTLINE, Outline as OutlineData } from "@/lib/markdown/headings";
 import Outline from "./Outline";
 import ViewSwitcher, { SidebarView, readView } from "./ViewSwitcher";
+import type { PanelSide } from "@/hooks/useResizableSidebar";
 import { useTags } from "@/hooks/useTags";
 import { useVaultScan } from "@/hooks/useVaultScan";
 import { Vault } from "@/lib/vaults";
@@ -224,6 +225,8 @@ interface SidebarProps {
   onResizeStart: (event: React.PointerEvent) => void;
   onResizeReset: () => void;
   isResizing: boolean;
+  /** The edge of the window the sidebar is docked against; its handle is on the other, against the note. */
+  side?: PanelSide;
   /** The open note's headings, and which section the editor is showing. */
   outline?: OutlineData;
   /** Goes to the heading whose line starts at `from` in the open note. */
@@ -268,6 +271,7 @@ function Sidebar({
   onResizeStart,
   onResizeReset,
   isResizing,
+  side = "right",
   outline = EMPTY_OUTLINE,
   onJumpToHeading,
   vimEnabled = false,
@@ -960,9 +964,9 @@ function Sidebar({
         aria-orientation="vertical"
         aria-label="Resize sidebar"
         title="Drag to resize, double-click to reset"
-        className={`absolute -left-1 top-0 z-10 h-full w-2 cursor-col-resize after:absolute after:inset-y-0 after:left-1 after:w-px after:transition-colors ${
-          isResizing ? "after:bg-[var(--nuza-accent)]" : "after:bg-transparent hover:after:bg-zinc-500"
-        }`}
+        className={`absolute top-0 z-10 h-full w-2 cursor-col-resize after:absolute after:inset-y-0 after:w-px after:transition-colors ${
+          side === "right" ? "-left-1 after:left-1" : "-right-1 after:right-1"
+        } ${isResizing ? "after:bg-[var(--nuza-accent)]" : "after:bg-transparent hover:after:bg-zinc-500"}`}
       />
 
       {/* As tall with the tree's buttons as without them, so the views below

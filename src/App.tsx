@@ -40,7 +40,15 @@ import { useRecentFiles } from "./hooks/useRecentFiles";
 import { PinStore, forgetPins, movePins, readPins, togglePin } from "./lib/pins";
 import { useOutline } from "./hooks/useOutline";
 import { hasEmbeds, refreshEmbeds, setVaultFiles } from "./lib/markdown/embedIndex";
-import { useResizableAiPanel, useResizableSidebar } from "./hooks/useResizableSidebar";
+import {
+  type PanelSide,
+  isPanelSide,
+  oppositeSide,
+  useResizableAiPanel,
+  useResizableSidebar,
+} from "./hooks/useResizableSidebar";
+import { DEFAULT_VIM_BAR, type VimBarStyle, vimBarColors } from "./lib/vimBar";
+import { DEFAULT_TAB_SIZE, type TabSize, isTabSize, tabSizeExtension } from "./lib/tabSize";
 import { useSteadyColumn } from "./hooks/useSteadyColumn";
 import { report } from "./lib/notices";
 import { isMainWindow } from "./lib/windowLabel";
@@ -111,7 +119,11 @@ function App() {
   // Off by default: Vim is something you go and turn on, not something a note
   // taking app should assume about whoever just opened it.
   const [vimEnabled, setVimEnabled] = usePersistedState("vimEnabled", false);
+  const [vimBar, setVimBar] = usePersistedState<VimBarStyle>("vimBar", DEFAULT_VIM_BAR);
+  const vimBarPalette = useMemo(() => vimBarColors(vimBar), [vimBar]);
   const [showLineNumbers, setShowLineNumbers] = usePersistedState("showLineNumbers", false);
+  const [storedTabSize, setTabSize] = usePersistedState<TabSize>("tabSize", DEFAULT_TAB_SIZE);
+  const tabSize: TabSize = isTabSize(storedTabSize) ? storedTabSize : DEFAULT_TAB_SIZE;
   const [typewriter, setTypewriter] = usePersistedState("typewriterScrolling", false);
   // On unless turned off: a misspelling is the one mark nobody minds being told about.
   const [spellCheck, setSpellCheck] = usePersistedState("spellCheck", true);
@@ -137,6 +149,10 @@ function App() {
     else delete document.documentElement.dataset.zen;
   }, [zen]);
   const [compactMode, setCompactMode] = usePersistedState("compactMode", false);
+  // The sidebar is on the right unless moved; the AI panel takes the other side.
+  const [storedSidebarSide, setSidebarSide] = usePersistedState<PanelSide>("sidebarSide", "right");
+  const sidebarSide: PanelSide = isPanelSide(storedSidebarSide) ? storedSidebarSide : "right";
+  const aiPanelSide = oppositeSide(sidebarSide);
   const [autoUpdateEnabled, setAutoUpdateEnabled] = usePersistedState("autoUpdateEnabled", true);
   const [editorFont, setEditorFont] = usePersistedState("editorFont", DEFAULT_EDITOR_FONT);
   const [uiFont, setUiFont] = usePersistedState("uiFont", "");
@@ -246,12 +262,23 @@ function App() {
     () => [
       ...(vimExtension ? [vimExtension] : []),
       editorFontTheme,
+      tabSizeExtension(tabSize),
       ...(showLineNumbers ? [noteLineNumbers] : []),
       ...(typewriter ? [typewriterScrolling] : []),
       ...(spellCheck ? [spellcheck(spellLanguage)] : []),
       ...(zen && zenDimming ? [zenFocus] : []),
     ],
-    [vimExtension, editorFontTheme, showLineNumbers, typewriter, spellCheck, spellLanguage, zen, zenDimming]
+    [
+      vimExtension,
+      editorFontTheme,
+      tabSize,
+      showLineNumbers,
+      typewriter,
+      spellCheck,
+      spellLanguage,
+      zen,
+      zenDimming,
+    ]
   );
 
   const {
@@ -333,13 +360,13 @@ function App() {
     resetBinding: resetKeymapBinding,
     resetAll: resetAllKeymaps,
   } = useKeymaps();
-  const { width: sidebarWidth, isResizing, startResize, resetWidth } = useResizableSidebar();
+  const { width: sidebarWidth, isResizing, startResize, resetWidth } = useResizableSidebar(sidebarSide);
   const {
     width: aiPanelWidth,
     isResizing: isResizingAiPanel,
     startResize: startAiPanelResize,
     resetWidth: resetAiPanelWidth,
-  } = useResizableAiPanel();
+  } = useResizableAiPanel(aiPanelSide);
 
   // The width the side panels take up, for holding the note's column still
   // while one of them slides in or out.
@@ -834,6 +861,13 @@ function App() {
         onToggle: setCompactMode,
       },
       {
+        id: "sidebar-left",
+        title: "Sidebar on the Left",
+        description: "Dock the file tree on the left of the window, and the AI panel on the right",
+        enabled: sidebarSide === "left",
+        onToggle: (on: boolean) => setSidebarSide(on ? "left" : "right"),
+      },
+      {
         id: "automatic-updates",
         title: "Automatic Updates",
         description: "Check for new versions in the background",
@@ -884,6 +918,8 @@ function App() {
       setZenDimming,
       compactMode,
       setCompactMode,
+      sidebarSide,
+      setSidebarSide,
       autoUpdateEnabled,
       setAutoUpdateEnabled,
       aiEnabled,
@@ -1156,7 +1192,13 @@ function App() {
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 px-4 flex w-full relative z-20 print:block print:p-0">
+      {/* Laid out sidebar-last; with the sidebar moved to the left the row is
+          read the other way round, which puts the AI panel on the right. */}
+      <div
+        className={`flex-1 min-h-0 px-4 flex w-full relative z-20 print:block print:p-0 ${
+          sidebarSide === "left" ? "flex-row-reverse" : ""
+        }`}
+      >
         {/*
           The AI panel, docked opposite the sidebar - only with AI turned on in
           Settings; until then it is not there at all. Mounted from then on
@@ -1169,12 +1211,19 @@ function App() {
             style={{ width: isAiOpen && !zen && !singleNote ? aiPanelWidth + SIDEBAR_GAP : 0 }}
             inert={!isAiOpen || zen || singleNote}
           >
-            <div className="h-full" style={{ width: aiPanelWidth + SIDEBAR_GAP, paddingRight: SIDEBAR_GAP }}>
+            <div
+              className="h-full"
+              style={{
+                width: aiPanelWidth + SIDEBAR_GAP,
+                [aiPanelSide === "left" ? "paddingRight" : "paddingLeft"]: SIDEBAR_GAP,
+              }}
+            >
               <AiPanel
                 ref={aiPanelRef}
                 notes={fileIndex.notes}
                 isOpen={isAiOpen && !zen && !singleNote}
                 width={aiPanelWidth}
+                side={aiPanelSide}
                 isResizing={isResizingAiPanel}
                 onResizeStart={startAiPanelResize}
                 onResizeReset={resetAiPanelWidth}
@@ -1296,14 +1345,24 @@ function App() {
           The sidebar stays mounted so it can animate closed as well as open;
           `inert` keeps the collapsed copy out of tab order and off screen
           readers. The gap between editor and sidebar lives in here too, so it
-          collapses along with the panel instead of leaving a dead strip.
+          collapses along with the panel instead of leaving a dead strip. On
+          the left it is held against the note's side of the fold, so it
+          slides out past the window's edge rather than being cut off.
         */}
         <div
-          className={`h-full shrink-0 overflow-hidden print:hidden ${isResizing ? "" : "sidebar-transition"}`}
+          className={`h-full shrink-0 overflow-hidden print:hidden ${isResizing ? "" : "sidebar-transition"} ${
+            sidebarSide === "left" ? "flex justify-end" : ""
+          }`}
           style={{ width: isSidebarOpen && !zen && !singleNote ? sidebarWidth + SIDEBAR_GAP : 0 }}
           inert={!isSidebarOpen || zen || singleNote}
         >
-          <div className="h-full" style={{ width: sidebarWidth + SIDEBAR_GAP, paddingLeft: SIDEBAR_GAP }}>
+          <div
+            className="h-full shrink-0"
+            style={{
+              width: sidebarWidth + SIDEBAR_GAP,
+              [sidebarSide === "right" ? "paddingLeft" : "paddingRight"]: SIDEBAR_GAP,
+            }}
+          >
             <Sidebar
               ref={sidebarRef}
               data={folderData}
@@ -1338,6 +1397,7 @@ function App() {
               onResizeStart={startResize}
               onResizeReset={resetWidth}
               isResizing={isResizing}
+              side={sidebarSide}
               outline={outline}
               onJumpToHeading={onJumpToHeading}
               vimEnabled={vimEnabled}
@@ -1359,6 +1419,7 @@ function App() {
               subscribeToStats={subscribeToStats}
               notePath={notePath}
               saved={!dirtyPaths.has(currentFile)}
+              colors={vimBarPalette}
             />
           ) : (
             <WritingStats
@@ -1424,7 +1485,11 @@ function App() {
         initialSection={settingsSection}
         vimEnabled={vimEnabled}
         setVimEnabled={setVimEnabled}
+        vimBar={vimBar}
+        setVimBar={setVimBar}
         showLineNumbers={showLineNumbers}
+        tabSize={tabSize}
+        setTabSize={setTabSize}
         setShowLineNumbers={setShowLineNumbers}
         typewriterScrolling={typewriter}
         setTypewriterScrolling={setTypewriter}
@@ -1446,6 +1511,8 @@ function App() {
         resetAppearance={resetAppearance}
         compactMode={compactMode}
         setCompactMode={setCompactMode}
+        sidebarSide={sidebarSide}
+        setSidebarSide={setSidebarSide}
         autoUpdateEnabled={autoUpdateEnabled}
         setAutoUpdateEnabled={setAutoUpdateEnabled}
         editorFont={editorFont}
