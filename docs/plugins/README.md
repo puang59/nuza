@@ -64,6 +64,7 @@ here is relative to the repo root unless it says otherwise.
 | 5   | [05-registry-and-publishing.md](05-registry-and-publishing.md) | The registry repo, review CI, author workflow, SDK and template, in-app browser     |
 | 6   | [06-security.md](06-security.md)                               | Trust model, vault trust, safe mode, limits, network, later sandbox                 |
 | 7   | [07-rollout-and-testing.md](07-rollout-and-testing.md)         | Phases, PR breakdown, tests, acceptance criteria, risks, open questions             |
+| 8   | [CHECKLIST.md](CHECKLIST.md)                                   | The task list, worked through one PR at a time                                      |
 
 ## Decisions already made
 
