@@ -50,7 +50,7 @@ Users see no change. Every existing test keeps passing.
 - [x] **P1.6 Code block renderers, mermaid first** · PR #389 · after P1.5
   - `src/lib/markdown/codeBlocks.ts` facet; general branch in `livePreview.ts` replacing the mermaid special case; `RenderedCodeBlockWidget`; error fallback shows source plus message.
   - Done when: mermaid looks and edits exactly as before (before/after screenshots in PR); `tests/codeBlocks.test.ts`.
-- [ ] **P1.7 Vault change events behind a flag** · PR # · after P1.1
+- [x] **P1.7 Vault change events behind a flag** · PR #390 · after P1.1
   - Rust: `plugin_events` flag on `Vault`, `vault-change` event from `watcher.rs` (kinds, `own`, `.nuza` excluded, 100 ms batching), `plugins_watch_vault` command. Frontend: `src/lib/registries/events.ts` bus with app-side events too.
   - Done when: Rust tests show nothing emitted with the flag off; events correct with it on.
 
