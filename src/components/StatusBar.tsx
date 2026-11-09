@@ -1,5 +1,6 @@
 import { memo, useEffect, useState } from "react";
 import { StatsSubscription, useDocumentStats } from "@/hooks/useDocumentStats";
+import AddedStatusItems from "./AddedStatusItems";
 import NoteAge from "./NoteAge";
 import ContextMenu from "./Sidebar/ContextMenu";
 import { StatusItem, useStatusItems } from "@/hooks/useStatusItems";
@@ -85,6 +86,7 @@ function StatusBar({ mode, currentFile, subscribeToStats, notePath, saved, color
       </div>
 
       <span className="font-light text-xs text-gray-400 flex h-full min-w-0 flex-1 items-center justify-end gap-2">
+        <AddedStatusItems shows={shows} />
         {shows("fileName") && <span className="min-w-0 truncate @max-[520px]:hidden">{fileName}</span>}
         {shows("clock") && (
           <span

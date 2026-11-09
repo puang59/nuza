@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { readingMinutes } from "@/lib/documentStats";
 import { StatsSubscription, useDocumentStats } from "@/hooks/useDocumentStats";
+import AddedStatusItems from "./AddedStatusItems";
 import NoteAge from "./NoteAge";
 import ContextMenu from "./Sidebar/ContextMenu";
 import { useStatusItems } from "@/hooks/useStatusItems";
@@ -45,6 +46,7 @@ function WritingStats({ subscribeToStats, notePath, saved }: WritingStatsProps) 
       onContextMenu={openMenu}
       className="@container animate-fade-in relative z-10 flex h-7 compact:h-6 shrink-0 items-center justify-end gap-5 overflow-hidden whitespace-nowrap px-5 text-xs text-zinc-500"
     >
+      <AddedStatusItems shows={shows} />
       {shows("age") && (
         <span className="contents @max-[380px]:hidden">
           <NoteAge path={notePath} saved={saved} />

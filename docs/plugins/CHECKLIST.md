@@ -38,7 +38,7 @@ Users see no change. Every existing test keeps passing.
   - `src/lib/registries/commands.ts`; `App.tsx` registers `KEYMAP_ACTIONS` with handlers through a ref; `useKeymaps`, `useKeymapListener`, palette commands, `runAction`, `KeymapSettings` (grouped) read the registry.
   - Overrides for unregistered ids are kept; core beats plugin on a chord clash.
   - Done when: every shortcut and palette entry works as in 2.2.0; new tests for binding resolution, kept overrides, conflicts, palette filtering; a test that each `KEYMAP_ACTIONS` id has a handler.
-- [ ] **P1.3 Status bar items on a registry** · PR # · after P1.1
+- [x] **P1.3 Status bar items on a registry** · PR #386 · after P1.1
   - `src/lib/registries/statusItems.ts`; React-or-mount render union; `StatusBar.tsx` and `useStatusItems` read it.
   - Done when: right-click menu and hidden items behave as before.
 - [ ] **P1.4 Sidebar views and settings tabs on registries** · PR # · after P1.1

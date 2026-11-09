@@ -97,30 +97,31 @@ editor.
 
 ## 2. Status bar items
 
-Today `src/hooks/useStatusItems.ts` has `STATUS_ITEMS` (8 keys) and
-`src/components/StatusBar.tsx` renders each with an inline `shows("x") && ...`.
+There are two footers: `StatusBar.tsx` (the Vim bar) and `WritingStats.tsx` (the quiet
+one), sharing `useStatusItems` for the right-click menu and the hidden list in
+`statusBarHidden`.
 
-After:
+As built (P1.3), nuza's own items stay where they are. Each one is laid out by hand with
+its own narrow-window rule (`@max-[620px]:hidden` and so on), and moving them behind a
+registry would only make that harder to read. The registry is for items added to the
+footer:
 
 ```ts
 // src/lib/registries/statusItems.ts
 export interface StatusItemSpec {
   id: string;
   label: string; // the name in the right-click menu
-  side: "left" | "right";
-  /** Built-ins render React; plugins render into an element they own. */
-  render: { react: () => React.ReactNode } | { mount(el: HTMLElement): Disposable | void };
+  mount(el: HTMLElement): void | (() => void);
 }
 ```
 
-- Built-in items keep their React bodies, registered from `StatusBar.tsx` as
-  `{ react: () => ... }`, so nothing about them is rewritten.
-- `useStatusItems(offered)` takes ids from the registry. Hidden ids already live in
-  `statusBarHidden` as a list of hidden items, so a newly installed plugin's item shows
-  until hidden, which is the right default.
-- A plugin item is a `<span>` the host creates once and keeps; `mount` is called once,
-  and its disposable runs on removal. The plugin updates the element itself.
-- `ZenBar.tsx` shows the same counts; it does not show plugin items in v1.
+- `AddedStatusItems.tsx` renders one `<span data-status-item>` per registered item and
+  hands it to `mount` once; the returned function runs when the item goes. A `mount` that
+  throws is reported and leaves an empty span, not a broken footer.
+- Both footers show added items: the Vim bar on its right, before the file name; the
+  quiet footer first in its row.
+- `useStatusItems` offers added items in the right-click menu after the footer's own.
+  Hidden items are stored as a list of hidden ids, so a new item shows until hidden.
 
 ## 3. Sidebar views
 
