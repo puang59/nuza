@@ -144,28 +144,23 @@ in v1.
 
 ## 5. Editor extensions
 
-Today `src/hooks/useDocuments.ts` builds each state with
-`[writingSurface, trackEdits, location.of(...), preferences.of(...)]` in `stateFor`
-(line ~294), and keeps every open note's `EditorState` in `states.current`.
+As built (P1.5): `editorExtensions` registry of `{ id, extension }`, and
+`addedExtensions()`, which returns one `Extension` that keeps its identity until the
+registry changes. `src/hooks/useDocuments.ts` has a third compartment, `additions`,
+beside `preferences` and `location`:
 
-After:
+1. `stateFor` builds every new note with `additions.of(addedExtensions())`.
+2. A registry change reconfigures the main and side views at once.
+3. A note parked in `states.current` is not rewritten. It gets the current set when it is
+   opened again, in the same dispatch that reapplies the settings and its location (all
+   three places a parked state is put into a view). This is how the settings compartment
+   already works, and costs nothing for notes that are never reopened.
+4. nuza's own extensions are not in this compartment; `writingSurface` is unchanged.
 
-1. New `const pluginExtensions = new Compartment()` beside `preferences` and `location`.
-2. `stateFor` adds `pluginExtensions.of(editorExtensions.combined())`, where
-   `editorExtensions` is a registry whose `combined()` returns `Prec.default([...])` of
-   every registered extension (memoised on the registry's change counter).
-3. A `useEffect` subscribes to the registry. On change it dispatches
-   `pluginExtensions.reconfigure(combined)` to the main view and the side-pane view, and
-   rewrites every cached state in `states.current` with
-   `state.update({ effects: pluginExtensions.reconfigure(combined) }).state`. A cached
-   state is not attached to a view, so this is cheap: no DOM work until it is shown.
-4. Built-in features are not moved into this compartment. `writingSurface` stays as it
-   is; the compartment is only for additions.
-
-Each plugin's extensions are wrapped so a throw inside a plugin's `ViewPlugin.update`
-cannot take the editor down: the host wraps plugin `ViewPlugin`s with
-`EditorView.exceptionSink` handling that reports the error against the plugin id and
-removes that plugin's extensions after three errors in ten seconds.
+Errors: CodeMirror already catches an exception thrown from a `ViewPlugin` or update
+listener, logs it, and disables that plugin, so a broken extension cannot take the editor
+down. Saying _which_ plugin failed is P2.3's job, where the loader wraps a plugin's
+extensions with `EditorView.exceptionSink` and attributes errors by owner.
 
 ## 6. Fenced code block renderers
 
