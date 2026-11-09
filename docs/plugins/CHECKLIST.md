@@ -44,7 +44,7 @@ Users see no change. Every existing test keeps passing.
 - [x] **P1.4 Sidebar views and settings tabs on registries** · PR #387 · after P1.1
   - `ViewSwitcher.tsx` / `Sidebar/index.tsx` and `SettingsModal.tsx` `TABS` read registries; `readView` fallback kept.
   - Done when: all four views and five tabs unchanged.
-- [ ] **P1.5 Editor compartment for added extensions** · PR # · after P1.1
+- [x] **P1.5 Editor compartment for added extensions** · PR #388 · after P1.1
   - `pluginExtensions` compartment in `useDocuments.ts` `stateFor`; reconfigure main view, side pane view, and every cached state in `states.current`; `exceptionSink` wrapper per owner.
   - Done when: test that registering and disposing an extension affects the view and cached states; 50-tab reconfigure timed and noted in the PR.
 - [ ] **P1.6 Code block renderers, mermaid first** · PR # · after P1.5
