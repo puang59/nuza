@@ -82,6 +82,22 @@ pub fn run() {
                 });
             },
         )
+        // A community plugin's code and styles, served only for plugins turned
+        // on in the vault of the window asking - see plugins/protocol.rs.
+        .register_asynchronous_uri_scheme_protocol(
+            plugins::protocol::PLUGIN_PROTOCOL,
+            |context, request, responder| {
+                let app_handle = context.app_handle().clone();
+                let label = context.webview_label().to_string();
+                tauri::async_runtime::spawn_blocking(move || {
+                    responder.respond(plugins::protocol::serve_plugin_file(
+                        &app_handle,
+                        &label,
+                        &request,
+                    ));
+                });
+            },
+        )
         // Kept on this machine, in the OS's log folder: why an agent would not
         // start, what it last printed, which turn was given up on.
         .plugin(

@@ -30,8 +30,8 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' nuza-media: http://nuza-media.localhost data: https:; media-src 'self' nuza-media: http://nuza-media.localhost; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'none'",
-      "devCsp": "default-src 'self'; img-src 'self' nuza-media: http://nuza-media.localhost data: https:; media-src 'self' nuza-media: http://nuza-media.localhost; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' ipc: http://ipc.localhost ws://localhost:1420 http://localhost:1420; object-src 'none'; base-uri 'self'",
+      "csp": "default-src 'self'; img-src 'self' nuza-media: http://nuza-media.localhost data: https: nuza-plugin: http://nuza-plugin.localhost; media-src 'self' nuza-media: http://nuza-media.localhost; style-src 'self' 'unsafe-inline' nuza-plugin: http://nuza-plugin.localhost; font-src 'self' data: nuza-plugin: http://nuza-plugin.localhost; script-src 'self' nuza-plugin: http://nuza-plugin.localhost; connect-src 'self' ipc: http://ipc.localhost; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'none'",
+      "devCsp": "default-src 'self'; img-src 'self' nuza-media: http://nuza-media.localhost data: https: nuza-plugin: http://nuza-plugin.localhost; media-src 'self' nuza-media: http://nuza-media.localhost; style-src 'self' 'unsafe-inline' nuza-plugin: http://nuza-plugin.localhost; font-src 'self' data: nuza-plugin: http://nuza-plugin.localhost; script-src 'self' 'unsafe-inline' 'unsafe-eval' nuza-plugin: http://nuza-plugin.localhost; connect-src 'self' ipc: http://ipc.localhost ws://localhost:1420 http://localhost:1420; object-src 'none'; base-uri 'self'",
       "assetProtocol": {
         "enable": false,
         "scope": []

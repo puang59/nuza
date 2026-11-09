@@ -250,3 +250,106 @@ fn plugins_are_listed_by_name() {
         .collect();
     assert_eq!(names, vec!["Alpha Tool", "Zed Tool"]);
 }
+
+mod scheme {
+    use super::super::protocol::resolve;
+    use super::*;
+
+    /// A vault with community plugins on and word-goal installed and enabled,
+    /// with an asset, its settings, and a file just outside its folder.
+    fn vault() -> tempfile::TempDir {
+        let vault = tempfile::tempdir().unwrap();
+        let root = vault.path();
+        install(root, "word-goal", Some(&good()), true);
+        install(
+            root,
+            "kanban",
+            Some(&PluginManifest {
+                id: "kanban".into(),
+                ..good()
+            }),
+            true,
+        );
+        let folder = store::plugins_folder(root).join("word-goal");
+        fs::write(folder.join("styles.css"), ".word-goal {}").unwrap();
+        fs::create_dir_all(folder.join("assets/icons")).unwrap();
+        fs::write(folder.join("assets/icons/flag.svg"), "<svg/>").unwrap();
+        fs::write(folder.join("data.json"), "{}").unwrap();
+        fs::write(root.join("secret.md"), "private").unwrap();
+        store::write_config(
+            root,
+            &PluginsConfig {
+                community: true,
+                enabled: vec!["word-goal".into()],
+            },
+        )
+        .unwrap();
+        vault
+    }
+
+    #[test]
+    fn serves_an_enabled_plugins_code_styles_and_assets() {
+        let vault = vault();
+        for file in [
+            "word-goal/main.js",
+            "word-goal/styles.css",
+            "word-goal/assets/icons/flag.svg",
+        ] {
+            assert!(resolve(vault.path(), file).is_ok(), "{file}");
+        }
+    }
+
+    #[test]
+    fn refuses_anything_else() {
+        let vault = vault();
+        let refused = [
+            "word-goal/data.json",
+            "word-goal/manifest.json",
+            "word-goal/../../secret.md",
+            "word-goal/assets/../../../secret.md",
+            "word-goal/assets/",
+            "word-goal//etc/passwd",
+            "word-goal/assets//etc/passwd",
+            "../secret.md",
+            "Word-Goal/main.js",
+            "word-goal",
+            "kanban/main.js",
+            "missing/main.js",
+        ];
+        for file in refused {
+            assert!(resolve(vault.path(), file).is_err(), "{file}");
+        }
+    }
+
+    #[test]
+    fn serves_nothing_while_community_plugins_are_off() {
+        let vault = vault();
+        store::write_config(
+            vault.path(),
+            &PluginsConfig {
+                community: false,
+                enabled: vec!["word-goal".into()],
+            },
+        )
+        .unwrap();
+        assert_eq!(resolve(vault.path(), "word-goal/main.js"), Err(403));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_out_of_the_plugin_is_refused_but_a_linked_plugin_is_served() {
+        let vault = vault();
+        let root = vault.path();
+        let folder = store::plugins_folder(root).join("word-goal");
+        std::os::unix::fs::symlink(root.join("secret.md"), folder.join("assets/secret.md"))
+            .unwrap();
+        assert_eq!(resolve(root, "word-goal/assets/secret.md"), Err(403));
+
+        // A plugin being worked on elsewhere, linked into the vault.
+        let elsewhere = tempfile::tempdir().unwrap();
+        fs::write(elsewhere.path().join("main.js"), "").unwrap();
+        fs::remove_dir_all(&folder).unwrap();
+        std::os::unix::fs::symlink(elsewhere.path(), &folder).unwrap();
+        assert!(resolve(root, "word-goal/main.js").is_ok());
+    }
+}
