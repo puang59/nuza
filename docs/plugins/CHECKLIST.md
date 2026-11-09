@@ -25,13 +25,13 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` merged
 - [ ] **D2** Confirm `.nuza/` as the in-vault folder name. Needed by P2.1.
 - [ ] **D3** Expose nuza's React to plugins: plan default no. Needed by P2.3.
 - [ ] **D4** Registry owner: `puang59/nuza-plugins` or a `nuza` org. Needed by P3.2.
-- [ ] **D5** Phase 1 into `main-v3` (plan default) or straight to `main` in 2.x. Needed by P1.1.
+- [x] **D5** Phase 1 into `main-v3` (plan default) or straight to `main` in 2.x. Needed by P1.1. Decided: `main-v3`.
 
 ## Phase 1: host registries ([02](02-host-registries.md))
 
 Users see no change. Every existing test keeps passing.
 
-- [ ] **P1.1 Registry primitive** · PR #
+- [x] **P1.1 Registry primitive** · PR #384
   - `src/lib/registries/registry.ts` (`Registry<T>`, `Disposable`, `disposeOwner`), `useRegistry` hook, `src/lib/registries/index.ts`.
   - Done when: `tests/registry.test.ts` covers ordering, duplicate ids, dispose twice, `disposeOwner`, stable `list()` identity.
 - [ ] **P1.2 Commands and keymaps on a registry** · PR # · after P1.1
