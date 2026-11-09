@@ -5,6 +5,7 @@ import { indentWithTab } from "@codemirror/commands";
 import { basicSetup } from "@uiw/codemirror-extensions-basic-setup";
 import { directoryOf, liveMarkdown, noteDirectory, vaultDirectory } from "@/lib/markdown";
 import { aiDiff } from "@/lib/markdown/aiDiff";
+import { addedExtensions, editorExtensions } from "@/lib/registries/editorExtensions";
 import { documentsToEvict } from "@/lib/documentCache";
 import {
   countDocument,
@@ -53,6 +54,8 @@ const SELECTION_COUNT_LIMIT = 20_000;
 const preferences = new Compartment();
 /** The open note's own directory, which its relative image paths resolve against. */
 const location = new Compartment();
+/** What has been added to the editor beside nuza's own extensions: plugins' (see registries/editorExtensions.ts). */
+const additions = new Compartment();
 
 interface UseDocumentsOptions {
   /** Extensions that follow the app's settings. */
@@ -301,6 +304,7 @@ export function useDocuments({
         trackEdits.current!,
         location.of(placeOf(path, latestVault.current)),
         preferences.of(latestSettings.current),
+        additions.of(addedExtensions()),
       ],
     });
     states.current.set(path, created);
@@ -354,6 +358,19 @@ export function useDocuments({
     editor.current?.dispatch({ effects: preferences.reconfigure(settings) });
     sideEditor.current?.dispatch({ effects: preferences.reconfigure(settings) });
   }, [settings]);
+
+  // An extension added or taken away applies to the notes on screen at once.
+  // One parked in `states` still has the old set, and is given the new one
+  // when it is opened, as with the settings.
+  useEffect(
+    () =>
+      editorExtensions.subscribe(() => {
+        const effects = additions.reconfigure(addedExtensions());
+        editor.current?.dispatch({ effects });
+        sideEditor.current?.dispatch({ effects });
+      }),
+    []
+  );
 
   // Opening a folder changes where the open note files its attachments, and
   // gives a scratch note somewhere to resolve its links from.
@@ -426,6 +443,7 @@ export function useDocuments({
           effects: [
             preferences.reconfigure(latestSettings.current),
             location.reconfigure(placeOf(path, latestVault.current)),
+            additions.reconfigure(addedExtensions()),
           ],
         });
         swapping.current = false;
@@ -485,6 +503,7 @@ export function useDocuments({
         effects: [
           preferences.reconfigure(latestSettings.current),
           location.reconfigure(placeOf(path, latestVault.current)),
+          additions.reconfigure(addedExtensions()),
         ],
       });
       swapping.current = false;
@@ -535,6 +554,7 @@ export function useDocuments({
         effects: [
           preferences.reconfigure(latestSettings.current),
           location.reconfigure(placeOf(path, latestVault.current)),
+          additions.reconfigure(addedExtensions()),
         ],
       });
       swapping.current = false;
