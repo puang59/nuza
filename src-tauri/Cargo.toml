@@ -55,6 +55,9 @@ tauri-utils = "2"
 # The rest is the AI agent: a child process spoken to over its stdin and
 # stdout (agent/rpc.rs). All of it was already compiled in under tauri.
 tokio = { version = "1", features = ["sync", "process", "io-util", "time", "macros", "rt", "net"] }
+# A plugin's main.js, fingerprinted so the page fetches a new copy after an
+# update. Already compiled in, under the updater.
+sha2 = "0.10"
 # The vault server's tokens: 256 random bits each. Already compiled in.
 getrandom = "0.3"
 # What the agent prints on stderr, and why it was given up on - for

@@ -21,8 +21,8 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` merged
 
 ## Decisions (before or during phase 1)
 
-- [ ] **D1** Install plugins per vault or once for every vault. Plan default: per vault. Needed by P2.1.
-- [ ] **D2** Confirm `.nuza/` as the in-vault folder name. Needed by P2.1.
+- [x] **D1** Install plugins per vault or once for every vault. Plan default: per vault. Needed by P2.1. Taken: per vault (the default), revisit any time before 3.0.
+- [x] **D2** Confirm `.nuza/` as the in-vault folder name. Needed by P2.1. Taken: `.nuza/` (the default).
 - [ ] **D3** Expose nuza's React to plugins: plan default no. Needed by P2.3.
 - [ ] **D4** Registry owner: `puang59/nuza-plugins` or a `nuza` org. Needed by P3.2.
 - [x] **D5** Phase 1 into `main-v3` (plan default) or straight to `main` in 2.x. Needed by P1.1. Decided: `main-v3`.
