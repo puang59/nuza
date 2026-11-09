@@ -1,4 +1,4 @@
-# Runs on every push to main or main-v2 and every pull request, so a type
+# Runs on every push to main, main-v2 or main-v3 and every pull request, so a type
 # error or a clippy warning is caught here rather than on the release branch.
 #
 # The Rust side runs on all three platforms deliberately: a good deal of
@@ -8,7 +8,7 @@ name: CI
 
 on:
   push:
-    branches: [main, main-v2]
+    branches: [main, main-v2, main-v3]
   pull_request:
 
 # A new push supersedes whatever was already running for the same branch.
