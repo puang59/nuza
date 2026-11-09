@@ -326,6 +326,12 @@ export const KEYMAP_ACTIONS: KeymapDefinition[] = [
 export const KEYMAP_STORAGE_KEY = "nuza:keymap-overrides";
 
 /**
+ * The binding of every command, by id: every built-in action, and whatever
+ * else is registered (see registries/commands.ts).
+ */
+export type KeymapBindings = Record<KeymapAction, string> & Partial<Record<string, string>>;
+
+/**
  * The actions whose binding is also some other action's.
  *
  * Two actions can be given the same chord, and the listener returns on the
@@ -337,22 +343,18 @@ export const KEYMAP_STORAGE_KEY = "nuza:keymap-overrides";
  * same keystroke spelled two ways, and comparing the spellings missed exactly
  * the clash this exists to report.
  */
-export function conflictingActions(
-  bindings: Partial<Record<KeymapAction, string>>,
-  isMac?: boolean
-): Set<KeymapAction> {
-  const seen = new Map<string, KeymapAction[]>();
+export function conflictingActions(bindings: Partial<Record<string, string>>, isMac?: boolean): Set<string> {
+  const seen = new Map<string, string[]>();
 
-  for (const action of KEYMAP_ACTIONS) {
-    const binding = bindings[action.id];
+  for (const [id, binding] of Object.entries(bindings)) {
     if (!binding) continue;
     const chord = chordOf(binding, isMac);
-    seen.set(chord, [...(seen.get(chord) ?? []), action.id]);
+    seen.set(chord, [...(seen.get(chord) ?? []), id]);
   }
 
-  const clashing = new Set<KeymapAction>();
+  const clashing = new Set<string>();
   for (const sharing of seen.values()) {
-    if (sharing.length > 1) for (const action of sharing) clashing.add(action);
+    if (sharing.length > 1) for (const id of sharing) clashing.add(id);
   }
   return clashing;
 }

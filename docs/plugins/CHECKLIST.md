@@ -34,7 +34,7 @@ Users see no change. Every existing test keeps passing.
 - [x] **P1.1 Registry primitive** · PR #384
   - `src/lib/registries/registry.ts` (`Registry<T>`, `Disposable`, `disposeOwner`), `useRegistry` hook, `src/lib/registries/index.ts`.
   - Done when: `tests/registry.test.ts` covers ordering, duplicate ids, dispose twice, `disposeOwner`, stable `list()` identity.
-- [ ] **P1.2 Commands and keymaps on a registry** · PR # · after P1.1
+- [x] **P1.2 Commands and keymaps on a registry** · PR #385 · after P1.1
   - `src/lib/registries/commands.ts`; `App.tsx` registers `KEYMAP_ACTIONS` with handlers through a ref; `useKeymaps`, `useKeymapListener`, palette commands, `runAction`, `KeymapSettings` (grouped) read the registry.
   - Overrides for unregistered ids are kept; core beats plugin on a chord clash.
   - Done when: every shortcut and palette entry works as in 2.2.0; new tests for binding resolution, kept overrides, conflicts, palette filtering; a test that each `KEYMAP_ACTIONS` id has a handler.
