@@ -1,5 +1,6 @@
 import { syntaxTree } from "@codemirror/language";
 import { EditorView, WidgetType } from "@codemirror/view";
+import type { CodeBlockRenderer } from "./codeBlocks";
 import type { SyntaxNode } from "@lezer/common";
 import { areaField, refresh, textField } from "./fields";
 import { Property, frontmatterRange, readFrontmatter } from "./frontmatter";
@@ -940,22 +941,15 @@ function themeColour(name: string, fallback: string) {
  * colours. Fitted to the column; the button in its corner opens it full size,
  * to scroll around and zoom. A diagram that does not parse shows why.
  */
-export class MermaidWidget extends WidgetType {
-  constructor(readonly source: string) {
-    super();
-  }
+export const mermaidBlocks: CodeBlockRenderer = {
+  language: "mermaid",
+  className: "cm-md-mermaid",
 
-  eq(other: MermaidWidget) {
-    return other.source === this.source;
-  }
-
-  toDOM(view: EditorView) {
-    const wrapper = document.createElement("div");
-    wrapper.className = "cm-md-mermaid";
+  render(source, wrapper, { view }) {
     const stage = document.createElement("div");
     stage.className = "cm-md-mermaid-stage cm-md-mermaid-source";
     // The source stands in while the library loads and draws.
-    stage.textContent = this.source;
+    stage.textContent = source;
     wrapper.append(stage);
 
     const expand = document.createElement("button");
@@ -992,7 +986,7 @@ export class MermaidWidget extends WidgetType {
           },
         });
         try {
-          const { svg } = await renderer.render(`nuza-mermaid-${++diagrams}`, this.source);
+          const { svg } = await renderer.render(`nuza-mermaid-${++diagrams}`, source);
           stage.innerHTML = svg;
           stage.classList.remove("cm-md-mermaid-source", "cm-md-mermaid-error");
           wrapper.append(expand);
@@ -1007,14 +1001,13 @@ export class MermaidWidget extends WidgetType {
         // The chunk did not load: the source it already shows is the fallback.
       }
     );
-    return wrapper;
-  }
+  },
 
   /** Clicking the diagram puts the caret in the source behind it, as math does. */
   ignoreEvent(event: Event) {
     return (event.target as Element | null)?.closest?.(".cm-md-mermaid-expand") != null;
-  }
-}
+  },
+};
 
 /**
  * A diagram at full size over the window: scroll to move around it, the

@@ -26,13 +26,13 @@ import { refreshEmbeds, vaultFiles } from "./embedIndex";
 import { readAltSize } from "./imageSize";
 import { SCROLLING_CODE_LINE } from "./codeScroll";
 import { readEmbed, readWikiLink, resolveEmbed } from "./wikiLinks";
+import { codeBlockRenderers, RenderedCodeBlockWidget } from "./codeBlocks";
 import {
   BulletWidget,
   HtmlWidget,
   ImageWidget,
   LinkThumbnailWidget,
   MathWidget,
-  MermaidWidget,
   PropertiesWidget,
   RuleWidget,
   TableAlignment,
@@ -640,14 +640,17 @@ function decorateNode(node: SyntaxNodeRef, build: Build): boolean | undefined {
     return false;
   }
 
-  // A ```mermaid block, drawn as its diagram unless it is being edited.
+  // A block with a renderer for its language - ```mermaid, or one a plugin
+  // added - drawn as what it describes unless it is being edited.
   if (name === "FencedCode" && !isBeingEdited(state, from, to)) {
     const info = findChild(node.node, "CodeInfo");
-    if (info && doc.sliceString(info.from, info.to).trim().toLowerCase() === "mermaid") {
+    const renderer =
+      info && state.facet(codeBlockRenderers).get(doc.sliceString(info.from, info.to).trim().toLowerCase());
+    if (renderer) {
       const code = findChild(node.node, "CodeText");
       const source = code ? doc.sliceString(code.from, code.to) : "";
       out.push(
-        Decoration.replace({ widget: new MermaidWidget(source), block: true }).range(
+        Decoration.replace({ widget: new RenderedCodeBlockWidget(renderer, source), block: true }).range(
           doc.lineAt(from).from,
           doc.lineAt(to).to
         )
@@ -1002,6 +1005,8 @@ export const liveMarkdownPreview = StateField.define<DecorationSet>({
     // happens while a file is being taken in, not while it is being written in.
     if (
       state.facet(noteDirectory) !== startState.facet(noteDirectory) ||
+      // A renderer added or taken away changes how every block of its language is drawn.
+      state.facet(codeBlockRenderers) !== startState.facet(codeBlockRenderers) ||
       (newTree !== oldTree && !transaction.docChanged) ||
       // Which file an embed names depends on what is in the vault, and that
       // has changed - or this note was last drawn before it was known.

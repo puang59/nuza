@@ -662,6 +662,21 @@ const editorTheme = EditorView.theme(
       transition: "opacity 120ms",
     },
     ".cm-md-mermaid:hover .cm-md-mermaid-expand": { opacity: "1" },
+    /* A block a renderer could not draw: its source as code, and why. */
+    ".cm-md-codeblock-failed": {
+      margin: "0.6em 0",
+      padding: "0.75em",
+      borderRadius: "8px",
+      border: `1px solid ${ink.hairline}`,
+    },
+    ".cm-md-codeblock-failed pre": {
+      margin: "0",
+      fontFamily: CODE_FONT_FAMILY,
+      fontSize: "0.85em",
+      whiteSpace: "pre-wrap",
+      color: ink.muted,
+    },
+    ".cm-md-codeblock-failed p": { margin: "0.5em 0 0", fontSize: "0.85em", color: "#f87171" },
     ".cm-md-math-source": { fontFamily: CODE_FONT_FAMILY, color: ink.code },
     ".cm-md-html": { whiteSpace: "normal" },
     ".cm-md-html-block": { display: "block", padding: "0.3em 0", overflowX: "auto" },
