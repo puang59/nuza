@@ -189,6 +189,13 @@ After:
 5. A renderer that throws shows the block's source as plain code with a one-line error
    under it, never a blank gap.
 
+As built (P1.6): `src/lib/markdown/codeBlocks.ts` has the facet (first renderer to claim
+a language keeps it), `RenderedCodeBlockWidget`, and the fallback. A renderer may also
+give a `className` for its block and an `ignoreEvent` for controls inside it; mermaid
+uses both (`cm-md-mermaid`, the expand button). The live preview rebuilds when the set
+of renderers changes, so a renderer added to an open note draws its blocks at once.
+Mermaid's output was compared with `main-v3` in the browser: pixel-identical.
+
 ## 7. Vault events
 
 Today Rust emits `FILE_CHANGED_EVENT` only for notes the window is holding

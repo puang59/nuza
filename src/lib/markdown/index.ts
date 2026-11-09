@@ -17,6 +17,8 @@ import { noteLinkCompletion } from "./linkCompletion";
 import { listIndent } from "./listIndent";
 import { continueListItem, insertNewLine, tabInProse } from "./lists";
 import { liveMarkdownPreview, steadyWhileDragging } from "./livePreview";
+import { codeBlockRenderers } from "./codeBlocks";
+import { mermaidBlocks } from "./widgets";
 import { MathSyntax } from "./math";
 import { pasteUrlAsLink, wrapSelectionInMarks } from "./formatting";
 import { findInNote } from "./searchPanel";
@@ -128,6 +130,8 @@ export const liveMarkdown: Extension = [
   htmlKeepsIndentation,
   EditorView.lineWrapping,
   nuzaEditorTheme,
+  // Ahead of anything added later, so a ```mermaid block is always nuza's.
+  codeBlockRenderers.of(mermaidBlocks),
   liveMarkdownPreview,
   steadyWhileDragging,
   headingFlash,

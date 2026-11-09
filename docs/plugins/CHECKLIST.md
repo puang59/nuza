@@ -47,7 +47,7 @@ Users see no change. Every existing test keeps passing.
 - [x] **P1.5 Editor compartment for added extensions** · PR #388 · after P1.1
   - `pluginExtensions` compartment in `useDocuments.ts` `stateFor`; reconfigure main view, side pane view, and every cached state in `states.current`; `exceptionSink` wrapper per owner.
   - Done when: test that registering and disposing an extension affects the view and cached states; 50-tab reconfigure timed and noted in the PR.
-- [ ] **P1.6 Code block renderers, mermaid first** · PR # · after P1.5
+- [x] **P1.6 Code block renderers, mermaid first** · PR #389 · after P1.5
   - `src/lib/markdown/codeBlocks.ts` facet; general branch in `livePreview.ts` replacing the mermaid special case; `RenderedCodeBlockWidget`; error fallback shows source plus message.
   - Done when: mermaid looks and edits exactly as before (before/after screenshots in PR); `tests/codeBlocks.test.ts`.
 - [ ] **P1.7 Vault change events behind a flag** · PR # · after P1.1
