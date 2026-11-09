@@ -125,27 +125,22 @@ export interface StatusItemSpec {
 
 ## 3. Sidebar views
 
-Today `SidebarView = "files" | "outline" | "tags" | "links"` and `VIEWS` in
-`src/components/Sidebar/ViewSwitcher.tsx`; `readView` falls back to `"files"` for unknown
-stored values.
-
-After: `sidebarViews` registry of `{ id, label, icon, render }` where `icon` is a lucide
-icon name (plugins pass a string; the host maps it through `lucide-react`'s icon set
-lazily, or accepts an SVG string) and `render` is the same React-or-mount union as status
-items. `readView` already falls back when a stored view is not known, which covers a
-plugin view that is gone after the plugin is turned off.
+As built (P1.4): `sidebarViews` registry of `{ id, label, title?, mount(el) }`. nuza's
+four views stay hand-built; added views follow them in `ViewSwitcher`, whose row is now
+`repeat(N, minmax(0, 1fr))` with the highlight one column wide, and labels truncate.
+`readView(stored, addedIds)` reads an added view's id as itself only while it is
+registered, so a view whose plugin is off shows Files, and the stored choice comes back
+when the plugin does. The chosen added view is drawn by `Mounted` (shared with footer
+items) inside the same panel the other non-file views use.
 
 ## 4. Settings tabs
 
-Today `TABS` in `src/components/SettingsModal.tsx:23` (General, Appearance, Keymaps, AI,
-Info).
-
-After: `settingTabs` registry. Built-ins register in their current order. Two new
-built-in tabs come with phase 2: **Community plugins** (list, toggles, browse) placed
-before Info, and below it one tab per plugin that called `addSettingTab`, under a small
-"Plugins" heading in the modal's tab list. `src/lib/settingsSearch.ts` only indexes
-built-in settings; plugin tabs are reachable by name in the palette ("<plugin> settings")
-but their contents are not searched in v1.
+As built (P1.4): `settingTabs` registry of `{ id, label, mount(el) }`. `SettingsModal`
+lists added panes after Info under a small "Plugins" heading (hidden in the narrow,
+horizontal layout), and draws the chosen one with `Mounted`. A pane that goes away while
+open leaves Settings on General. The Community plugins pane itself arrives with P2.4.
+`src/lib/settingsSearch.ts` only indexes built-in settings; plugin panes are not searched
+in v1.
 
 ## 5. Editor extensions
 

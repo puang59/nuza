@@ -59,6 +59,9 @@ import { useBacklinks } from "@/hooks/useBacklinks";
 import { EMPTY_OUTLINE, Outline as OutlineData } from "@/lib/markdown/headings";
 import Outline from "./Outline";
 import ViewSwitcher, { SidebarView, readView } from "./ViewSwitcher";
+import Mounted from "../Mounted";
+import { useRegistry } from "@/lib/registries/registry";
+import { sidebarViews } from "@/lib/registries/sidebarViews";
 import type { PanelSide } from "@/hooks/useResizableSidebar";
 import { useTags } from "@/hooks/useTags";
 import { useVaultScan } from "@/hooks/useVaultScan";
@@ -290,7 +293,12 @@ function Sidebar({
   // Which of its views the sidebar is on. Checked on the way out of storage,
   // which may hold a view from a build that had others.
   const [storedView, setView] = usePersistedState<SidebarView>("sidebarView", "files");
-  const view = readView(storedView);
+  const addedViews = useRegistry(sidebarViews);
+  const view = readView(
+    storedView,
+    addedViews.map((added) => added.id)
+  );
+  const addedView = addedViews.find((added) => added.id === view);
   // Only for a note in the vault: the scratch note has no name to link to.
   const inVault = !!rootPath && currentFile.startsWith(rootPath);
   /**
@@ -1236,6 +1244,7 @@ function Sidebar({
               onOpen={(path, line) => (onOpenAt ? onOpenAt(path, line, 0) : onFileSelect?.(path))}
             />
           )}
+          {addedView && <Mounted key={addedView.id} item={addedView} place="the sidebar" />}
           {view === "links" &&
             (inVault ? (
               <Backlinks

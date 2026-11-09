@@ -16,6 +16,9 @@ import AiSettings from "./settings/AiSettings";
 import type { ModelChoices } from "@/lib/ai/modelChoice";
 import type { MemoryStore } from "@/lib/ai/memory";
 import type { SpellLanguage } from "@/lib/spellDictionaries";
+import { useRegistry } from "@/lib/registries/registry";
+import { settingTabs } from "@/lib/registries/settingTabs";
+import Mounted from "./Mounted";
 
 type SettingsSection = "general" | "appearance" | "keymaps" | "ai" | "info";
 
@@ -168,7 +171,13 @@ export default function SettingsModal({
   aiMemory,
   setAiMemory,
 }: SettingsModalProps) {
-  const [activeSection, setActiveSection] = useState<SettingsSection>("general");
+  const [chosenSection, setActiveSection] = useState<SettingsSection | (string & {})>("general");
+  const addedTabs = useRegistry(settingTabs);
+  const addedTab = addedTabs.find((tab) => tab.id === chosenSection);
+  // An added pane that has since gone - its plugin turned off while it was
+  // open - leaves Settings on General rather than on nothing.
+  const activeSection =
+    addedTab || SECTIONS.some((section) => section.id === chosenSection) ? chosenSection : "general";
 
   // Opened from somewhere that wants a particular pane - the AI panel's
   // "Set up" - it opens on that one.
@@ -232,9 +241,29 @@ export default function SettingsModal({
                 {label}
               </button>
             ))}
+
+            {addedTabs.length > 0 && (
+              <p className="hidden px-3 pt-3 pb-1 text-[11px] font-medium text-zinc-500 sm:block">Plugins</p>
+            )}
+            {addedTabs.map(({ id, label }) => (
+              <button
+                key={id}
+                onClick={() => setActiveSection(id)}
+                className={cn(
+                  "flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors cursor-pointer whitespace-nowrap shrink-0",
+                  activeSection === id
+                    ? "bg-zinc-800 text-white"
+                    : "text-gray-400 hover:text-white hover:bg-zinc-800/50"
+                )}
+              >
+                <span className="truncate">{label}</span>
+              </button>
+            ))}
           </nav>
 
           <div className="flex-1 min-w-0 overflow-y-auto p-4">
+            {addedTab && <Mounted key={addedTab.id} item={addedTab} place="Settings" />}
+
             {activeSection === "general" && (
               <GeneralSettings
                 vimEnabled={vimEnabled}

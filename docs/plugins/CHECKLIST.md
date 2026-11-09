@@ -41,7 +41,7 @@ Users see no change. Every existing test keeps passing.
 - [x] **P1.3 Status bar items on a registry** · PR #386 · after P1.1
   - `src/lib/registries/statusItems.ts`; React-or-mount render union; `StatusBar.tsx` and `useStatusItems` read it.
   - Done when: right-click menu and hidden items behave as before.
-- [ ] **P1.4 Sidebar views and settings tabs on registries** · PR # · after P1.1
+- [x] **P1.4 Sidebar views and settings tabs on registries** · PR #387 · after P1.1
   - `ViewSwitcher.tsx` / `Sidebar/index.tsx` and `SettingsModal.tsx` `TABS` read registries; `readView` fallback kept.
   - Done when: all four views and five tabs unchanged.
 - [ ] **P1.5 Editor compartment for added extensions** · PR # · after P1.1
