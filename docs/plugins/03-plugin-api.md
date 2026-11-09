@@ -8,6 +8,32 @@ wrapper whose shape is in this document. Internals can then be renamed and reorg
 without breaking published plugins. The two exceptions are CodeMirror's own types
 (`EditorView`, `Extension`), which are already a public, stable API.
 
+## As built in P2.3
+
+The runtime is `src/lib/plugins/` (`api/plugin.ts`, `api/app.ts`, `api/ui.ts`,
+`loader.ts`, `modules.ts`, `bridge.ts`, `paths.ts`). Where it differs from the design
+below:
+
+- `vault.files()` and `vault.exists()` are async (they ask the index in Rust).
+- `vault.rename(path, newName)` renames within the same folder; moving is not in v1.
+- `metadata` has `tags()` and `search()`; `frontmatter`, `backlinks`, `outgoingLinks`
+  and `resolveLink` come later.
+- `workspace.on` covers `active-note-change`, `editor-change` and `vault-open`; each
+  listener gets the note (or null). `note-open` and `layout-change` come later.
+- `ui.pick` comes later; `ui.notice`, `confirm`, `prompt` and `theme` are in.
+- `vault.write` to a note with a tab goes through its editor (`useDocuments.edit`), so it
+  is undoable and autosaved; to any other note it is a forced write.
+- A plugin's errors are caught where nuza calls into it (commands, DOM events, footer
+  items, settings panes, sidebar views, code block renderers) and reported once a minute
+  per plugin. Errors inside a CodeMirror extension are left to CodeMirror, which logs
+  them and disables that plugin; attributing them to a plugin is still to do.
+
+Checked end to end in the real app with a hand-written plugin in the test vault: loaded
+over `nuza-plugin://` under the real CSP, its `styles.css` applied, `require` handed it
+nuza's CodeMirror and refused an unshared module, `vault.files()` and `activeNote()`
+answered, a path out of the vault was refused, `saveData` wrote `data.json`, and a note
+created from the terminal reached its `vault.on("create")` listener.
+
 ## The manifest
 
 `manifest.json` in the plugin folder and attached to every release:

@@ -192,6 +192,7 @@ export function useFileOperations({
     markSaved,
     forget: forgetDocuments,
     rewrite: rewriteDocuments,
+    edit: editDocument,
   } = useDocuments({
     preferences,
     initialPath: UNTITLED_FILE,
@@ -1819,5 +1820,8 @@ export function useFileOperations({
     moveEntry,
     deleteEntry,
     attachFiles,
+    isDocumentOpen,
+    readDocument,
+    editDocument,
   };
 }

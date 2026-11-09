@@ -585,6 +585,34 @@ export function useDocuments({
     [stateFor, reportStats]
   );
 
+  /**
+   * Changes the text of a note that is held here, as an edit: it can be
+   * undone, it marks the note unsaved, and the autosave writes it. For a
+   * change made from outside the editor - a plugin's - to a note with a tab,
+   * which written straight to disk would come back as a conflict with what
+   * the tab holds. Returns false for a note that is not held.
+   */
+  const edit = useCallback((path: string, content: string) => {
+    const view =
+      path === currentPath.current
+        ? editor.current
+        : path === sidePathRef.current
+          ? sideEditor.current
+          : null;
+    const state = view?.state ?? states.current.get(path);
+    if (!state) return false;
+    if (state.doc.toString() === content) return true;
+
+    const changes = { from: 0, to: state.doc.length, insert: content };
+    if (view) {
+      view.dispatch({ changes });
+    } else {
+      states.current.set(path, state.update({ changes }).state);
+      setDirtyPaths((paths) => (paths.has(path) ? paths : new Set(paths).add(path)));
+    }
+    return true;
+  }, []);
+
   /** The path of the document the editor is showing right now. */
   const showing = useCallback(() => currentPath.current, []);
 
@@ -712,5 +740,6 @@ export function useDocuments({
     markSaved,
     forget,
     rewrite,
+    edit,
   };
 }
