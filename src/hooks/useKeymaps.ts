@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { KEYMAP_ACTIONS, KEYMAP_STORAGE_KEY, KeymapAction } from "@/lib/keymaps";
+import { KEYMAP_STORAGE_KEY, type KeymapBindings } from "@/lib/keymaps";
 import { firesWhileTyping, matchesBinding } from "@/lib/keybinding";
+import { commands, isEnabled, resolveBindings } from "@/lib/registries/commands";
+import { useRegistry } from "@/lib/registries/registry";
 import { changeFrom, valueFromChange } from "@/lib/storageSync";
 
-type KeymapOverrides = Partial<Record<KeymapAction, string>>;
+/** Keyed by command id; kept for commands that are not registered right now. */
+type KeymapOverrides = Partial<Record<string, string>>;
 
 function loadOverrides(): KeymapOverrides {
   try {
@@ -14,7 +17,7 @@ function loadOverrides(): KeymapOverrides {
   }
 }
 
-/** Resolves the effective binding for every action, merging user overrides onto the defaults. */
+/** Resolves the effective binding for every command, merging user overrides onto the defaults. */
 export function useKeymaps() {
   const [overrides, setOverrides] = useState<KeymapOverrides>(loadOverrides);
   const latest = useRef(overrides);
@@ -42,19 +45,17 @@ export function useKeymaps() {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  const bindings = useMemo(() => {
-    const map = {} as Record<KeymapAction, string>;
-    for (const action of KEYMAP_ACTIONS) {
-      map[action.id] = overrides[action.id] ?? action.defaultBinding;
-    }
-    return map;
-  }, [overrides]);
+  const registered = useRegistry(commands);
+  const bindings = useMemo(
+    () => resolveBindings(registered, overrides) as KeymapBindings,
+    [registered, overrides]
+  );
 
-  const setBinding = useCallback((action: KeymapAction, binding: string) => {
+  const setBinding = useCallback((action: string, binding: string) => {
     setOverrides((prev) => ({ ...prev, [action]: binding }));
   }, []);
 
-  const resetBinding = useCallback((action: KeymapAction) => {
+  const resetBinding = useCallback((action: string) => {
     setOverrides((prev) => {
       if (!(action in prev)) return prev;
       const next = { ...prev };
@@ -110,34 +111,44 @@ export function ownedHere(event: KeyboardEvent): boolean {
 }
 
 /**
- * Wires up a single global keydown listener that dispatches to the given
- * handlers based on the current (possibly user-customized) bindings.
- * Uses the capture phase so shortcuts still fire while CodeMirror has focus.
+ * Runs the command `bindings` give the keystroke to, if it can run, and says
+ * whether it did. The first binding that matches decides, even if its command
+ * cannot run just now: the keystroke is then left alone rather than handed to
+ * a command further down that shares the chord.
  */
-export function useKeymapListener(
-  bindings: Record<KeymapAction, string>,
-  handlers: Partial<Record<KeymapAction, () => void>>
-) {
+export function runBoundCommand(e: KeyboardEvent, bindings: Partial<Record<string, string>>): boolean {
+  if (ownedHere(e)) return false;
+  const typing = isTyping(e.target);
+
+  for (const [id, binding] of Object.entries(bindings)) {
+    if (!binding) continue;
+    if (typing && !firesWhileTyping(binding)) continue;
+    if (!matchesBinding(e, binding)) continue;
+
+    const command = commands.get(id);
+    if (!command || !isEnabled(command)) return false;
+    e.preventDefault();
+    void command.run();
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Wires up a single global keydown listener that runs the registered command
+ * the current (possibly user-customized) bindings give the keystroke to.
+ * Uses the capture phase so shortcuts still fire while CodeMirror has focus.
+ *
+ * Bindings are tried in order, nuza's own first, so a plugin's shortcut on
+ * a chord nuza already uses never takes it over.
+ */
+export function useKeymapListener(bindings: Partial<Record<string, string>>) {
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (ownedHere(e)) return;
-      const typing = isTyping(e.target);
-
-      for (const action of Object.keys(bindings) as KeymapAction[]) {
-        if (typing && !firesWhileTyping(bindings[action])) continue;
-
-        if (matchesBinding(e, bindings[action])) {
-          const handler = handlers[action];
-          if (handler) {
-            e.preventDefault();
-            handler();
-          }
-          return;
-        }
-      }
+      runBoundCommand(e, bindings);
     }
 
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [bindings, handlers]);
+  }, [bindings]);
 }

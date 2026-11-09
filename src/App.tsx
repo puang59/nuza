@@ -28,6 +28,8 @@ import ZenBar from "./components/ZenBar";
 import { zenFocus } from "./lib/markdown/zen";
 import { formatBinding } from "./lib/keybinding";
 import { KEYMAP_ACTIONS, type KeymapAction } from "./lib/keymaps";
+import { commands, CORE_GROUP, isEnabled } from "./lib/registries/commands";
+import { disposeAll, useRegistry } from "./lib/registries/registry";
 import type { ToggleSetting } from "./lib/settingsSearch";
 import { useVimMode } from "./hooks/useVimMode";
 import { useVaults } from "./hooks/useVaults";
@@ -1057,34 +1059,59 @@ function App() {
     ]
   );
 
-  useKeymapListener(keymapBindings, keymapHandlers);
+  // nuza's own actions, as commands: what their keys, the palette and the
+  // buttons on screen all run. Registered once, calling through a ref, since
+  // the handlers are made again on every render that changes one of them.
+  const handlersRef = useRef<Partial<Record<KeymapAction, () => void>>>(keymapHandlers);
+  handlersRef.current = keymapHandlers;
+  useEffect(() => {
+    const added = KEYMAP_ACTIONS.map((action) =>
+      commands.register({
+        id: action.id,
+        label: action.label,
+        description: action.description,
+        defaultBinding: action.defaultBinding,
+        group: CORE_GROUP,
+        run: () => handlersRef.current[action.id]?.(),
+        enabled: () => !!handlersRef.current[action.id],
+        // Not the palette itself, which is already open.
+        inPalette: action.id !== "quick-settings",
+      })
+    );
+    const all = disposeAll(added);
+    return () => all.dispose();
+  }, []);
 
-  // Every action with a handler, for the palette: by its name, with its
-  // shortcut. Not the palette itself, which is already open.
+  useKeymapListener(keymapBindings);
+
+  // Every command that can run, for the palette: by its name, with its
+  // shortcut. A plugin's is named after the plugin too, as it is in Keymaps.
+  const registeredCommands = useRegistry(commands);
   const paletteCommands = useMemo<PaletteCommand[]>(
     () =>
-      KEYMAP_ACTIONS.flatMap((action) => {
-        const run = (keymapHandlers as Partial<Record<KeymapAction, () => void>>)[action.id];
-        if (!run || action.id === "quick-settings") return [];
-        const binding = keymapBindings[action.id];
+      registeredCommands.flatMap((command) => {
+        if (command.inPalette === false || !isEnabled(command)) return [];
+        const binding = keymapBindings[command.id];
         return [
           {
-            id: action.id,
-            title: action.label,
-            description: action.description,
+            id: command.id,
+            title: command.group === CORE_GROUP ? command.label : `${command.group}: ${command.label}`,
+            description: command.description ?? "",
             shortcut: binding ? formatBinding(binding) : "",
-            run,
+            run: () => void command.run(),
           },
         ];
       }),
-    [keymapHandlers, keymapBindings]
+    // The handlers decide what is enabled, so a change to them is a change here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [registeredCommands, keymapBindings, keymapHandlers]
   );
 
   /** Does what an action's keys would, for something on screen that offers it. */
-  const runAction = useCallback(
-    (action: KeymapAction) => (keymapHandlers as Partial<Record<KeymapAction, () => void>>)[action]?.(),
-    [keymapHandlers]
-  );
+  const runAction = useCallback((action: KeymapAction) => {
+    const command = commands.get(action);
+    if (command && isEnabled(command)) void command.run();
+  }, []);
 
   // The two extra buttons on the side of a mouse, which go back and forward
   // everywhere else they are found.

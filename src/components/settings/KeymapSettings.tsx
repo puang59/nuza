@@ -1,12 +1,37 @@
 import { useMemo } from "react";
-import { conflictingActions, KEYMAP_ACTIONS, KeymapAction } from "@/lib/keymaps";
+import { conflictingActions, KEYMAP_ACTIONS, type KeymapBindings } from "@/lib/keymaps";
+import { commands, CORE_GROUP } from "@/lib/registries/commands";
+import { useRegistry } from "@/lib/registries/registry";
 import KeyRecorder from "./KeyRecorder";
 
 interface KeymapSettingsProps {
-  bindings: Record<KeymapAction, string>;
-  setBinding: (action: KeymapAction, binding: string) => void;
-  resetBinding: (action: KeymapAction) => void;
+  bindings: KeymapBindings;
+  setBinding: (action: string, binding: string) => void;
+  resetBinding: (action: string) => void;
   resetAll: () => void;
+}
+
+interface Row {
+  id: string;
+  label: string;
+  description: string;
+  defaultBinding: string;
+}
+
+/** Commands plugins added, by the plugin they came from, in the order they arrived. */
+function pluginGroups(registered: ReturnType<typeof commands.list>): [string, Row[]][] {
+  const groups = new Map<string, Row[]>();
+  for (const command of registered) {
+    if (command.group === CORE_GROUP) continue;
+    const row = {
+      id: command.id,
+      label: command.label,
+      description: command.description ?? "",
+      defaultBinding: command.defaultBinding ?? "",
+    };
+    groups.set(command.group, [...(groups.get(command.group) ?? []), row]);
+  }
+  return [...groups];
 }
 
 export default function KeymapSettings({
@@ -15,7 +40,11 @@ export default function KeymapSettings({
   resetBinding,
   resetAll,
 }: KeymapSettingsProps) {
-  const hasCustomBindings = KEYMAP_ACTIONS.some((action) => bindings[action.id] !== action.defaultBinding);
+  const registered = useRegistry(commands);
+  const groups = useMemo(() => pluginGroups(registered), [registered]);
+  const hasCustomBindings =
+    KEYMAP_ACTIONS.some((action) => bindings[action.id] !== action.defaultBinding) ||
+    groups.some(([, rows]) => rows.some((row) => (bindings[row.id] ?? "") !== row.defaultBinding));
 
   // Two actions on one chord is resolved by whichever the listener reaches
   // first, which is an order nobody chose and nothing shows. Both of them are
@@ -36,28 +65,49 @@ export default function KeymapSettings({
         )}
       </div>
 
-      <div className="divide-y divide-zinc-800">
-        {KEYMAP_ACTIONS.map((action) => (
-          <div key={action.id} className="flex items-center justify-between gap-4 py-2.5">
-            <div className="min-w-0">
-              <h3 className="text-sm font-medium text-white truncate">{action.label}</h3>
-              {clashing.has(action.id) ? (
-                <p className="mt-0.5 truncate text-xs text-amber-400">
-                  Shared with another shortcut — only one of them will run.
-                </p>
-              ) : (
-                <p className="text-xs text-gray-500 mt-0.5 truncate">{action.description}</p>
-              )}
-            </div>
-            <KeyRecorder
-              binding={bindings[action.id]}
-              defaultBinding={action.defaultBinding}
-              onChange={(nextBinding) => setBinding(action.id, nextBinding)}
-              onReset={() => resetBinding(action.id)}
-            />
+      <Rows rows={KEYMAP_ACTIONS} {...{ bindings, clashing, setBinding, resetBinding }} />
+
+      {groups.map(([group, rows]) => (
+        <section key={group} className="mt-5">
+          <h2 className="mb-1 text-xs font-medium text-gray-500">{group}</h2>
+          <Rows rows={rows} {...{ bindings, clashing, setBinding, resetBinding }} />
+        </section>
+      ))}
+    </div>
+  );
+}
+
+interface RowsProps {
+  rows: readonly Row[];
+  bindings: KeymapBindings;
+  clashing: Set<string>;
+  setBinding: (action: string, binding: string) => void;
+  resetBinding: (action: string) => void;
+}
+
+function Rows({ rows, bindings, clashing, setBinding, resetBinding }: RowsProps) {
+  return (
+    <div className="divide-y divide-zinc-800">
+      {rows.map((action) => (
+        <div key={action.id} className="flex items-center justify-between gap-4 py-2.5">
+          <div className="min-w-0">
+            <h3 className="text-sm font-medium text-white truncate">{action.label}</h3>
+            {clashing.has(action.id) ? (
+              <p className="mt-0.5 truncate text-xs text-amber-400">
+                Shared with another shortcut — only one of them will run.
+              </p>
+            ) : (
+              <p className="text-xs text-gray-500 mt-0.5 truncate">{action.description}</p>
+            )}
           </div>
-        ))}
-      </div>
+          <KeyRecorder
+            binding={bindings[action.id] ?? ""}
+            defaultBinding={action.defaultBinding}
+            onChange={(nextBinding) => setBinding(action.id, nextBinding)}
+            onReset={() => resetBinding(action.id)}
+          />
+        </div>
+      ))}
     </div>
   );
 }
