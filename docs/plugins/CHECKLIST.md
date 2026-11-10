@@ -59,7 +59,7 @@ Users see no change. Every existing test keeps passing.
 - [x] **P2.1 Plugins module, manifests, enabled list** · PR #391 · after D1, D2
   - `src-tauri/src/plugins/{mod,manifest,store}.rs`; `plugins_state`, `plugins_set_community`, `plugins_set_enabled`, `plugins_open_folder`; stale staging cleanup; `.nuza` skipped by index and search.
   - Done when: manifest rule tests and fixture-vault `plugins_state` tests pass ([04](04-rust-backend.md#tests-pluginstestsrs)).
-- [ ] **P2.2 The `nuza-plugin` scheme and CSP** · PR # · after P2.1
+- [x] **P2.2 The `nuza-plugin` scheme and CSP** · PR #392 · after P2.1
   - `plugins/protocol.rs`; `csp` and `devCsp` in `tauri.conf.json` (both scheme forms).
   - Done when: every refusal case in the plan returns 403 in tests; a script and stylesheet load in dev on macOS.
 - [ ] **P2.3 Plugin runtime and loader** · PR # · after P1.2-P1.6, P2.2, D3

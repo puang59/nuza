@@ -3,6 +3,7 @@
 //! See docs/plugins/.
 
 pub(crate) mod manifest;
+pub(crate) mod protocol;
 pub(crate) mod store;
 
 use crate::state::{locked, vault_of, Windows};
