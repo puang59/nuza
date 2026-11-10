@@ -1,0 +1,252 @@
+use super::manifest::{self, PluginManifest};
+use super::store::{self, PluginsConfig};
+use std::fs;
+use std::path::Path;
+
+fn good() -> PluginManifest {
+    PluginManifest {
+        id: "word-goal".into(),
+        name: "Word Goal".into(),
+        version: "1.2.0".into(),
+        min_app_version: "2.0.0".into(),
+        api_version: 1,
+        description: "A daily word target in the status bar.".into(),
+        author: "Jane Doe".into(),
+        author_url: None,
+        funding_url: None,
+        permissions: vec![],
+    }
+}
+
+fn install(root: &Path, folder: &str, manifest: Option<&PluginManifest>, main: bool) {
+    let dir = store::plugins_folder(root).join(folder);
+    fs::create_dir_all(&dir).unwrap();
+    if let Some(manifest) = manifest {
+        fs::write(
+            dir.join("manifest.json"),
+            serde_json::to_string(manifest).unwrap(),
+        )
+        .unwrap();
+    }
+    if main {
+        fs::write(dir.join("main.js"), "nuza.registerPlugin(function () {});").unwrap();
+    }
+}
+
+#[test]
+fn a_good_manifest_has_no_problem() {
+    assert_eq!(manifest::problem(&good(), "word-goal"), None);
+}
+
+/// A change to a good manifest, and what the problem with it should say.
+type Breakage = (&'static str, Box<dyn Fn(&mut PluginManifest)>);
+
+#[test]
+fn a_manifest_is_refused_for_each_rule_it_breaks() {
+    let cases: Vec<Breakage> = vec![
+        (
+            "not a valid plugin id",
+            Box::new(|m| m.id = "Word_Goal".into()),
+        ),
+        (
+            "but its folder is called",
+            Box::new(|m| m.id = "other-id".into()),
+        ),
+        (
+            "can't contain \"nuza\"",
+            Box::new(|m| m.name = "Nuza Goals".into()),
+        ),
+        ("name has to be", Box::new(|m| m.name = " ".into())),
+        (
+            "description has to be",
+            Box::new(|m| m.description = "x".repeat(251)),
+        ),
+        ("who wrote it", Box::new(|m| m.author = String::new())),
+        (
+            "not a version number like 1.0.0",
+            Box::new(|m| m.version = "1.0".into()),
+        ),
+        (
+            "Needs nuza 99.0.0 or newer",
+            Box::new(|m| m.min_app_version = "99.0.0".into()),
+        ),
+        ("plugin API 7", Box::new(|m| m.api_version = 7)),
+        (
+            "doesn't know: \"camera\"",
+            Box::new(|m| m.permissions = vec!["camera".into()]),
+        ),
+    ];
+    for (expected, change) in cases {
+        let mut manifest = good();
+        change(&mut manifest);
+        // The folder keeps the good id, so only the id-mismatch case differs from it.
+        let folder = if expected.contains("folder") {
+            "word-goal".to_string()
+        } else {
+            manifest.id.clone()
+        };
+        let problem = manifest::problem(&manifest, &folder).unwrap_or_default();
+        assert!(
+            problem.contains(expected),
+            "expected {expected:?}, got {problem:?}"
+        );
+    }
+}
+
+#[test]
+fn ids_are_lower_case_words_joined_by_dashes() {
+    for id in ["word-goal", "abc", "a1-b2"] {
+        assert!(manifest::is_valid_id(id), "{id}");
+    }
+    for id in [
+        "ab",
+        "-word",
+        "word-",
+        "Word",
+        "word_goal",
+        "word goal",
+        "../x",
+        &"a".repeat(65),
+    ] {
+        assert!(!manifest::is_valid_id(id), "{id}");
+    }
+}
+
+#[test]
+fn versions_are_three_numbers() {
+    assert_eq!(manifest::version("3.0.12"), Some((3, 0, 12)));
+    assert!(manifest::version("3.0").is_none());
+    assert!(manifest::version("3.0.0.1").is_none());
+    assert!(manifest::version("3.x.0").is_none());
+}
+
+#[test]
+fn a_vault_with_no_settings_runs_nothing() {
+    let vault = tempfile::tempdir().unwrap();
+    assert_eq!(store::read_config(vault.path()), PluginsConfig::default());
+
+    fs::create_dir_all(store::app_folder(vault.path())).unwrap();
+    fs::write(
+        store::app_folder(vault.path()).join("plugins.json"),
+        "{ not json",
+    )
+    .unwrap();
+    assert_eq!(store::read_config(vault.path()), PluginsConfig::default());
+}
+
+#[test]
+fn settings_are_kept() {
+    let vault = tempfile::tempdir().unwrap();
+    let config = PluginsConfig {
+        community: true,
+        enabled: vec!["word-goal".into()],
+    };
+    store::write_config(vault.path(), &config).unwrap();
+    assert_eq!(store::read_config(vault.path()), config);
+}
+
+#[test]
+fn installed_plugins_are_listed_with_what_stops_them_loading() {
+    let vault = tempfile::tempdir().unwrap();
+    let root = vault.path();
+    install(root, "word-goal", Some(&good()), true);
+    install(
+        root,
+        "no-main",
+        Some(&PluginManifest {
+            id: "no-main".into(),
+            name: "No Main".into(),
+            ..good()
+        }),
+        false,
+    );
+    install(root, "no-manifest", None, true);
+    install(
+        root,
+        "too-new",
+        Some(&PluginManifest {
+            id: "too-new".into(),
+            name: "Too New".into(),
+            min_app_version: "99.0.0".into(),
+            ..good()
+        }),
+        true,
+    );
+    let config = PluginsConfig {
+        community: true,
+        enabled: vec!["word-goal".into()],
+    };
+
+    let found = store::installed(root, &config);
+    let by_id = |id: &str| found.iter().find(|plugin| plugin.id == id).unwrap();
+
+    assert_eq!(by_id("word-goal").problem, None);
+    assert!(by_id("word-goal").enabled);
+    assert_eq!(by_id("word-goal").hash.len(), 12);
+    assert!(!by_id("no-main").enabled);
+    assert_eq!(
+        by_id("no-main").problem.as_deref(),
+        Some("It has no main.js")
+    );
+    assert_eq!(
+        by_id("no-manifest").problem.as_deref(),
+        Some("It has no manifest.json")
+    );
+    assert_eq!(
+        by_id("too-new").problem.as_deref(),
+        Some("Needs nuza 99.0.0 or newer")
+    );
+}
+
+#[test]
+fn installs_cut_short_are_cleared_and_hidden_folders_skipped() {
+    let vault = tempfile::tempdir().unwrap();
+    let root = vault.path();
+    install(root, "word-goal", Some(&good()), true);
+    install(root, ".staging-kanban-1a2b", None, true);
+    install(root, ".DS_Store-ish", None, false);
+
+    let found = store::installed(root, &PluginsConfig::default());
+
+    assert_eq!(
+        found
+            .iter()
+            .map(|plugin| plugin.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["word-goal"]
+    );
+    assert!(!store::plugins_folder(root)
+        .join(".staging-kanban-1a2b")
+        .exists());
+}
+
+#[test]
+fn plugins_are_listed_by_name() {
+    let vault = tempfile::tempdir().unwrap();
+    let root = vault.path();
+    install(
+        root,
+        "zeta",
+        Some(&PluginManifest {
+            id: "zeta".into(),
+            name: "Alpha Tool".into(),
+            ..good()
+        }),
+        true,
+    );
+    install(
+        root,
+        "alpha",
+        Some(&PluginManifest {
+            id: "alpha".into(),
+            name: "Zed Tool".into(),
+            ..good()
+        }),
+        true,
+    );
+    let names: Vec<String> = store::installed(root, &PluginsConfig::default())
+        .into_iter()
+        .map(|plugin| plugin.manifest.unwrap().name)
+        .collect();
+    assert_eq!(names, vec!["Alpha Tool", "Zed Tool"]);
+}

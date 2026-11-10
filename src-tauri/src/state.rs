@@ -70,6 +70,22 @@ impl Windows {
         root
     }
 
+    /// The windows with `root` open, other than `except`: the ones to tell
+    /// when something about the folder changes in one of them.
+    pub(crate) fn others_on(&self, root: &Path, except: &str) -> Vec<String> {
+        let vaults: Vec<(String, Arc<Vault>)> = locked(&self.0)
+            .iter()
+            .map(|(label, vault)| (label.clone(), vault.clone()))
+            .collect();
+        vaults
+            .into_iter()
+            .filter(|(label, vault)| {
+                label != except && locked(&vault.root).as_deref() == Some(root)
+            })
+            .map(|(label, _)| label)
+            .collect()
+    }
+
     /// Forgets a window that has closed, which drops its watcher with it.
     pub(crate) fn remove(&self, label: &str) {
         locked(&self.0).remove(label);

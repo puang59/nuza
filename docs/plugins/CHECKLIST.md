@@ -21,8 +21,8 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` merged
 
 ## Decisions (before or during phase 1)
 
-- [ ] **D1** Install plugins per vault or once for every vault. Plan default: per vault. Needed by P2.1.
-- [ ] **D2** Confirm `.nuza/` as the in-vault folder name. Needed by P2.1.
+- [x] **D1** Install plugins per vault or once for every vault. Plan default: per vault. Needed by P2.1. Taken: per vault (the default), revisit any time before 3.0.
+- [x] **D2** Confirm `.nuza/` as the in-vault folder name. Needed by P2.1. Taken: `.nuza/` (the default).
 - [ ] **D3** Expose nuza's React to plugins: plan default no. Needed by P2.3.
 - [ ] **D4** Registry owner: `puang59/nuza-plugins` or a `nuza` org. Needed by P3.2.
 - [x] **D5** Phase 1 into `main-v3` (plan default) or straight to `main` in 2.x. Needed by P1.1. Decided: `main-v3`.
@@ -56,7 +56,7 @@ Users see no change. Every existing test keeps passing.
 
 ## Phase 2: local plugins
 
-- [ ] **P2.1 Plugins module, manifests, enabled list** · PR # · after D1, D2
+- [x] **P2.1 Plugins module, manifests, enabled list** · PR #391 · after D1, D2
   - `src-tauri/src/plugins/{mod,manifest,store}.rs`; `plugins_state`, `plugins_set_community`, `plugins_set_enabled`, `plugins_open_folder`; stale staging cleanup; `.nuza` skipped by index and search.
   - Done when: manifest rule tests and fixture-vault `plugins_state` tests pass ([04](04-rust-backend.md#tests-pluginstestsrs)).
 - [ ] **P2.2 The `nuza-plugin` scheme and CSP** · PR # · after P2.1

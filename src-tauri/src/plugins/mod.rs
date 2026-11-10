@@ -1,0 +1,113 @@
+//! Community plugins: finding the ones installed in a vault, and which of
+//! them run. The page loads them; this decides what it is allowed to load.
+//! See docs/plugins/.
+
+pub(crate) mod manifest;
+pub(crate) mod store;
+
+use crate::state::{locked, vault_of, Windows};
+use crate::tasks::off_thread;
+use serde::Serialize;
+use std::path::PathBuf;
+use store::{InstalledPlugin, PluginsConfig};
+use tauri::{Emitter, Manager};
+
+/// Told to the other windows on a vault when its plugins are changed in one.
+pub(crate) const PLUGINS_CHANGED_EVENT: &str = "plugins-changed";
+
+/// What the page needs to know to load a vault's plugins.
+#[derive(Serialize)]
+pub(crate) struct PluginsState {
+    community: bool,
+    plugins: Vec<InstalledPlugin>,
+}
+
+/// The folder open in the window, or why there is nothing to do yet.
+fn root_of(window: &tauri::WebviewWindow) -> Result<PathBuf, String> {
+    let vault = vault_of(window);
+    let root = locked(&vault.root).clone();
+    root.ok_or_else(|| "Open a folder first".to_string())
+}
+
+/// Tells the other windows on the same folder that its plugins changed.
+fn tell_others(window: &tauri::WebviewWindow, root: &std::path::Path) {
+    let windows = window.state::<Windows>();
+    for label in windows.others_on(root, window.label()) {
+        let _ = window.emit_to(label.as_str(), PLUGINS_CHANGED_EVENT, ());
+    }
+}
+
+/// The plugins installed in the window's vault, and whether community plugins
+/// run there at all. A plugin that will not load is listed with why.
+#[tauri::command]
+pub(crate) async fn plugins_state(window: tauri::WebviewWindow) -> Result<PluginsState, String> {
+    let root = root_of(&window)?;
+    off_thread(move || {
+        let config = store::read_config(&root);
+        Ok(PluginsState {
+            community: config.community,
+            plugins: store::installed(&root, &config),
+        })
+    })
+    .await
+}
+
+/// Turns community plugins on or off for the window's vault.
+#[tauri::command]
+pub(crate) async fn plugins_set_community(
+    window: tauri::WebviewWindow,
+    on: bool,
+) -> Result<(), String> {
+    let root = root_of(&window)?;
+    let notify = window.clone();
+    off_thread(move || {
+        let config = PluginsConfig {
+            community: on,
+            ..store::read_config(&root)
+        };
+        store::write_config(&root, &config)?;
+        tell_others(&notify, &root);
+        Ok(())
+    })
+    .await
+}
+
+/// Turns one plugin on or off for the window's vault.
+#[tauri::command]
+pub(crate) async fn plugins_set_enabled(
+    window: tauri::WebviewWindow,
+    id: String,
+    on: bool,
+) -> Result<(), String> {
+    if !manifest::is_valid_id(&id) {
+        return Err(format!("\"{id}\" is not a plugin id"));
+    }
+    let root = root_of(&window)?;
+    let notify = window.clone();
+    off_thread(move || {
+        let mut config = store::read_config(&root);
+        config.enabled.retain(|enabled| enabled != &id);
+        if on {
+            config.enabled.push(id);
+        }
+        store::write_config(&root, &config)?;
+        tell_others(&notify, &root);
+        Ok(())
+    })
+    .await
+}
+
+/// Opens the vault's plugins folder in the file manager, making it if need be.
+#[tauri::command]
+pub(crate) async fn plugins_open_folder(window: tauri::WebviewWindow) -> Result<(), String> {
+    let root = root_of(&window)?;
+    off_thread(move || {
+        let folder = store::plugins_folder(&root);
+        std::fs::create_dir_all(&folder).map_err(|e| e.to_string())?;
+        tauri_plugin_opener::open_path(&folder, None::<&str>).map_err(|e| e.to_string())
+    })
+    .await
+}
+
+#[cfg(test)]
+mod tests;

@@ -12,6 +12,7 @@ mod launch;
 mod media;
 mod menu;
 mod multiwindow;
+mod plugins;
 mod recovery;
 mod search;
 mod shellpath;
@@ -246,7 +247,11 @@ pub fn run() {
             agent::commands::agent_set_vault_search,
             agent::commands::agent_citable,
             agent::commands::agent_cite,
-            watcher::plugins_watch_vault
+            watcher::plugins_watch_vault,
+            plugins::plugins_state,
+            plugins::plugins_set_community,
+            plugins::plugins_set_enabled,
+            plugins::plugins_open_folder
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
