@@ -415,3 +415,30 @@ mod trust {
         assert!(!trust.allows(vault.path()));
     }
 }
+
+#[test]
+fn a_rebuild_is_a_change_to_the_code_or_the_styles() {
+    use super::dev::is_built;
+    assert!(is_built(Path::new("/dev/word-goal/main.js")));
+    assert!(is_built(Path::new("/dev/word-goal/styles.css")));
+    assert!(!is_built(Path::new("/dev/word-goal/main.js.map")));
+    assert!(!is_built(Path::new("/dev/word-goal/data.json")));
+}
+
+#[test]
+fn the_hash_follows_the_styles_too() {
+    let vault = tempfile::tempdir().unwrap();
+    install(vault.path(), "word-goal", Some(&good()), true);
+    let hash = || {
+        store::installed(vault.path(), &PluginsConfig::default())[0]
+            .hash
+            .clone()
+    };
+    let before = hash();
+    fs::write(
+        store::plugins_folder(vault.path()).join("word-goal/styles.css"),
+        "a {}",
+    )
+    .unwrap();
+    assert_ne!(hash(), before);
+}

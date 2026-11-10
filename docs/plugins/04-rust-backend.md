@@ -199,3 +199,13 @@ changed; nothing else depends on GitHub directly.
   wrong id, wrong version, oversized file, interrupted download leaves the old version.
 - Watcher: with the flag clear no `vault-change` is emitted; with it set, create, modify,
   delete, rename and `.nuza` exclusion.
+
+### As built: dev reload (P2.6)
+
+`plugins/dev.rs`: `plugins_dev_watch(id, on)` refuses a folder that is not a link, and an
+untrusted vault, then watches the link's target (not recursive) and emits
+`plugin-rebuilt` with the id when `main.js` or `styles.css` is written. Watchers live in
+`Vault.dev_watchers` and are dropped when the window opens another folder. The plugin's
+`hash` now covers `styles.css` as well, so the page's `PluginHost.rebuilt()` (debounced
+150 ms) only has to sync. Checked in the real app: a rebuild reloads the plugin with no
+page reload, and its `saveData` state carries over; a styles-only change reloads it too.

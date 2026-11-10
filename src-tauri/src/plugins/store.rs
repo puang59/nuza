@@ -140,7 +140,7 @@ fn read_plugin(folder: &Path, id: &str, linked: bool, config: &PluginsConfig) ->
         },
     }
 
-    match hash_of(&folder.join("main.js")) {
+    match hash_of(&folder.join("main.js"), &folder.join("styles.css")) {
         Some(hash) => plugin.hash = hash,
         None => {
             plugin
@@ -164,10 +164,17 @@ pub(crate) fn read_limited(path: &Path, limit: u64) -> Result<String, String> {
     Ok(text)
 }
 
-/// The first 12 hex characters of a file's SHA-256.
-fn hash_of(path: &Path) -> Option<String> {
-    let bytes = fs::read(path).ok()?;
-    let digest = Sha256::digest(&bytes);
+/// The first 12 hex characters of the SHA-256 of a plugin's code and its
+/// styles, if it has any: what changes when either is rebuilt. None without
+/// the code.
+fn hash_of(main: &Path, styles: &Path) -> Option<String> {
+    let mut hasher = Sha256::new();
+    hasher.update(fs::read(main).ok()?);
+    if let Ok(css) = fs::read(styles) {
+        hasher.update([0]);
+        hasher.update(css);
+    }
+    let digest = hasher.finalize();
     Some(
         digest
             .iter()

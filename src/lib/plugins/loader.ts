@@ -113,7 +113,15 @@ interface Loaded {
   plugin: Plugin;
   hash: string;
   elements: HTMLElement[];
+  /** A link to where it is built, watched for rebuilds. */
+  linked: boolean;
 }
+
+/** Told by plugins/dev.rs when a linked plugin is rebuilt. */
+export const PLUGIN_REBUILT_EVENT = "plugin-rebuilt";
+
+/** How long a rebuild is given to finish writing before the plugin is reloaded. */
+const REBUILD_SETTLE_MS = 150;
 
 /** Ends after `ms`, failing with `message`, unless `promise` settles first. */
 function within<T>(promise: Promise<T>, ms: number, message: string) {
@@ -158,6 +166,7 @@ export class PluginHost {
   private markerKey: string | null = null;
   /** Held back for this visit to the vault, until the person says otherwise. */
   private skipped: Held | null = null;
+  private rebuildTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor() {
     window.nuza = { registerPlugin };
@@ -185,6 +194,15 @@ export class PluginHost {
     else if (skip) this.skipped = { why: "shift" };
     else this.skipped = null;
     return this.skipped;
+  }
+
+  /**
+   * A linked plugin was rebuilt: reloads it once the build has settled - its
+   * hash has changed, which is what `sync` reloads on.
+   */
+  rebuilt() {
+    clearTimeout(this.rebuildTimer);
+    this.rebuildTimer = setTimeout(() => void this.sync(), REBUILD_SETTLE_MS);
   }
 
   /** Loads the vault's plugins after all, in a visit that started without them. */
@@ -269,6 +287,13 @@ export class PluginHost {
     return invoke<PluginsState>("plugins_state");
   }
 
+  /** Starts or stops reloading a linked plugin when it is rebuilt. */
+  protected watchRebuilds(id: string, on: boolean) {
+    invoke("plugins_dev_watch", { id, on }).catch((error) =>
+      console.warn(`Couldn't ${on ? "watch" : "stop watching"} ${id} for rebuilds:`, error)
+    );
+  }
+
   /** Runs the plugin's main.js, and hands back the factory it registered. */
   protected async loadCode(installed: InstalledPlugin, elements: HTMLElement[]): Promise<Factory> {
     const { id, hash } = installed;
@@ -316,7 +341,8 @@ export class PluginHost {
 
       const loadMs = Math.round(performance.now() - started);
       if (loadMs > SLOW_LOAD_MS) console.warn(`${manifest.name} took ${loadMs} ms to start`);
-      this.loaded.set(id, { plugin, hash, elements });
+      this.loaded.set(id, { plugin, hash, elements, linked: installed.linked });
+      if (installed.linked) this.watchRebuilds(id, true);
       return { state: "loaded", loadMs };
     } catch (error) {
       if (plugin) this.undo(plugin);
@@ -330,6 +356,7 @@ export class PluginHost {
     const loaded = this.loaded.get(id);
     if (!loaded) return;
     this.loaded.delete(id);
+    if (loaded.linked) this.watchRebuilds(id, false);
     try {
       loaded.plugin.onunload();
     } catch (error) {
