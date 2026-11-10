@@ -45,3 +45,8 @@ export function report(message: string, error?: unknown) {
 
   window.dispatchEvent(new CustomEvent(NOTICE_EVENT, { detail: { message, reason: reason || undefined } }));
 }
+
+/** Says `message`, which is news rather than a failure: shown, not logged as an error. */
+export function tell(message: string) {
+  window.dispatchEvent(new CustomEvent(NOTICE_EVENT, { detail: { message } }));
+}

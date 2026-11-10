@@ -98,6 +98,57 @@ pub(crate) async fn plugins_set_enabled(
     .await
 }
 
+/// The most a plugin may keep in its data.json.
+const DATA_LIMIT: u64 = 5 * 1024 * 1024;
+
+/// What a plugin saved with `saveData`, as the JSON text it saved, or None if
+/// it has saved nothing yet.
+#[tauri::command]
+pub(crate) async fn plugin_load_data(
+    window: tauri::WebviewWindow,
+    id: String,
+) -> Result<Option<String>, String> {
+    let file = data_file(&window, &id)?;
+    off_thread(move || match store::read_limited(&file, DATA_LIMIT) {
+        Ok(text) => Ok(Some(text)),
+        Err(_) if !file.exists() => Ok(None),
+        Err(error) => Err(error),
+    })
+    .await
+}
+
+/// Keeps a plugin's settings in its folder, written whole or not at all.
+#[tauri::command]
+pub(crate) async fn plugin_save_data(
+    window: tauri::WebviewWindow,
+    id: String,
+    data: String,
+) -> Result<(), String> {
+    if data.len() as u64 > DATA_LIMIT {
+        return Err("A plugin's saved data can't be more than 5 MB".to_string());
+    }
+    serde_json::from_str::<serde_json::Value>(&data)
+        .map_err(|e| format!("That isn't JSON: {e}"))?;
+    let file = data_file(&window, &id)?;
+    off_thread(move || {
+        if !file.parent().is_some_and(|folder| folder.is_dir()) {
+            return Err("That plugin isn't installed".to_string());
+        }
+        crate::files::write_atomically(&file, data.as_bytes())
+    })
+    .await
+}
+
+/// Where plugin `id` keeps its data in the window's vault.
+fn data_file(window: &tauri::WebviewWindow, id: &str) -> Result<PathBuf, String> {
+    if !manifest::is_valid_id(id) {
+        return Err(format!("\"{id}\" is not a plugin id"));
+    }
+    Ok(store::plugins_folder(&root_of(window)?)
+        .join(id)
+        .join("data.json"))
+}
+
 /// Opens the vault's plugins folder in the file manager, making it if need be.
 #[tauri::command]
 pub(crate) async fn plugins_open_folder(window: tauri::WebviewWindow) -> Result<(), String> {

@@ -32,6 +32,9 @@ import { commands, CORE_GROUP, isEnabled } from "./lib/registries/commands";
 import { disposeAll, useRegistry } from "./lib/registries/registry";
 import { events } from "./lib/registries/events";
 import { connectVaultChanges } from "./lib/vaultChanges";
+import { setHostBridge } from "./lib/plugins/bridge";
+import { plugins } from "./lib/plugins/loader";
+import { listenHere } from "./lib/windowEvents";
 import type { ToggleSetting } from "./lib/settingsSearch";
 import { useVimMode } from "./hooks/useVimMode";
 import { useVaults } from "./hooks/useVaults";
@@ -108,6 +111,12 @@ const NO_PINS: string[] = [];
  * rather than squeezing the note to nothing.
  */
 const NARROW_WINDOW = 900;
+
+/** How long after a folder opens its plugins are loaded: after the first note is on screen. */
+const PLUGIN_LOAD_DELAY = 300;
+
+/** Told to every window on a folder when its plugins change in one (plugins/mod.rs). */
+const PLUGINS_CHANGED_EVENT = "plugins-changed";
 
 function App() {
   const [mode, setMode] = useState<string>("normal");
@@ -342,6 +351,9 @@ function App() {
     moveEntry,
     deleteEntry,
     attachFiles,
+    isDocumentOpen,
+    readDocument,
+    editDocument,
   } = useFileOperations({
     preferences: editorPreferences,
     onFolderOpened,
@@ -491,6 +503,68 @@ function App() {
   useEffect(() => events.emit("vault-open", { path: rootPath ?? null }), [rootPath]);
   useEffect(() => events.emit("active-note-change", { path: notePath }), [notePath]);
   useEffect(connectVaultChanges, []);
+
+  // What community plugins reach the app through (lib/plugins/bridge.ts):
+  // read when a plugin asks, so it always sees the app as it is right then.
+  const forPlugins = useRef({
+    rootPath,
+    notePath,
+    editorView,
+    isDocumentOpen,
+    readDocument,
+    editDocument,
+    selectFile,
+    openToSide,
+    renameEntry,
+    deleteEntry,
+    createFolder,
+  });
+  useEffect(() => {
+    forPlugins.current = {
+      rootPath,
+      notePath,
+      editorView,
+      isDocumentOpen,
+      readDocument,
+      editDocument,
+      selectFile,
+      openToSide,
+      renameEntry,
+      deleteEntry,
+      createFolder,
+    };
+  });
+  useEffect(() => {
+    setHostBridge({
+      root: () => forPlugins.current.rootPath ?? null,
+      activePath: () => forPlugins.current.notePath,
+      activeView: () => forPlugins.current.editorView ?? null,
+      isOpen: (path) => forPlugins.current.isDocumentOpen(path),
+      readOpen: (path) => forPlugins.current.readDocument(path),
+      editOpen: (path, text) => forPlugins.current.editDocument(path, text),
+      openNote: (path, { split }) =>
+        split ? forPlugins.current.openToSide(path) : forPlugins.current.selectFile(path),
+      rename: async (path, newName) => void (await forPlugins.current.renameEntry(path, newName)),
+      trash: (path) => forPlugins.current.deleteEntry(path),
+      createFolder: (parent, name) => forPlugins.current.createFolder(parent, name),
+    });
+    return () => setHostBridge(null);
+  }, []);
+
+  // The folder's plugins, loaded once the window has drawn and has a moment
+  // to spare, so a slow one never holds up opening a note; unloaded when the
+  // window leaves the folder; and brought up to date when another window on
+  // the same folder turns one on or off.
+  useEffect(() => {
+    if (!rootPath) return;
+    const timer = setTimeout(() => void plugins.sync(), PLUGIN_LOAD_DELAY);
+    const listening = listenHere(PLUGINS_CHANGED_EVENT, () => void plugins.sync());
+    return () => {
+      clearTimeout(timer);
+      void listening.then((unlisten) => unlisten());
+      void plugins.unloadAll();
+    };
+  }, [rootPath]);
 
   const outline = useOutline(editorView);
   const onJumpToHeading = useCallback(

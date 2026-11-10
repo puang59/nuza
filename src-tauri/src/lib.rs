@@ -267,7 +267,9 @@ pub fn run() {
             plugins::plugins_state,
             plugins::plugins_set_community,
             plugins::plugins_set_enabled,
-            plugins::plugins_open_folder
+            plugins::plugins_open_folder,
+            plugins::plugin_load_data,
+            plugins::plugin_save_data
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
