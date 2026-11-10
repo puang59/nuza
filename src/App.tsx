@@ -34,7 +34,13 @@ import { disposeAll, useRegistry } from "./lib/registries/registry";
 import { events } from "./lib/registries/events";
 import { connectVaultChanges } from "./lib/vaultChanges";
 import { setHostBridge } from "./lib/plugins/bridge";
-import { heldMessage, PLUGIN_REBUILT_EVENT, pluginName, plugins } from "./lib/plugins/loader";
+import {
+  heldMessage,
+  PLUGIN_DATA_CHANGED_EVENT,
+  PLUGIN_REBUILT_EVENT,
+  pluginName,
+  plugins,
+} from "./lib/plugins/loader";
 import { listenHere } from "./lib/windowEvents";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import type { ToggleSetting } from "./lib/settingsSearch";
@@ -556,9 +562,9 @@ function App() {
   // The folder's plugins, loaded once the window has drawn and has a moment
   // to spare, so a slow one never holds up opening a note; unloaded when the
   // window leaves the folder; and brought up to date when another window on
-  // the same folder turns one on or off, or a linked one is rebuilt. Shift
-  // held as the folder opens - or a start that a plugin stopped last time -
-  // opens it without them.
+  // the same folder turns one on or off or saves a plugin's data, or a linked
+  // one is rebuilt. Shift held as the folder opens - or a start that a plugin
+  // stopped last time - opens it without them.
   useEffect(() => {
     if (!rootPath) return;
     let left = false;
@@ -581,6 +587,7 @@ function App() {
     const listening = Promise.all([
       listenHere(PLUGINS_CHANGED_EVENT, () => void plugins.sync()),
       listenHere(PLUGIN_REBUILT_EVENT, () => plugins.rebuilt()),
+      listenHere<string>(PLUGIN_DATA_CHANGED_EVENT, ({ payload }) => plugins.dataChanged(payload)),
     ]);
     return () => {
       left = true;

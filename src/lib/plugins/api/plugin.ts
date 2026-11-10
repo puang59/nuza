@@ -123,8 +123,8 @@ export abstract class Plugin {
 
   onload(): void | Promise<void> {}
   onunload(): void {}
-  /** Another window on this vault saved this plugin's data. */
-  onExternalDataChange(): void {}
+  /** Another window on this vault saved this plugin's data: read it again with `loadData`. */
+  onExternalDataChange(): void | Promise<void> {}
 
   /** Something to call when the plugin is turned off. */
   register(cleanup: () => void) {

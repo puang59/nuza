@@ -6,7 +6,7 @@ import { settingTabs } from "@/lib/registries/settingTabs";
 import { sidebarViews } from "@/lib/registries/sidebarViews";
 import { statusItems } from "@/lib/registries/statusItems";
 import { app } from "./api/app";
-import { disposeAdded, Plugin, type PluginManifest } from "./api/plugin";
+import { disposeAdded, Plugin, pluginFailed, type PluginManifest } from "./api/plugin";
 import { requireShared } from "./modules";
 
 /** What `plugins_state` says about one installed plugin (plugins/store.rs). */
@@ -117,6 +117,9 @@ interface Loaded {
   linked: boolean;
 }
 
+/** Told by plugins/mod.rs when a plugin saves its data in another window on the vault. */
+export const PLUGIN_DATA_CHANGED_EVENT = "plugin-data-changed";
+
 /** Told by plugins/dev.rs when a linked plugin is rebuilt. */
 export const PLUGIN_REBUILT_EVENT = "plugin-rebuilt";
 
@@ -203,6 +206,20 @@ export class PluginHost {
   rebuilt() {
     clearTimeout(this.rebuildTimer);
     this.rebuildTimer = setTimeout(() => void this.sync(), REBUILD_SETTLE_MS);
+  }
+
+  /** Plugin `id` saved its data in another window: this window's copy of it may want to read it again. */
+  dataChanged(id: string) {
+    const loaded = this.loaded.get(id);
+    if (!loaded) return;
+    try {
+      const result = loaded.plugin.onExternalDataChange() as unknown;
+      if (result instanceof Promise) {
+        result.catch((error) => pluginFailed(loaded.plugin, "Couldn't take in its new settings", error));
+      }
+    } catch (error) {
+      pluginFailed(loaded.plugin, "Couldn't take in its new settings", error);
+    }
   }
 
   /** Loads the vault's plugins after all, in a visit that started without them. */
