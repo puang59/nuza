@@ -62,7 +62,7 @@ Users see no change. Every existing test keeps passing.
 - [x] **P2.2 The `nuza-plugin` scheme and CSP** · PR #392 · after P2.1
   - `plugins/protocol.rs`; `csp` and `devCsp` in `tauri.conf.json` (both scheme forms).
   - Done when: every refusal case in the plan returns 403 in tests; a script and stylesheet load in dev on macOS.
-- [ ] **P2.3 Plugin runtime and loader** · PR # · after P1.2-P1.6, P2.2, D3
+- [x] **P2.3 Plugin runtime and loader** · PR #393 · after P1.2-P1.6, P2.2, D3
   - `src/lib/plugins/`: `window.nuza.registerPlugin`, `modules.ts` shared `require`, `Plugin` base, `App` wrappers (vault, workspace, metadata, ui), `Modal`, `Setting`, `PluginSettingTab`, `Notice`; load after first paint; timing; unload in reverse; runtime error wrappers.
   - Done when: `tests/pluginLoader.test.ts` and `tests/pluginApi.test.ts` cover the cases in [07](07-rollout-and-testing.md#unit-bun-test-tests); a hand-written fixture plugin works in the app.
 - [ ] **P2.4 Community plugins settings tab** · PR # · after P2.3
