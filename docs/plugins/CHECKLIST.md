@@ -71,7 +71,7 @@ Users see no change. Every existing test keeps passing.
 - [x] **P2.5 Vault trust and safe mode** · PR #395 · after P2.4
   - `trusted-vaults.json`, `plugins_trust_vault`, trust checked in Rust for scheme and commands; banner; loading marker per window; Shift on open; `nuza --no-plugins`.
   - Done when: manual checks 6 and 7 pass.
-- [ ] **P2.6 Reload linked plugins on rebuild** · PR # · after P2.3
+- [x] **P2.6 Reload linked plugins on rebuild** · PR #396 · after P2.3
   - `plugins/dev.rs`, `plugins_dev_watch`, `plugin-rebuilt` event, "linked" badge.
   - Done when: manual check 3 passes.
 - [ ] **P2.7 Plugin data and multiple windows** · PR # · after P2.3
