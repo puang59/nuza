@@ -1,22 +1,9 @@
-import { describe, expect, mock, test } from "bun:test";
-import { Window } from "happy-dom";
-
-mock.module("@tauri-apps/api/core", () => ({
-  invoke: async () => null,
-  convertFileSrc: (path: string, protocol: string) => `${protocol}://localhost/${encodeURIComponent(path)}`,
-}));
-mock.module("@tauri-apps/api/app", () => ({ getVersion: async () => "3.0.0" }));
+import { afterAll, describe, expect, test } from "bun:test";
+import { fakeTauriPage } from "./fakeTauri";
 
 // Before the imports below: the loader puts `nuza` on the window as it loads.
-const page = new Window();
-Object.assign(globalThis, {
-  window: page,
-  document: page.document,
-  HTMLElement: page.HTMLElement,
-  Element: page.Element,
-  Event: page.Event,
-  CustomEvent: page.CustomEvent,
-});
+const restore = fakeTauriPage(() => null);
+afterAll(restore);
 
 const { PluginHost } = await import("../src/lib/plugins/loader");
 const { Plugin } = await import("../src/lib/plugins/api/plugin");

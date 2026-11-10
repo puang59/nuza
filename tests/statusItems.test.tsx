@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { Window } from "happy-dom";
@@ -9,7 +9,20 @@ import { statusItems } from "../src/lib/registries/statusItems";
 let root: Root | null = null;
 let container: HTMLElement;
 
+const replaced = [
+  "window",
+  "document",
+  "localStorage",
+  "HTMLElement",
+  "Element",
+  "Event",
+  "CustomEvent",
+  "IS_REACT_ACT_ENVIRONMENT",
+];
+let before: [string, PropertyDescriptor | undefined][] = [];
+
 beforeAll(() => {
+  before = replaced.map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]);
   const window = new Window();
   Object.assign(globalThis, {
     window,
@@ -21,6 +34,13 @@ beforeAll(() => {
     CustomEvent: window.CustomEvent,
     IS_REACT_ACT_ENVIRONMENT: true,
   });
+});
+
+afterAll(() => {
+  for (const [key, descriptor] of before) {
+    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+    else delete (globalThis as Record<string, unknown>)[key];
+  }
 });
 
 afterEach(() => {
