@@ -39,7 +39,8 @@ handles this with a "Do you trust the author of this vault?" prompt; nuza does t
   banner: "This vault has 3 plugins turned on: Word Goal, Kanban, Citations. Plugins
   can read and change your files. Turn them on?" with **Turn on** and **Keep off**.
   "Keep off" sets `community: false` in that vault.
-- Turning community plugins on yourself in Settings counts as trusting the vault.
+- Turning community plugins on yourself in Settings, or turning a plugin on there, counts
+  as trusting the vault.
 - Moving or renaming the folder asks again, which is the safe side.
 - The scheme and every plugin command check trust in Rust, so a webview-side bug cannot
   load an untrusted plugin.
@@ -57,6 +58,16 @@ A plugin that crashes or hangs the window on load must not lock the user out.
   when it stopped (the marker records the id currently loading).
 - Holding Shift while nuza opens a vault starts without plugins, too.
 - `nuza --no-plugins` (the CLI in `src-tauri/src/cli.rs`) does the same for every window.
+
+As built (P2.5): trust lives in `plugins/trust.rs` (`PluginTrust`, managed state, read
+from `std::env::args` for `--no-plugins`). `allows(root)` is checked by the scheme and by
+`plugin_load_data`/`plugin_save_data`; `plugins_state` reports `trusted` and `noPlugins`.
+The page's `PluginHost.begin(vault, { label, skip })` reads and clears the marker; held
+starts are reported as `held` (`untrusted`, `crashed`, `shift`, `flag`) and released from
+Settings with "Load plugins now". Shift is read with `NSEvent.modifierFlags` on macOS
+(`plugins_shift_held`), and from key events during the load delay elsewhere. Checked in
+the real app: copied-vault banner, "Keep off", "Turn on", a plugin looping in `onload`
+(next start names it), and `--no-plugins`. Shift held at launch is left to try by hand.
 
 ## Load-time budget
 

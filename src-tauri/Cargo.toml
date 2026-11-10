@@ -79,6 +79,8 @@ tauri-plugin-single-instance = "2"
 objc2 = "0.6"
 objc2-foundation = { version = "0.3", features = ["NSArray", "NSString"] }
 objc2-web-kit = { version = "0.3", features = ["WKWebViewConfiguration", "WKPreferences"] }
+# Whether Shift is held as a vault opens, which opens it without plugins.
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSEvent"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

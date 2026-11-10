@@ -5,6 +5,7 @@
 pub(crate) mod manifest;
 pub(crate) mod protocol;
 pub(crate) mod store;
+pub(crate) mod trust;
 
 use crate::state::{locked, vault_of, Windows};
 use crate::tasks::off_thread;
@@ -12,14 +13,20 @@ use serde::Serialize;
 use std::path::PathBuf;
 use store::{InstalledPlugin, PluginsConfig};
 use tauri::{Emitter, Manager};
+use trust::PluginTrust;
 
 /// Told to the other windows on a vault when its plugins are changed in one.
 pub(crate) const PLUGINS_CHANGED_EVENT: &str = "plugins-changed";
 
 /// What the page needs to know to load a vault's plugins.
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct PluginsState {
     community: bool,
+    /// Whether this machine has said the vault's plugins may run.
+    trusted: bool,
+    /// Started with `--no-plugins`: nothing runs in any window.
+    no_plugins: bool,
     plugins: Vec<InstalledPlugin>,
 }
 
@@ -28,6 +35,17 @@ fn root_of(window: &tauri::WebviewWindow) -> Result<PathBuf, String> {
     let vault = vault_of(window);
     let root = locked(&vault.root).clone();
     root.ok_or_else(|| "Open a folder first".to_string())
+}
+
+/// The vault's folder, if plugins may run in it: trusted on this machine, and
+/// not a run started with `--no-plugins`. Checked here as well as in the page,
+/// so nothing a page gets wrong can run or reach an untrusted vault's plugins.
+fn allowed_root(window: &tauri::WebviewWindow) -> Result<PathBuf, String> {
+    let root = root_of(window)?;
+    if !window.state::<PluginTrust>().allows(&root) {
+        return Err("Plugins aren't allowed to run in this folder".to_string());
+    }
+    Ok(root)
 }
 
 /// Tells the other windows on the same folder that its plugins changed.
@@ -43,17 +61,22 @@ fn tell_others(window: &tauri::WebviewWindow, root: &std::path::Path) {
 #[tauri::command]
 pub(crate) async fn plugins_state(window: tauri::WebviewWindow) -> Result<PluginsState, String> {
     let root = root_of(&window)?;
+    let app = window.app_handle().clone();
     off_thread(move || {
         let config = store::read_config(&root);
+        let trust = app.state::<PluginTrust>();
         Ok(PluginsState {
             community: config.community,
+            trusted: trust.is_trusted(&root),
+            no_plugins: trust.no_plugins,
             plugins: store::installed(&root, &config),
         })
     })
     .await
 }
 
-/// Turns community plugins on or off for the window's vault.
+/// Turns community plugins on or off for the window's vault. Turning them
+/// on here is the person saying the vault's plugins may run, so it trusts it.
 #[tauri::command]
 pub(crate) async fn plugins_set_community(
     window: tauri::WebviewWindow,
@@ -62,6 +85,9 @@ pub(crate) async fn plugins_set_community(
     let root = root_of(&window)?;
     let notify = window.clone();
     off_thread(move || {
+        if on {
+            notify.state::<PluginTrust>().trust(&root)?;
+        }
         let config = PluginsConfig {
             community: on,
             ..store::read_config(&root)
@@ -73,7 +99,28 @@ pub(crate) async fn plugins_set_community(
     .await
 }
 
-/// Turns one plugin on or off for the window's vault.
+/// Lets the plugins turned on in the window's vault run on this machine.
+#[tauri::command]
+pub(crate) async fn plugins_trust_vault(window: tauri::WebviewWindow) -> Result<(), String> {
+    let root = root_of(&window)?;
+    let notify = window.clone();
+    off_thread(move || {
+        notify.state::<PluginTrust>().trust(&root)?;
+        tell_others(&notify, &root);
+        Ok(())
+    })
+    .await
+}
+
+/// Whether Shift is held as the window opens its vault, which opens it
+/// without plugins.
+#[tauri::command]
+pub(crate) fn plugins_shift_held() -> bool {
+    trust::shift_held()
+}
+
+/// Turns one plugin on or off for the window's vault. Turning one on trusts
+/// the vault, as turning community plugins on does.
 #[tauri::command]
 pub(crate) async fn plugins_set_enabled(
     window: tauri::WebviewWindow,
@@ -86,6 +133,10 @@ pub(crate) async fn plugins_set_enabled(
     let root = root_of(&window)?;
     let notify = window.clone();
     off_thread(move || {
+        // Turned on by the person, in this window: they are saying it may run.
+        if on {
+            notify.state::<PluginTrust>().trust(&root)?;
+        }
         let mut config = store::read_config(&root);
         config.enabled.retain(|enabled| enabled != &id);
         if on {
@@ -144,7 +195,7 @@ fn data_file(window: &tauri::WebviewWindow, id: &str) -> Result<PathBuf, String>
     if !manifest::is_valid_id(id) {
         return Err(format!("\"{id}\" is not a plugin id"));
     }
-    Ok(store::plugins_folder(&root_of(window)?)
+    Ok(store::plugins_folder(&allowed_root(window)?)
         .join(id)
         .join("data.json"))
 }

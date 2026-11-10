@@ -12,6 +12,7 @@ import SettingsPalette, { type PaletteCommand } from "./components/SettingsPalet
 import NameNoteDialog from "./components/NameNoteDialog";
 import ChangedOnDisk from "./components/ChangedOnDisk";
 import RecoveredEdits from "./components/RecoveredEdits";
+import PluginTrustBar from "./components/PluginTrustBar";
 import SidePane from "./components/SidePane";
 import SplitDropZone from "./components/SplitDropZone";
 import Notices from "./components/Notices";
@@ -33,8 +34,9 @@ import { disposeAll, useRegistry } from "./lib/registries/registry";
 import { events } from "./lib/registries/events";
 import { connectVaultChanges } from "./lib/vaultChanges";
 import { setHostBridge } from "./lib/plugins/bridge";
-import { plugins } from "./lib/plugins/loader";
+import { heldMessage, pluginName, plugins } from "./lib/plugins/loader";
 import { listenHere } from "./lib/windowEvents";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import type { ToggleSetting } from "./lib/settingsSearch";
 import { useVimMode } from "./hooks/useVimMode";
 import { useVaults } from "./hooks/useVaults";
@@ -57,7 +59,7 @@ import {
 import { DEFAULT_VIM_BAR, type VimBarStyle, vimBarColors } from "./lib/vimBar";
 import { DEFAULT_TAB_SIZE, type TabSize, isTabSize, tabSizeExtension } from "./lib/tabSize";
 import { useSteadyColumn } from "./hooks/useSteadyColumn";
-import { report } from "./lib/notices";
+import { report, tell } from "./lib/notices";
 import { isMainWindow } from "./lib/windowLabel";
 import { addFrontmatter, addProperty, canAddFrontmatter } from "./lib/markdown/addFrontmatter";
 import { OpenTarget } from "./lib/launchTarget";
@@ -554,12 +556,31 @@ function App() {
   // The folder's plugins, loaded once the window has drawn and has a moment
   // to spare, so a slow one never holds up opening a note; unloaded when the
   // window leaves the folder; and brought up to date when another window on
-  // the same folder turns one on or off.
+  // the same folder turns one on or off. Shift held as the folder opens - or
+  // a start that a plugin stopped last time - opens it without them.
   useEffect(() => {
     if (!rootPath) return;
-    const timer = setTimeout(() => void plugins.sync(), PLUGIN_LOAD_DELAY);
+    let left = false;
+    let shift = invoke<boolean>("plugins_shift_held").catch(() => false);
+    const onKey = (event: KeyboardEvent) => {
+      if (event.shiftKey) shift = Promise.resolve(true);
+    };
+    window.addEventListener("keydown", onKey, true);
+    const timer = setTimeout(async () => {
+      window.removeEventListener("keydown", onKey, true);
+      const skip = await shift;
+      if (left) return;
+      plugins.begin(rootPath, { label: getCurrentWebviewWindow().label, skip });
+      await plugins.sync();
+      const { state, held } = plugins.current();
+      if (left || !held) return;
+      const said = heldMessage(held, pluginName(state?.plugins ?? [], held));
+      if (said) tell(said);
+    }, PLUGIN_LOAD_DELAY);
     const listening = listenHere(PLUGINS_CHANGED_EVENT, () => void plugins.sync());
     return () => {
+      left = true;
+      window.removeEventListener("keydown", onKey, true);
       clearTimeout(timer);
       void listening.then((unlisten) => unlisten());
       void plugins.unloadAll();
@@ -1381,6 +1402,7 @@ function App() {
                 onRestore={() => void restoreRecovered(currentFile)}
                 onDiscard={() => discardRecovered(currentFile)}
               />
+              <PluginTrustBar />
             </div>
             {/* CodeMirror mounts itself in here and owns the document from then
               on. Nothing about the text passes back through React, which is

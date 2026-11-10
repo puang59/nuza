@@ -68,7 +68,7 @@ Users see no change. Every existing test keeps passing.
 - [x] **P2.4 Community plugins settings tab** · PR #394 · after P2.3
   - `src/components/settings/PluginSettings.tsx`: off state, installed rows, toggles, problems, reload, open folder; per-plugin tabs under a "Plugins" heading.
   - Done when: manual checks 1, 2 and 4 in [07](07-rollout-and-testing.md#manual-in-the-app) pass.
-- [ ] **P2.5 Vault trust and safe mode** · PR # · after P2.4
+- [x] **P2.5 Vault trust and safe mode** · PR #395 · after P2.4
   - `trusted-vaults.json`, `plugins_trust_vault`, trust checked in Rust for scheme and commands; banner; loading marker per window; Shift on open; `nuza --no-plugins`.
   - Done when: manual checks 6 and 7 pass.
 - [ ] **P2.6 Reload linked plugins on rebuild** · PR # · after P2.3

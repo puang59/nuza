@@ -9,7 +9,8 @@ type Invoke = (command: string, args?: Record<string, unknown>) => unknown;
  * back, for `afterAll`.
  */
 export function fakeTauriPage(invoke: Invoke, extra: Record<string, unknown> = {}) {
-  const page = new Window();
+  // Plugin scripts fail to load rather than being fetched from nowhere.
+  const page = new Window({ settings: { disableJavaScriptFileLoading: true, disableCSSFileLoading: true } });
   Object.assign(page, {
     __TAURI_INTERNALS__: {
       invoke: async (command: string, args?: Record<string, unknown>) => {
