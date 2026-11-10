@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { PanelSide } from "@/hooks/useResizableSidebar";
 import type { TabSize } from "@/lib/tabSize";
-import { X, SlidersHorizontal, Palette, Keyboard, Info, Sparkles, LucideIcon } from "lucide-react";
+import { X, SlidersHorizontal, Palette, Keyboard, Info, Sparkles, Puzzle, LucideIcon } from "lucide-react";
 import { cn } from "cn";
 import { useExitAnimation } from "@/hooks/useExitAnimation";
 import type { KeymapBindings } from "@/lib/keymaps";
@@ -13,6 +13,7 @@ import AppearanceSettings from "./settings/AppearanceSettings";
 import KeymapSettings from "./settings/KeymapSettings";
 import InfoSettings from "./settings/InfoSettings";
 import AiSettings from "./settings/AiSettings";
+import PluginSettings from "./settings/PluginSettings";
 import type { ModelChoices } from "@/lib/ai/modelChoice";
 import type { MemoryStore } from "@/lib/ai/memory";
 import type { SpellLanguage } from "@/lib/spellDictionaries";
@@ -20,13 +21,14 @@ import { useRegistry } from "@/lib/registries/registry";
 import { settingTabs } from "@/lib/registries/settingTabs";
 import Mounted from "./Mounted";
 
-type SettingsSection = "general" | "appearance" | "keymaps" | "ai" | "info";
+type SettingsSection = "general" | "appearance" | "keymaps" | "ai" | "plugins" | "info";
 
 const SECTIONS: { id: SettingsSection; label: string; icon: LucideIcon }[] = [
   { id: "general", label: "General", icon: SlidersHorizontal },
   { id: "appearance", label: "Appearance", icon: Palette },
   { id: "keymaps", label: "Keymaps", icon: Keyboard },
   { id: "ai", label: "AI", icon: Sparkles },
+  { id: "plugins", label: "Plugins", icon: Puzzle },
   { id: "info", label: "Info", icon: Info },
 ];
 
@@ -243,7 +245,9 @@ export default function SettingsModal({
             ))}
 
             {addedTabs.length > 0 && (
-              <p className="hidden px-3 pt-3 pb-1 text-[11px] font-medium text-zinc-500 sm:block">Plugins</p>
+              <p className="hidden px-3 pt-3 pb-1 text-[11px] font-medium text-zinc-500 sm:block">
+                Plugin options
+              </p>
             )}
             {addedTabs.map(({ id, label }) => (
               <button
@@ -343,6 +347,10 @@ export default function SettingsModal({
                 memory={aiMemory}
                 setMemory={setAiMemory}
               />
+            )}
+
+            {activeSection === "plugins" && (
+              <PluginSettings vaultPath={vaultPath} onOpenTab={setActiveSection} />
             )}
 
             {activeSection === "info" && (
