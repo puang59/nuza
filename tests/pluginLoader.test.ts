@@ -79,6 +79,11 @@ class TestHost extends PluginHost {
     return factory;
   }
 
+  watched: [string, boolean][] = [];
+  protected watchRebuilds(id: string, on: boolean) {
+    this.watched.push([id, on]);
+  }
+
   status(id: string) {
     return this.current().statuses.get(id);
   }
@@ -320,5 +325,35 @@ describe("what holds plugins back", () => {
     const loads = Counter.loads;
     await host.sync();
     expect(Counter.loads).toBe(loads);
+  });
+});
+
+describe("a linked plugin", () => {
+  test("is watched while it runs, and reloaded when it is rebuilt", async () => {
+    const host = new TestHost();
+    host.installed = [installed("counter", { linked: true })];
+    host.code.set("counter", factoryFor(Counter));
+    await host.sync();
+    expect(host.watched).toEqual([["counter", true]]);
+    const loads = Counter.loads;
+
+    host.installed = [installed("counter", { linked: true, hash: "rebuilt" })];
+    host.rebuilt();
+    host.rebuilt();
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    await host.sync();
+
+    expect(Counter.loads).toBe(loads + 1);
+    await host.unloadAll();
+    expect(host.watched.at(-1)).toEqual(["counter", false]);
+  });
+
+  test("an installed one is not watched", async () => {
+    const host = new TestHost();
+    host.installed = [installed("counter")];
+    host.code.set("counter", factoryFor(Counter));
+    await host.sync();
+    expect(host.watched).toEqual([]);
+    await host.unloadAll();
   });
 });

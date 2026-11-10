@@ -41,6 +41,9 @@ pub(crate) struct Vault {
     /// Changes waiting to be sent, gathered for a moment so a `git checkout`
     /// arrives as a handful of messages rather than thousands.
     pub(crate) unsent_changes: Mutex<Vec<crate::watcher::VaultChange>>,
+    /// Watchers on linked plugin folders - plugins being worked on - by id,
+    /// so a rebuild reloads them. Cleared with the vault's own watcher.
+    pub(crate) dev_watchers: Mutex<HashMap<String, notify::RecommendedWatcher>>,
 }
 
 /// Every window's vault, by the window's label.

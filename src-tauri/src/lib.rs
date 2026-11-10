@@ -276,6 +276,7 @@ pub fn run() {
             plugins::plugins_set_enabled,
             plugins::plugins_trust_vault,
             plugins::plugins_shift_held,
+            plugins::dev::plugins_dev_watch,
             plugins::plugins_open_folder,
             plugins::plugin_load_data,
             plugins::plugin_save_data

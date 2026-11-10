@@ -2,6 +2,7 @@
 //! them run. The page loads them; this decides what it is allowed to load.
 //! See docs/plugins/.
 
+pub(crate) mod dev;
 pub(crate) mod manifest;
 pub(crate) mod protocol;
 pub(crate) mod store;

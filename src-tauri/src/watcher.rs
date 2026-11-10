@@ -107,6 +107,8 @@ pub(crate) fn watch_vault<R: tauri::Runtime>(
 
     // Replacing the old watcher drops it, which is how it stops watching.
     *locked(&vault.watcher) = Some(watcher);
+    // Linked plugins were the old folder's.
+    locked(&vault.dev_watchers).clear();
     Ok(())
 }
 
