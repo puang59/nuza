@@ -136,7 +136,7 @@ items) inside the same panel the other non-file views use.
 ## 4. Settings tabs
 
 As built (P1.4): `settingTabs` registry of `{ id, label, mount(el) }`. `SettingsModal`
-lists added panes after Info under a small "Plugins" heading (hidden in the narrow,
+lists added panes after Info under a small "Plugin options" heading (hidden in the narrow,
 horizontal layout), and draws the chosen one with `Mounted`. A pane that goes away while
 open leaves Settings on General. The Community plugins pane itself arrives with P2.4.
 `src/lib/settingsSearch.ts` only indexes built-in settings; plugin panes are not searched

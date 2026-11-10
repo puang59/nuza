@@ -65,7 +65,7 @@ Users see no change. Every existing test keeps passing.
 - [x] **P2.3 Plugin runtime and loader** · PR #393 · after P1.2-P1.6, P2.2, D3
   - `src/lib/plugins/`: `window.nuza.registerPlugin`, `modules.ts` shared `require`, `Plugin` base, `App` wrappers (vault, workspace, metadata, ui), `Modal`, `Setting`, `PluginSettingTab`, `Notice`; load after first paint; timing; unload in reverse; runtime error wrappers.
   - Done when: `tests/pluginLoader.test.ts` and `tests/pluginApi.test.ts` cover the cases in [07](07-rollout-and-testing.md#unit-bun-test-tests); a hand-written fixture plugin works in the app.
-- [ ] **P2.4 Community plugins settings tab** · PR # · after P2.3
+- [x] **P2.4 Community plugins settings tab** · PR #394 · after P2.3
   - `src/components/settings/PluginSettings.tsx`: off state, installed rows, toggles, problems, reload, open folder; per-plugin tabs under a "Plugins" heading.
   - Done when: manual checks 1, 2 and 4 in [07](07-rollout-and-testing.md#manual-in-the-app) pass.
 - [ ] **P2.5 Vault trust and safe mode** · PR # · after P2.4
