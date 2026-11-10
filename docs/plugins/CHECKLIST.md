@@ -74,7 +74,7 @@ Users see no change. Every existing test keeps passing.
 - [x] **P2.6 Reload linked plugins on rebuild** · PR #396 · after P2.3
   - `plugins/dev.rs`, `plugins_dev_watch`, `plugin-rebuilt` event, "linked" badge.
   - Done when: manual check 3 passes.
-- [ ] **P2.7 Plugin data and multiple windows** · PR # · after P2.3
+- [x] **P2.7 Plugin data and multiple windows** · PR #397 · after P2.3
   - `plugin_load_data`, `plugin_save_data` (atomic, 5 MB cap), `plugin-data-changed` and `plugins-changed` to other windows on the vault, `onExternalDataChange`.
   - Done when: manual check 5 passes.
 

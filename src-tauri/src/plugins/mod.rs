@@ -19,6 +19,10 @@ use trust::PluginTrust;
 /// Told to the other windows on a vault when its plugins are changed in one.
 pub(crate) const PLUGINS_CHANGED_EVENT: &str = "plugins-changed";
 
+/// Told to the other windows on a vault when a plugin saves its data in one,
+/// with the plugin's id.
+pub(crate) const PLUGIN_DATA_CHANGED_EVENT: &str = "plugin-data-changed";
+
 /// What the page needs to know to load a vault's plugins.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -169,7 +173,8 @@ pub(crate) async fn plugin_load_data(
     .await
 }
 
-/// Keeps a plugin's settings in its folder, written whole or not at all.
+/// Keeps a plugin's settings in its folder, written whole or not at all, and
+/// tells the plugin in the vault's other windows.
 #[tauri::command]
 pub(crate) async fn plugin_save_data(
     window: tauri::WebviewWindow,
@@ -182,11 +187,17 @@ pub(crate) async fn plugin_save_data(
     serde_json::from_str::<serde_json::Value>(&data)
         .map_err(|e| format!("That isn't JSON: {e}"))?;
     let file = data_file(&window, &id)?;
+    let root = root_of(&window)?;
     off_thread(move || {
         if !file.parent().is_some_and(|folder| folder.is_dir()) {
             return Err("That plugin isn't installed".to_string());
         }
-        crate::files::write_atomically(&file, data.as_bytes())
+        crate::files::write_atomically(&file, data.as_bytes())?;
+        let windows = window.state::<Windows>();
+        for label in windows.others_on(&root, window.label()) {
+            let _ = window.emit_to(label.as_str(), PLUGIN_DATA_CHANGED_EVENT, &id);
+        }
+        Ok(())
     })
     .await
 }

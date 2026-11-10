@@ -357,3 +357,23 @@ describe("a linked plugin", () => {
     await host.unloadAll();
   });
 });
+
+describe("a plugin's data", () => {
+  test("saved in another window is handed to this window's copy", async () => {
+    let told = 0;
+    class Listens extends Plugin {
+      onExternalDataChange() {
+        told++;
+      }
+    }
+    const host = new TestHost();
+    host.installed = [installed("listens")];
+    host.code.set("listens", factoryFor(Listens));
+    await host.sync();
+
+    host.dataChanged("listens");
+    host.dataChanged("not-loaded");
+    expect(told).toBe(1);
+    await host.unloadAll();
+  });
+});

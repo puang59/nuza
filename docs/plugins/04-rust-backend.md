@@ -209,3 +209,11 @@ untrusted vault, then watches the link's target (not recursive) and emits
 `hash` now covers `styles.css` as well, so the page's `PluginHost.rebuilt()` (debounced
 150 ms) only has to sync. Checked in the real app: a rebuild reloads the plugin with no
 page reload, and its `saveData` state carries over; a styles-only change reloads it too.
+
+### As built: data across windows (P2.7)
+
+`plugin_save_data` emits `plugin-data-changed` (the id) to the vault's other windows, which
+call that plugin's `onExternalDataChange()` (may return a promise; a throw is the
+plugin's, as everywhere). `plugins-changed` from P2.1 already re-syncs them on a toggle.
+Checked in the real app with two windows on one vault: a save in one shows in the other,
+and turning the plugin off in one unloads it in both.
