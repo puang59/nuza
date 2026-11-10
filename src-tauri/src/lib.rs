@@ -245,7 +245,8 @@ pub fn run() {
             agent::commands::agent_set_web_lookups,
             agent::commands::agent_set_vault_search,
             agent::commands::agent_citable,
-            agent::commands::agent_cite
+            agent::commands::agent_cite,
+            watcher::plugins_watch_vault
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")

@@ -6,6 +6,7 @@ import { basicSetup } from "@uiw/codemirror-extensions-basic-setup";
 import { directoryOf, liveMarkdown, noteDirectory, vaultDirectory } from "@/lib/markdown";
 import { aiDiff } from "@/lib/markdown/aiDiff";
 import { addedExtensions, editorExtensions } from "@/lib/registries/editorExtensions";
+import { events } from "@/lib/registries/events";
 import { documentsToEvict } from "@/lib/documentCache";
 import {
   countDocument,
@@ -49,6 +50,23 @@ const COUNT_DELAY = 250;
  * for the selection to stop moving.
  */
 const SELECTION_COUNT_LIMIT = 20_000;
+
+/** How long typing has to stop before an edit is announced to whoever listens for one. */
+const EDIT_REPORT_DELAY = 300;
+
+const editTimers = new Map<string | null, ReturnType<typeof setTimeout>>();
+
+/** Says a note was edited, once the typing in it has paused. */
+function reportEdit(path: string | null) {
+  clearTimeout(editTimers.get(path));
+  editTimers.set(
+    path,
+    setTimeout(() => {
+      editTimers.delete(path);
+      events.emit("editor-change", { path });
+    }, EDIT_REPORT_DELAY)
+  );
+}
 
 /** Settings that change while the app is running: the font, and Vim mode. */
 const preferences = new Compartment();
@@ -285,6 +303,7 @@ export function useDocuments({
       if (update.docChanged && !swapping.current) {
         const path = inSide ? sidePathRef.current : currentPath.current;
         if (path) setDirtyPaths((paths) => (paths.has(path) ? paths : new Set(paths).add(path)));
+        if (events.listening("editor-change")) reportEdit(path);
       }
       if (!inSide && (update.docChanged || update.selectionSet)) reportStats(update.state);
     });

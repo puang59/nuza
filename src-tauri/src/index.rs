@@ -357,6 +357,21 @@ impl VaultIndex {
         }
     }
 
+    /// `path` as the index names it, and whether it is listed: a file in the
+    /// vault, outside its tools' folders. None for anything outside the vault.
+    pub(crate) fn listing(&self, path: &Path) -> Option<(PathBuf, bool)> {
+        let inner = lock(&self.inner);
+        let display = if let Ok(inside) = path.strip_prefix(&inner.resolved_root) {
+            inner.display_root.join(inside)
+        } else if path.starts_with(&inner.display_root) {
+            path.to_path_buf()
+        } else {
+            return None;
+        };
+        let listed = inner.files.contains_key(&display);
+        Some((display, listed))
+    }
+
     /// Every file in the vault, for quick-open, in path order.
     pub(crate) fn files(&self) -> Vec<FileEntry> {
         self.wait_until_built();

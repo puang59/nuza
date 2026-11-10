@@ -30,6 +30,8 @@ import { formatBinding } from "./lib/keybinding";
 import { KEYMAP_ACTIONS, type KeymapAction } from "./lib/keymaps";
 import { commands, CORE_GROUP, isEnabled } from "./lib/registries/commands";
 import { disposeAll, useRegistry } from "./lib/registries/registry";
+import { events } from "./lib/registries/events";
+import { connectVaultChanges } from "./lib/vaultChanges";
 import type { ToggleSetting } from "./lib/settingsSearch";
 import { useVimMode } from "./hooks/useVimMode";
 import { useVaults } from "./hooks/useVaults";
@@ -484,6 +486,11 @@ function App() {
   // The open note's file, for the footer's "edited a while ago". The scratch
   // note has none.
   const notePath = rootPath && isWithin(currentFile, rootPath) ? currentFile : null;
+
+  // What this window is showing, for whatever listens (registries/events.ts).
+  useEffect(() => events.emit("vault-open", { path: rootPath ?? null }), [rootPath]);
+  useEffect(() => events.emit("active-note-change", { path: notePath }), [notePath]);
+  useEffect(connectVaultChanges, []);
 
   const outline = useOutline(editorView);
   const onJumpToHeading = useCallback(

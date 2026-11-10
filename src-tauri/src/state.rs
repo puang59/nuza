@@ -34,6 +34,13 @@ pub(crate) struct Vault {
     /// Every file in the folder, and the text of the notes, kept current as
     /// the folder changes - what search, quick-open and the scans read.
     pub(crate) index: Arc<crate::index::VaultIndex>,
+    /// Whether the window wants to hear about every change in the folder, not
+    /// only the notes it holds - set while a plugin is listening, so with none
+    /// the watcher does no more than it ever did.
+    pub(crate) reports_changes: std::sync::atomic::AtomicBool,
+    /// Changes waiting to be sent, gathered for a moment so a `git checkout`
+    /// arrives as a handful of messages rather than thousands.
+    pub(crate) unsent_changes: Mutex<Vec<crate::watcher::VaultChange>>,
 }
 
 /// Every window's vault, by the window's label.

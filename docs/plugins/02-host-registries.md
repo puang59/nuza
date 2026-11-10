@@ -198,22 +198,35 @@ Mermaid's output was compared with `main-v3` in the browser: pixel-identical.
 
 ## 7. Vault events
 
-Today Rust emits `FILE_CHANGED_EVENT` only for notes the window is holding
-(`src-tauri/src/watcher.rs:53`) and announces "files changed" for the index.
+As built (P1.7): `src/lib/registries/events.ts` is a typed bus (`events`), with
+`whileListened(name, { start, stop })` so a costly source runs only while someone listens.
 
-After: a frontend event bus `src/lib/registries/events.ts` with typed events
-`note-create`, `note-modify`, `note-delete`, `note-rename`, `active-note-change`,
-`note-open`, `editor-change` (debounced), `vault-open`, `layout-change`.
+| Event                | Payload                                                      | Comes from                                                                        |
+| -------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| `vault-change`       | `{ kind: create\|modify\|delete\|rename, path, from?, own }` | Rust watcher, see below                                                           |
+| `vault-open`         | `{ path \| null }`                                           | `App.tsx`, when the folder changes                                                |
+| `active-note-change` | `{ path \| null }`                                           | `App.tsx`, the main pane's note (null for scratch)                                |
+| `editor-change`      | `{ path \| null }`                                           | `useDocuments.ts` update listener, 300 ms after typing stops, only while listened |
 
-- `active-note-change`, `note-open`, `editor-change` and `layout-change` come from the
-  app's own state and cost nothing.
-- The four file events come from a new Rust event `vault-change { kind, path, from? }`
-  that the watcher emits only while `Vault.plugin_events` is set (see
-  [04-rust-backend.md](04-rust-backend.md#vault-events)). The flag is set when the first
-  plugin subscribes to a file event and cleared when the last unsubscribes, so with no
-  plugins the watcher does exactly what it does today.
-- nuza's own saves are included (with `own: true`), since a plugin that reacts to edits
-  wants those most of all.
+`layout-change` and `note-open` from the plan are left for P2.3, where the API decides
+what they carry.
+
+Rust: `Vault` has `reports_changes: AtomicBool` and `unsent_changes`. While the flag is
+set, `watcher.rs` asks the file index whether each path in a notify event was listed
+before and after the index refreshes it, and reports the transition: not listed to listed
+is `create`, listed to gone is `delete`, listed on both sides is `modify`, a paired
+rename from a listed file to a newly listed one is `rename`. The platform's own event
+kind is not trusted on its own: in the real app on macOS, FSEvents repeated "created" on
+a plain append and reported one deletion twice, and both read correctly this way. So
+events cover exactly what the index lists (files outside `.nuza`, dot-folders and
+.gitignore'd paths). `own` is true only for a modification of a note whose mtime is still
+what nuza last read or wrote. Changes go out as one `vault-changes` event per 100 ms
+batch, with exact duplicates dropped. macOS does not pair renames, so there a rename
+arrives as `delete` + `create`; the API documents that.
+
+`plugins_watch_vault(on)` sets the flag; `src/lib/vaultChanges.ts` calls it when the
+first `vault-change` listener arrives and the last one leaves. Paths are absolute here;
+the plugin API makes them vault-relative.
 
 ## Order of work
 
