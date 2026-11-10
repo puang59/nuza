@@ -353,3 +353,65 @@ mod scheme {
         assert!(resolve(root, "word-goal/main.js").is_ok());
     }
 }
+
+mod trust {
+    use super::super::trust::PluginTrust;
+
+    #[test]
+    fn a_vault_is_trusted_only_once_this_machine_says_so() {
+        let data = tempfile::tempdir().unwrap();
+        let vault = tempfile::tempdir().unwrap();
+        let trust = PluginTrust::new(Some(data.path()), false);
+        assert!(!trust.allows(vault.path()));
+
+        trust.trust(vault.path()).unwrap();
+        assert!(trust.allows(vault.path()));
+        // Kept for the next run.
+        assert!(PluginTrust::new(Some(data.path()), false).is_trusted(vault.path()));
+    }
+
+    #[test]
+    fn a_copy_of_a_trusted_vault_is_asked_about_again() {
+        let data = tempfile::tempdir().unwrap();
+        let vault = tempfile::tempdir().unwrap();
+        let copy = tempfile::tempdir().unwrap();
+        let trust = PluginTrust::new(Some(data.path()), false);
+        trust.trust(vault.path()).unwrap();
+        assert!(!trust.allows(copy.path()));
+    }
+
+    #[test]
+    fn a_vault_reached_through_a_link_is_the_same_vault() {
+        let data = tempfile::tempdir().unwrap();
+        let vault = tempfile::tempdir().unwrap();
+        let links = tempfile::tempdir().unwrap();
+        let link = links.path().join("notes");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(vault.path(), &link).unwrap();
+        #[cfg(windows)]
+        std::os::windows::fs::symlink_dir(vault.path(), &link).unwrap();
+        let trust = PluginTrust::new(Some(data.path()), false);
+        trust.trust(&link).unwrap();
+        assert!(trust.allows(vault.path()));
+    }
+
+    #[test]
+    fn no_plugins_runs_nothing_even_where_trusted() {
+        let data = tempfile::tempdir().unwrap();
+        let vault = tempfile::tempdir().unwrap();
+        PluginTrust::new(Some(data.path()), false)
+            .trust(vault.path())
+            .unwrap();
+        let trust = PluginTrust::new(Some(data.path()), true);
+        assert!(trust.is_trusted(vault.path()));
+        assert!(!trust.allows(vault.path()));
+    }
+
+    #[test]
+    fn without_a_data_folder_nothing_is_trusted() {
+        let vault = tempfile::tempdir().unwrap();
+        let trust = PluginTrust::new(None, false);
+        assert!(trust.trust(vault.path()).is_err());
+        assert!(!trust.allows(vault.path()));
+    }
+}

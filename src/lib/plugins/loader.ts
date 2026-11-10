@@ -22,7 +22,49 @@ export interface InstalledPlugin {
 
 export interface PluginsState {
   community: boolean;
+  /** Whether this machine has said the vault's plugins may run. */
+  trusted: boolean;
+  /** Started with `nuza --no-plugins`. */
+  noPlugins: boolean;
   plugins: InstalledPlugin[];
+}
+
+/**
+ * Why plugins that are turned on are not running in this window: a vault
+ * that came with them turned on and is not trusted here yet, a start they
+ * stopped last time (and which one was starting), Shift held as the vault
+ * opened, or `nuza --no-plugins`.
+ */
+export type Held =
+  | { why: "untrusted"; names: string[] }
+  | { why: "crashed"; id: string | null }
+  | { why: "shift" }
+  | { why: "flag" };
+
+/** What is written while plugins load, and is still there if one stops the window. */
+interface LoadingMarker {
+  vault: string;
+  id: string;
+}
+
+const MARKER_PREFIX = "pluginsLoading:";
+
+function readMarker(key: string): LoadingMarker | null {
+  try {
+    const text = localStorage.getItem(key);
+    return text ? (JSON.parse(text) as LoadingMarker) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeMarker(key: string, marker: LoadingMarker | null) {
+  try {
+    if (marker) localStorage.setItem(key, JSON.stringify(marker));
+    else localStorage.removeItem(key);
+  } catch {
+    // Without storage there is no safe mode, which only matters after a crash.
+  }
 }
 
 /** How a plugin is doing in this window, for Settings. */
@@ -86,8 +128,7 @@ function attach(el: HTMLScriptElement | HTMLLinkElement) {
     el.addEventListener("load", () => resolve(), { once: true });
     el.addEventListener(
       "error",
-      () =>
-        reject(new Error(`${el instanceof HTMLScriptElement ? "main.js" : "styles.css"} couldn't be loaded`)),
+      () => reject(new Error(`${el.tagName === "SCRIPT" ? "main.js" : "styles.css"} couldn't be loaded`)),
       { once: true }
     );
     document.head.append(el);
@@ -107,10 +148,16 @@ export class PluginHost {
   private statuses = new Map<string, PluginStatus>();
   private listeners = new Set<() => void>();
   private queue: Promise<unknown> = Promise.resolve();
-  private snapshot: { state: PluginsState | null; statuses: ReadonlyMap<string, PluginStatus> } = {
-    state: null,
-    statuses: new Map(),
-  };
+  private snapshot: {
+    state: PluginsState | null;
+    statuses: ReadonlyMap<string, PluginStatus>;
+    held: Held | null;
+  } = { state: null, statuses: new Map(), held: null };
+  /** The open vault, and where its loading marker is kept for this window. */
+  private vault: string | null = null;
+  private markerKey: string | null = null;
+  /** Held back for this visit to the vault, until the person says otherwise. */
+  private skipped: Held | null = null;
 
   constructor() {
     window.nuza = { registerPlugin };
@@ -123,11 +170,36 @@ export class PluginHost {
     return next;
   }
 
+  /**
+   * The window has opened `vault`. If plugins stopped its last start here -
+   * the marker written while they load is still there - or `skip` (Shift was
+   * held), this visit starts without them until `release`.
+   */
+  begin(vault: string, { label, skip }: { label: string; skip: boolean }) {
+    this.vault = vault;
+    this.markerKey = MARKER_PREFIX + label;
+    const marker = readMarker(this.markerKey);
+    // Read once: the next start tries again, as it should once the plugin is fixed or off.
+    writeMarker(this.markerKey, null);
+    if (marker?.vault === vault) this.skipped = { why: "crashed", id: marker.id };
+    else if (skip) this.skipped = { why: "shift" };
+    else this.skipped = null;
+    return this.skipped;
+  }
+
+  /** Loads the vault's plugins after all, in a visit that started without them. */
+  release(): Promise<void> {
+    this.skipped = null;
+    return this.sync();
+  }
+
   /** Unloads every plugin, as when the window leaves its folder. */
   unloadAll(): Promise<void> {
     const next = this.queue.then(() => {
       for (const id of [...this.loaded.keys()].reverse()) this.unload(id);
-      this.snapshot = { state: null, statuses: new Map() };
+      this.snapshot = { state: null, statuses: new Map(), held: null };
+      this.vault = null;
+      this.skipped = null;
       this.statuses.clear();
       this.changed();
     });
@@ -146,7 +218,7 @@ export class PluginHost {
   };
 
   private changed() {
-    this.snapshot = { state: this.snapshot.state, statuses: new Map(this.statuses) };
+    this.snapshot = { ...this.snapshot, statuses: new Map(this.statuses) };
     for (const listener of [...this.listeners]) listener();
   }
 
@@ -159,15 +231,19 @@ export class PluginHost {
       console.debug("No plugins to load:", error);
       return;
     }
-    this.snapshot = { ...this.snapshot, state };
+    const runnable = state.community
+      ? state.plugins.filter((plugin) => plugin.enabled && !plugin.problem && plugin.manifest)
+      : [];
+    const held: Held | null = !runnable.length
+      ? null
+      : state.noPlugins
+        ? { why: "flag" }
+        : !state.trusted
+          ? { why: "untrusted", names: runnable.map((plugin) => plugin.manifest!.name) }
+          : this.skipped;
+    this.snapshot = { ...this.snapshot, state, held };
 
-    const wanted = new Map(
-      state.community
-        ? state.plugins
-            .filter((plugin) => plugin.enabled && !plugin.problem && plugin.manifest)
-            .map((plugin) => [plugin.id, plugin])
-        : []
-    );
+    const wanted = new Map(held ? [] : runnable.map((plugin) => [plugin.id, plugin]));
 
     for (const id of [...this.loaded.keys()].reverse()) {
       const want = wanted.get(id);
@@ -180,9 +256,12 @@ export class PluginHost {
 
     for (const plugin of wanted.values()) {
       if (this.loaded.has(plugin.id)) continue;
+      // Left behind if this plugin stops the window, so the next start skips them all.
+      if (this.markerKey && this.vault) writeMarker(this.markerKey, { vault: this.vault, id: plugin.id });
       this.statuses.set(plugin.id, await this.load(plugin));
       this.changed();
     }
+    if (this.markerKey) writeMarker(this.markerKey, null);
   }
 
   /** What the vault has installed and turned on. */
@@ -278,3 +357,31 @@ export class PluginHost {
 
 /** This window's plugins. */
 export const plugins = new PluginHost();
+
+/** What to say about plugins held back from a start, or null for a vault that is not trusted, which asks instead. */
+export function heldMessage(held: Held, name?: string): string | null {
+  switch (held.why) {
+    case "crashed":
+      return `nuza started without plugins because ${name ?? "one"} stopped the last start. Turn them back on in Settings, one at a time.`;
+    case "shift":
+      return "Opened without plugins, as Shift was held.";
+    case "flag":
+      return "Plugins are off for this run (nuza --no-plugins).";
+    case "untrusted":
+      return null;
+  }
+}
+
+/** The name of the plugin a crashed start was loading, if it is still installed. */
+export function pluginName(installed: InstalledPlugin[], held: Held) {
+  if (held.why !== "crashed") return undefined;
+  const plugin = installed.find((candidate) => candidate.id === held.id);
+  return plugin ? (plugin.manifest?.name ?? plugin.id) : undefined;
+}
+
+/** The names, as a list to read: "A", "A and B", "A, B and C". */
+export function listed(names: string[]) {
+  return names.length < 2
+    ? (names[0] ?? "")
+    : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}

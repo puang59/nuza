@@ -2,7 +2,16 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Switch } from "@/components/ui/switch";
 import { report } from "@/lib/notices";
-import { plugins, SLOW_LOAD_MS, type InstalledPlugin, type PluginStatus } from "@/lib/plugins/loader";
+import PluginTrustBar from "@/components/PluginTrustBar";
+import {
+  heldMessage,
+  pluginName,
+  plugins,
+  SLOW_LOAD_MS,
+  type Held,
+  type InstalledPlugin,
+  type PluginStatus,
+} from "@/lib/plugins/loader";
 import { useRegistry } from "@/lib/registries/registry";
 import { settingTabs } from "@/lib/registries/settingTabs";
 import SettingRow from "./SettingRow";
@@ -25,8 +34,11 @@ async function change(command: string, args: Record<string, unknown>, failure: s
 }
 
 /** What to say under a plugin's name: why it is not running, or how its start went. */
-function standing(plugin: InstalledPlugin, status: PluginStatus | undefined) {
+function standing(plugin: InstalledPlugin, status: PluginStatus | undefined, held: Held | null) {
   if (plugin.problem) return { text: plugin.problem, warn: true };
+  if (held?.why === "crashed" && held.id === plugin.id) {
+    return { text: "Was starting when nuza stopped last time", warn: true };
+  }
   if (status?.state === "failed") return { text: `Failed to start: ${status.reason}`, warn: true };
   if (status?.state === "loaded" && status.loadMs > SLOW_LOAD_MS) {
     return { text: `Slow to start (${(status.loadMs / 1000).toFixed(1)} s)`, warn: true };
@@ -40,7 +52,7 @@ function standing(plugin: InstalledPlugin, status: PluginStatus | undefined) {
  * its own switch.
  */
 export default function PluginSettings({ vaultPath, onOpenTab }: PluginSettingsProps) {
-  const { state, statuses } = useSyncExternalStore(plugins.subscribe, () => plugins.current());
+  const { state, statuses, held } = useSyncExternalStore(plugins.subscribe, () => plugins.current());
   const tabs = useRegistry(settingTabs);
   const [busy, setBusy] = useState(false);
 
@@ -89,8 +101,28 @@ export default function PluginSettings({ vaultPath, onOpenTab }: PluginSettingsP
     );
   }
 
+  const heldBack = held && heldMessage(held, pluginName(state.plugins, held));
+
   return (
     <div>
+      <div className="mb-2 overflow-hidden rounded-md empty:hidden">
+        <PluginTrustBar />
+      </div>
+      {heldBack && held && (
+        <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2">
+          <p className="min-w-0 flex-1 basis-64 text-xs text-amber-100/90">{heldBack}</p>
+          {held.why !== "flag" && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void run(() => plugins.release())}
+              className="shrink-0 rounded-md bg-amber-500/80 px-3 py-1 text-xs text-black transition-colors hover:bg-amber-400 cursor-pointer disabled:opacity-50"
+            >
+              Load plugins now
+            </button>
+          )}
+        </div>
+      )}
       <div className="divide-y divide-zinc-800">
         <SettingRow title="Community plugins" description="Run the plugins turned on below, in this folder">
           <Switch
@@ -135,7 +167,7 @@ export default function PluginSettings({ vaultPath, onOpenTab }: PluginSettingsP
       ) : (
         <div className="divide-y divide-zinc-800">
           {state.plugins.map((plugin) => {
-            const { text, warn } = standing(plugin, statuses.get(plugin.id));
+            const { text, warn } = standing(plugin, statuses.get(plugin.id), held);
             const manifest = plugin.manifest;
             const hasTab = tabs.some((tab) => tab.id === plugin.id);
             return (

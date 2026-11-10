@@ -32,7 +32,7 @@ src-tauri/src/plugins/
     .staging-kanban-1a2b3c/    install in progress; removed on success or next start
 
 <app data dir>/
-  trusted-vaults.json          { "<canonical vault path>": { "trustedAt": "2026-11-09T..." } }
+  trusted-vaults.json          { "<canonical vault path>": { "trustedAt": 1762732800 } }   (seconds)
   plugin-registry.json         cached registry, with ETag and fetched-at
 ```
 

@@ -3,6 +3,19 @@ import { fakeTauriPage } from "./fakeTauri";
 
 // Before the imports below: the loader puts `nuza` on the window as it loads.
 const restore = fakeTauriPage(() => null);
+const storage = new Map<string, string>();
+const before = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+Object.assign(globalThis, {
+  localStorage: {
+    getItem: (key: string) => storage.get(key) ?? null,
+    setItem: (key: string, value: string) => void storage.set(key, value),
+    removeItem: (key: string) => void storage.delete(key),
+  },
+});
+afterAll(() => {
+  if (before) Object.defineProperty(globalThis, "localStorage", before);
+  else delete (globalThis as Record<string, unknown>).localStorage;
+});
 afterAll(restore);
 
 const { PluginHost } = await import("../src/lib/plugins/loader");
@@ -46,11 +59,18 @@ function factoryFor(Class: unknown): Factory {
 /** A host whose vault and scripts are given rather than read. */
 class TestHost extends PluginHost {
   community = true;
+  trusted = true;
+  noPlugins = false;
   installed: Installed[] = [];
   code = new Map<string, Factory>();
 
   protected async readState() {
-    return { community: this.community, plugins: this.installed };
+    return {
+      community: this.community,
+      trusted: this.trusted,
+      noPlugins: this.noPlugins,
+      plugins: this.installed,
+    };
   }
 
   protected async loadCode(plugin: Installed) {
@@ -218,5 +238,87 @@ describe("a plugin's commands", () => {
     class Odd extends Plugin {}
     const plugin = new Odd({} as never, installed("odd").manifest!);
     expect(() => plugin.registerCodeBlockRenderer("Mermaid", () => {})).toThrow("drawn by nuza itself");
+  });
+});
+
+describe("what holds plugins back", () => {
+  test("a vault that is not trusted here runs nothing, and says which plugins it would", async () => {
+    const host = new TestHost();
+    host.trusted = false;
+    host.installed = [installed("counter")];
+    host.code.set("counter", factoryFor(Counter));
+    const loads = Counter.loads;
+
+    await host.sync();
+
+    expect(Counter.loads).toBe(loads);
+    expect(host.current().held).toEqual({ why: "untrusted", names: ["counter"] });
+  });
+
+  test("a vault with nothing turned on is not held back", async () => {
+    const host = new TestHost();
+    host.trusted = false;
+    host.installed = [installed("counter", { enabled: false })];
+    await host.sync();
+    expect(host.current().held).toBeNull();
+  });
+
+  test("--no-plugins runs nothing, trusted or not", async () => {
+    const host = new TestHost();
+    host.noPlugins = true;
+    host.installed = [installed("counter")];
+    host.code.set("counter", factoryFor(Counter));
+    const loads = Counter.loads;
+    await host.sync();
+    expect(Counter.loads).toBe(loads);
+    expect(host.current().held).toEqual({ why: "flag" });
+  });
+
+  test("a plugin that stops the window is skipped, with the rest, on the next start", async () => {
+    class Hangs extends Plugin {
+      onload() {
+        // As far as the marker goes, the window died here.
+        expect(JSON.parse(storage.get("pluginsLoading:main")!)).toEqual({ vault: "/v", id: "hangs" });
+        throw new Error("gone");
+      }
+    }
+    const crashed = new TestHost();
+    crashed.installed = [installed("hangs")];
+    crashed.code.set("hangs", factoryFor(Hangs));
+    expect(crashed.begin("/v", { label: "main", skip: false })).toBeNull();
+    await crashed.sync();
+    // Settled, so cleared.
+    expect(storage.has("pluginsLoading:main")).toBe(false);
+
+    storage.set("pluginsLoading:main", JSON.stringify({ vault: "/v", id: "hangs" }));
+    const next = new TestHost();
+    next.installed = [installed("counter")];
+    next.code.set("counter", factoryFor(Counter));
+    expect(next.begin("/v", { label: "main", skip: false })).toEqual({ why: "crashed", id: "hangs" });
+    const loads = Counter.loads;
+    await next.sync();
+    expect(Counter.loads).toBe(loads);
+
+    await next.release();
+    expect(Counter.loads).toBe(loads + 1);
+    await next.unloadAll();
+  });
+
+  test("a marker from another vault, or another window, is not this start's", () => {
+    storage.set("pluginsLoading:main", JSON.stringify({ vault: "/other", id: "hangs" }));
+    expect(new TestHost().begin("/v", { label: "main", skip: false })).toBeNull();
+    storage.set("pluginsLoading:second", JSON.stringify({ vault: "/v", id: "hangs" }));
+    expect(new TestHost().begin("/v", { label: "main", skip: false })).toBeNull();
+    storage.clear();
+  });
+
+  test("Shift held as the vault opens starts it without plugins", async () => {
+    const host = new TestHost();
+    host.installed = [installed("counter")];
+    host.code.set("counter", factoryFor(Counter));
+    expect(host.begin("/v", { label: "main", skip: true })).toEqual({ why: "shift" });
+    const loads = Counter.loads;
+    await host.sync();
+    expect(Counter.loads).toBe(loads);
   });
 });

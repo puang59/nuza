@@ -137,6 +137,13 @@ pub fn run() {
             app.manage(harness);
             app.manage(tools);
 
+            // Which vaults may run their plugins here, and whether this run
+            // runs any: `nuza --no-plugins` starts every window without them.
+            app.manage(plugins::trust::PluginTrust::new(
+                app.path().app_data_dir().ok().as_deref(),
+                std::env::args().any(|arg| arg == plugins::trust::NO_PLUGINS_FLAG),
+            ));
+
             // What `nuza <path>` started this run on, if it did. Read here, not
             // by the window, so it does not depend on who asks first.
             let launched = std::env::current_dir()
@@ -267,6 +274,8 @@ pub fn run() {
             plugins::plugins_state,
             plugins::plugins_set_community,
             plugins::plugins_set_enabled,
+            plugins::plugins_trust_vault,
+            plugins::plugins_shift_held,
             plugins::plugins_open_folder,
             plugins::plugin_load_data,
             plugins::plugin_save_data

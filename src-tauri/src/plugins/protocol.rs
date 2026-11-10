@@ -25,6 +25,12 @@ pub(crate) fn serve_plugin_file(
     let Some(root) = locked(&vault.root).clone() else {
         return media_status(403);
     };
+    if !app_handle
+        .state::<super::trust::PluginTrust>()
+        .allows(&root)
+    {
+        return media_status(403);
+    }
     let path = match resolve(&root, &requested_path(request.uri())) {
         Ok(path) => path,
         Err(status) => return media_status(status),

@@ -1,14 +1,15 @@
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { fakeTauriPage } from "./fakeTauri";
 
-type State = { community: boolean; plugins: unknown[] };
+type State = { community: boolean; plugins: unknown[]; trusted?: boolean };
 let vaultState: State = { community: false, plugins: [] };
 const calls: [string, unknown][] = [];
 
 const restore = fakeTauriPage(
   (command, args) => {
     calls.push([command, args]);
-    if (command === "plugins_state") return vaultState;
+    if (command === "plugins_state") return { trusted: true, noPlugins: false, ...vaultState };
+    if (command === "plugins_trust_vault") vaultState = { ...vaultState, trusted: true };
     if (command === "plugins_set_community") vaultState = { ...vaultState, community: !!args?.on };
     return null;
   },
@@ -100,5 +101,16 @@ describe("the Community plugins pane", () => {
     expect(pane.textContent).toContain("v1.2.0");
     expect(pane.textContent).toContain("by Jane");
     expect(pane.textContent).toContain("Needs nuza 9.0.0 or newer");
+  });
+
+  test("asks before running the plugins a vault arrived with", async () => {
+    vaultState = { community: true, trusted: false, plugins: [{ ...wordGoal, enabled: true }] };
+    const pane = await render("/vault");
+    expect(pane.textContent).toContain("This folder has a plugin turned on: Word Goal");
+
+    const turnOn = [...pane.querySelectorAll("button")].find((b) => b.textContent === "Turn on")!;
+    await act(async () => turnOn.click());
+    expect(calls).toContainEqual(["plugins_trust_vault", {}]);
+    expect(pane.textContent).not.toContain("This folder has a plugin turned on");
   });
 });
